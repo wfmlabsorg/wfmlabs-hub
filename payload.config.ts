@@ -6,7 +6,8 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import sharp from 'sharp'
 
-// Collections — imported as they're built
+// Collections
+import { Members } from '@/collections/Members'
 import { Media } from '@/collections/Media'
 
 const filename = fileURLToPath(import.meta.url)
@@ -49,11 +50,8 @@ export default buildConfig({
   ],
 
   collections: [
+    Members,
     Media,
-    // Members, Topics added in Week 2
-    // Papers, Articles, Tools, NewsletterIssues added in Week 3
-    // Discussions, Reactions, Notifications added in Week 5
-    // AuditLog added in Week 6
   ],
 
   secret: process.env.PAYLOAD_SECRET || 'CHANGE-ME-IN-PRODUCTION',
