@@ -4,6 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  NEXT_PUBLIC_SERVER_URL = "https://wfmlabs-hub.netlify.app"
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
