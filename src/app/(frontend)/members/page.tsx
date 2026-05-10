@@ -3,6 +3,7 @@ import config from '@payload-config'
 import React from 'react'
 
 export const metadata = { title: 'Members' }
+export const dynamic = 'force-dynamic'
 
 export default async function MembersBrowsePage() {
   const payload = await getPayload({ config })

@@ -4,6 +4,7 @@ import React from 'react'
 import { AssetCard } from '@/components/cards/AssetCard'
 
 export const metadata = { title: 'Tools' }
+export const dynamic = 'force-dynamic'
 
 const categories = [
   { value: 'all', label: 'All', icon: '🔮' },

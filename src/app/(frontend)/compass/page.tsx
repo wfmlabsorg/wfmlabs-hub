@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { BrowsePageLayout } from '@/components/pages/BrowsePageLayout'
 
 export const metadata = { title: 'Compass' }
+export const dynamic = 'force-dynamic'
 
 export default async function CompassBrowsePage() {
   const payload = await getPayload({ config })

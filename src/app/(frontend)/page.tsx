@@ -11,6 +11,7 @@ const assetTypeMap: Record<string, { label: string; path: string; type: string }
   'newsletter-issues': { label: 'Compass', path: '/compass', type: 'newsletter-issue' },
 }
 
+export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   const payload = await getPayload({ config })
 

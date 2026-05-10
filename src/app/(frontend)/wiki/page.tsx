@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { BrowsePageLayout } from '@/components/pages/BrowsePageLayout'
 
 export const metadata = { title: 'Wiki' }
+export const dynamic = 'force-dynamic'
 
 export default async function WikiBrowsePage() {
   const payload = await getPayload({ config })
