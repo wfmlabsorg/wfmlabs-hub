@@ -1,7 +1,7 @@
 # Current State — WFM Labs Hub
 
-**Last updated:** 2026-05-09
-**Phase:** Week 1 in progress
+**Last updated:** 2026-05-10
+**Phase:** Week 1 complete, ready for Week 2
 **Seed doc version:** v1.1
 
 ## What Exists
@@ -24,25 +24,30 @@
 - **Local dev dir (node_modules):** `~/projects/wfmlabs-hub-local/`
 - node_modules MUST be in local dir due to R2 sync performance (see learnings/2026-05-09-wsl2-cloud-dir-perf.md)
 
+## Live Deployment
+
+- **Vercel:** https://wfmlabs-hub-local.vercel.app
+- **Admin:** https://wfmlabs-hub-local.vercel.app/admin
+- **Admin user:** ted@wfmlabs.com (created 2026-05-10)
+- **Netlify site exists** but doesn't work for Payload (server actions incompatibility). Vercel is production.
+
 ## What Does NOT Exist Yet
-
-- Netlify site (creating now)
-- Environment variables configured on Netlify
+- GitHub → Vercel auto-deploy (deploying via CLI currently)
 - CI workflow (GitHub Actions)
-- Any collections beyond Media
-- Any content
+- Topics collection
+- Content collections (Papers, Articles, Tools, NewsletterIssues)
+- Engagement collections (Discussions, Reactions, Notifications)
+- Any content loaded
+- Frontend pages beyond homepage placeholder
 
-## Current Phase: Week 1 (in progress)
+## Current Phase: Week 2 (starting)
 
-Remaining Week 1 items:
-1. Create Netlify site + link to GitHub
-2. Configure environment variables (Neon + R2 credentials in sops)
-3. Set up GitHub Actions CI
-4. Verify preview deployment works
-5. Verify Payload admin UI connects to Neon database
-
-Neon database: provisioned (credentials in sops as WFMLABS_HUB_DATABASE_URL)
-R2 bucket: `wfmlabs-media` (credentials in sops as WFMLABS_HUB_R2_*)
+Next deliverables:
+1. Connect GitHub to Vercel for auto-deploy
+2. Topics collection + seed taxonomy
+3. Papers, Articles, Tools, NewsletterIssues collections
+4. Access control functions
+5. Postgres FTS indexes
 
 ## Decisions Made
 
