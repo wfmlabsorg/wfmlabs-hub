@@ -1,5 +1,5 @@
 [build]
-  command = "NEXT_DISABLE_TURBOPACK=1 bun run build"
+  command = "bun run build"
   publish = ".next"
 
 [build.environment]
