@@ -73,8 +73,8 @@ export const Papers: CollectionConfig = {
     },
   ],
   access: {
-    read: isMember,
-    create: isAdmin,
+    read: () => true,
+    create: isMember,
     update: isAuthor('primaryContributor'),
     delete: isAdmin,
   },
