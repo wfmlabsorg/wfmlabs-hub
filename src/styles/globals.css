@@ -3,42 +3,54 @@
 /* === WFM Labs Hub — HF-inspired theme === */
 
 :root {
+  /* Hugging Face theme — light mode */
   --bg: #ffffff;
-  --bg-secondary: #f9fafb;
-  --bg-card: #f9fafb;
-  --fg: #1a1a2e;
+  --bg-secondary: #f5f5f5;
+  --bg-card: #ffffff;
+  --fg: #1f2937;
   --fg-muted: #6b7280;
   --fg-faint: #9ca3af;
-  --accent: #ff9d00;
-  --accent-hover: #e68e00;
-  --accent-light: #fff3e0;
-  --border: #e5e7eb;
-  --border-hover: #d1d5db;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --success: #10b981;
-  --error: #ef4444;
-  --info: #3b82f6;
-  --warning: #f59e0b;
+  --accent: #FFD21E;           /* HF yellow */
+  --accent-hover: #FFC800;
+  --accent-text: #1f2937;      /* dark text on yellow buttons */
+  --accent-light: #FFF9E5;
+  --link: #2563EB;             /* blue links like HF */
+  --link-hover: #1D4ED8;
+  --border: #E5E7EB;
+  --border-hover: #D1D5DB;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --card-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --success: #10B981;
+  --error: #EF4444;
+  --info: #3B82F6;
+  --warning: #F59E0B;
   --radius: 0.5rem;
   --radius-lg: 0.75rem;
+  --nav-bg: #ffffff;
+  --nav-border: #E5E7EB;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1b1d;
-    --bg-secondary: #232325;
-    --bg-card: #262626;
-    --fg: #f5f5f5;
-    --fg-muted: #9ca3af;
-    --fg-faint: #6b7280;
-    --accent: #ff9d00;
-    --accent-hover: #ffb340;
-    --accent-light: #3d2e00;
-    --border: #333333;
-    --border-hover: #444444;
-    --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --card-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.4);
+    /* Hugging Face theme — dark mode */
+    --bg: #0D1117;             /* HF-style very dark blue-black */
+    --bg-secondary: #161B22;
+    --bg-card: #161B22;
+    --fg: #E6EDF3;
+    --fg-muted: #8B949E;
+    --fg-faint: #6E7681;
+    --accent: #FFD21E;         /* HF yellow stays consistent */
+    --accent-hover: #FFE066;
+    --accent-text: #0D1117;    /* dark text on yellow buttons */
+    --accent-light: #2D2A0E;
+    --link: #58A6FF;           /* blue links in dark mode */
+    --link-hover: #79C0FF;
+    --border: #30363D;
+    --border-hover: #484F58;
+    --card-shadow: none;
+    --card-shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --nav-bg: #161B22;
+    --nav-border: #30363D;
   }
 }
 
@@ -67,13 +79,14 @@ kbd {
 }
 
 a {
-  color: var(--accent);
+  color: var(--link);
   text-decoration: none;
   transition: color 0.15s;
 }
 
 a:hover {
-  color: var(--accent-hover);
+  color: var(--link-hover);
+  text-decoration: underline;
 }
 
 /* === Utility Classes === */
@@ -127,14 +140,16 @@ a:hover {
 
 .btn-primary {
   background: var(--accent);
-  color: #000;
+  color: var(--accent-text);
   border-color: var(--accent);
+  font-weight: 600;
 }
 
 .btn-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-  color: #000;
+  color: var(--accent-text);
+  text-decoration: none;
 }
 
 .btn-secondary {
@@ -162,7 +177,10 @@ a:hover {
 
 .badge-type {
   background: var(--accent-light);
-  color: var(--accent);
+  color: #B8860B;
+}
+@media (prefers-color-scheme: dark) {
+  .badge-type { color: var(--accent); }
 }
 
 .badge-status-published {

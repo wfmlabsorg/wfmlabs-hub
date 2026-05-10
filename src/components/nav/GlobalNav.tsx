@@ -20,8 +20,8 @@ export function GlobalNav() {
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        background: 'var(--bg)',
-        borderBottom: '1px solid var(--border)',
+        background: 'var(--nav-bg)',
+        borderBottom: '1px solid var(--nav-border)',
       }}
     >
       <div
@@ -35,7 +35,7 @@ export function GlobalNav() {
           gap: '1.5rem',
         }}
       >
-        {/* Logo */}
+        {/* Logo — HF-style: icon + wordmark */}
         <a
           href="/"
           style={{
@@ -43,14 +43,25 @@ export function GlobalNav() {
             alignItems: 'center',
             gap: '0.5rem',
             fontWeight: 700,
-            fontSize: '1.125rem',
+            fontSize: '1rem',
             color: 'var(--fg)',
             textDecoration: 'none',
             flexShrink: 0,
           }}
         >
-          <span style={{ color: 'var(--accent)' }}>WFM</span>
-          <span>Labs</span>
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '1.75rem',
+            height: '1.75rem',
+            background: 'var(--accent)',
+            color: 'var(--accent-text)',
+            borderRadius: '0.375rem',
+            fontSize: '0.875rem',
+            fontWeight: 800,
+          }}>W</span>
+          <span>WFM Labs</span>
         </a>
 
         {/* Desktop nav links */}
