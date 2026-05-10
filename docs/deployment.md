@@ -6,17 +6,17 @@
 
 ## Status
 
-Not yet deployed. This document will be populated during Week 1 when Netlify project is created.
+Not yet deployed. This document will be populated during Week 1 when Vercel project is created.
 
 ## Target Architecture
 
 ```
 GitHub (wfmlabsorg/wfmlabs-hub)
   │
-  ├── PR opened → Netlify Preview Deployment
+  ├── PR opened → Vercel Preview Deployment
   │                (unique URL per PR)
   │
-  └── Merge to main → Netlify Production Deployment
+  └── Merge to main → Vercel Production Deployment
                        (community.wfmlabs.com)
 ```
 
@@ -24,7 +24,7 @@ GitHub (wfmlabsorg/wfmlabs-hub)
 
 | Service | Account | Project Name | Status |
 |---------|---------|-------------|--------|
-| Netlify | Ted's account | wfmlabs-hub | Not created |
+| Vercel | Ted's account | wfmlabs-hub | Not created |
 | Neon | Ted's account | wfmlabs-hub | Not created |
 | Cloudflare R2 | Ted's account | wfmlabshub-media | Not created |
 | Resend | Ted's account | (existing) | Domain setup needed |
@@ -48,8 +48,8 @@ RESEND_API_KEY          # Resend
 RESEND_FROM_EMAIL       # hello@community.wfmlabs.com
 ```
 
-### Setup in Netlify
-All environment variables set in Netlify dashboard → Settings → Environment Variables. Different values for Preview and Production environments.
+### Setup in Vercel
+All environment variables set in Vercel dashboard → Settings → Environment Variables. Different values for Preview and Production environments.
 
 ### Local Development
 Copy `.env.example` to `.env.local` and fill in values. Never commit `.env.local`.
@@ -62,7 +62,7 @@ Copy `.env.example` to `.env.local` and fill in values. Never commit `.env.local
 
 ## Rollback
 
-Netlify supports instant rollback to any previous deployment via dashboard or CLI:
+Vercel supports instant rollback to any previous deployment via dashboard or CLI:
 ```bash
 vercel rollback [deployment-url]
 ```

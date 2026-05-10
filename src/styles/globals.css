@@ -487,3 +487,108 @@ a:hover {
 .input::placeholder {
   color: var(--fg-faint);
 }
+
+/* === Discussion Components === */
+
+.discussion-section {
+  margin-top: 0;
+}
+
+.discussion-entry {
+  border-left: 3px solid var(--border);
+  padding: 1rem 1.25rem;
+  background: var(--bg-card);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  transition: border-color 0.15s;
+}
+
+.discussion-entry:hover {
+  border-left-color: var(--accent);
+}
+
+.discussion-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--accent-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.discussion-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+}
+
+.discussion-body {
+  font-size: 0.9375rem;
+  line-height: 1.7;
+  color: var(--fg);
+}
+
+.discussion-body p:last-child {
+  margin-bottom: 0;
+}
+
+.discussion-form {
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* === Reaction Bar === */
+
+.reaction-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reaction-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  line-height: 1;
+}
+
+.reaction-btn:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--fg);
+  transform: scale(1.05);
+}
+
+.reaction-btn:active {
+  transform: scale(0.95);
+}
+
+.reaction-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+}
+
+.reaction-emoji {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.reaction-count {
+  font-weight: 500;
+  font-size: 0.75rem;
+}

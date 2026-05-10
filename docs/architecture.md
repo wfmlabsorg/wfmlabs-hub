@@ -10,7 +10,7 @@
 ```
                     ┌────────────────────────────┐
                     │    Payload CMS (Neon PG)    │
-                    │    Netlify deployment         │
+                    │    Vercel deployment         │
                     │                              │
                     │  Members / Identity           │
                     │  Papers / Articles / Tools    │
@@ -40,11 +40,11 @@
 | Database | Neon Postgres (serverless) |
 | Storage | Cloudflare R2 |
 | Email | Resend + React Email |
-| Hosting | Netlify |
+| Hosting | Vercel |
 | Search | Postgres full-text search |
 | Styling | Tailwind v4 + shadcn/ui |
 | Package manager | Bun |
-| CI/CD | GitHub Actions + Netlify auto-deploy |
+| CI/CD | GitHub Actions + Vercel auto-deploy |
 
 ## Collections (Phase 1)
 

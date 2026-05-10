@@ -1,53 +1,40 @@
 # Current State — WFM Labs Hub
 
-**Last updated:** 2026-05-10
-**Phase:** Week 1 complete, ready for Week 2
+**Last updated:** 2026-05-09
+**Phase:** Pre-build (seed document finalized, infrastructure not yet created)
 **Seed doc version:** v1.1
 
 ## What Exists
 
 - Seed document v1.1 (`wfmlabs-platform-seed-v1.1.md`) — source of truth
 - Seed document v1.0 (`wfmlabs-platform-seed-v1.md`) — archived for reference
-- MEMORY directory with 15 initial ADRs + 1 learning
+- MEMORY directory with 15 initial ADRs
 - TARS session infrastructure (CLAUDE.md, WFMLabsHub skill)
 - Documentation structure (`docs/`)
-- **Git repo initialized, pushed to `wfmlabsorg/wfmlabs-hub` (private)**
-- **Next.js 16.2.6 + Payload CMS 3.84.1 scaffolded and build-verified**
-- **Media collection (first collection)**
-- **Frontend layout + homepage placeholder**
-- **Payload admin routes wired** (`/admin`, `/api`)
-- **Tailwind v4.3 + PostCSS configured**
-
-## Dev Environment
-
-- **Cloud dir (git):** `~/cloud/projects/wfmlabs-hub/`
-- **Local dev dir (node_modules):** `~/projects/wfmlabs-hub-local/`
-- node_modules MUST be in local dir due to R2 sync performance (see learnings/2026-05-09-wsl2-cloud-dir-perf.md)
-
-## Live Deployment
-
-- **Vercel:** https://wfmlabs-hub-local.vercel.app
-- **Admin:** https://wfmlabs-hub-local.vercel.app/admin
-- **Admin user:** ted@wfmlabs.com (created 2026-05-10)
-- **Netlify site exists** but doesn't work for Payload (server actions incompatibility). Vercel is production.
 
 ## What Does NOT Exist Yet
-- GitHub → Vercel auto-deploy (deploying via CLI currently)
-- CI workflow (GitHub Actions)
-- Topics collection
-- Content collections (Papers, Articles, Tools, NewsletterIssues)
-- Engagement collections (Discussions, Reactions, Notifications)
-- Any content loaded
-- Frontend pages beyond homepage placeholder
 
-## Current Phase: Week 2 (starting)
+- Git repository (not initialized)
+- GitHub repo (`wfmlabsorg/wfmlabs-hub`)
+- Next.js application
+- Payload CMS configuration
+- Neon database project
+- R2 bucket
+- Vercel project
+- Any collections or content
+- Any frontend pages
 
-Next deliverables:
-1. Connect GitHub to Vercel for auto-deploy
-2. Topics collection + seed taxonomy
-3. Papers, Articles, Tools, NewsletterIssues collections
-4. Access control functions
-5. Postgres FTS indexes
+## Current Phase: Pre-Build
+
+Next step is Week 1 execution:
+1. Initialize git repo
+2. Push to GitHub
+3. Scaffold Next.js + Payload app
+4. Create Vercel project
+5. Create Neon project
+6. Create R2 bucket
+7. Configure environment variables
+8. Verify preview deployment works
 
 ## Decisions Made
 

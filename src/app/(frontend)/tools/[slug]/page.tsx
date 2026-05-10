@@ -2,6 +2,8 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { notFound } from 'next/navigation'
 import { RichTextContent } from '@/components/ui/RichTextContent'
+import { DiscussionSection } from '@/components/discussion/DiscussionSection'
+import { ReactionBar } from '@/components/ui/ReactionBar'
 import React from 'react'
 
 const categoryColors: Record<string, string> = {
@@ -63,6 +65,23 @@ export default async function ToolDetailPage({
 
   const tool = result.docs[0]
   if (!tool) notFound()
+
+  // Fetch reaction counts for this tool
+  const reactionTypes = ['like', 'insightful', 'practical', 'question'] as const
+  const reactionCounts: Record<string, number> = { like: 0, insightful: 0, practical: 0, question: 0 }
+  for (const rType of reactionTypes) {
+    const r = await payload.find({
+      collection: 'reactions',
+      where: {
+        'target.relationTo': { equals: 'tools' },
+        'target.value': { equals: tool.id },
+        type: { equals: rType },
+      },
+      limit: 0,
+      overrideAccess: true,
+    })
+    reactionCounts[rType] = r.totalDocs
+  }
 
   const contributor =
     typeof tool.primaryContributor === 'object' &&
@@ -207,6 +226,11 @@ export default async function ToolDetailPage({
           {tool.version && <span>v{tool.version}</span>}
           {tool.updatedAt && <span>Updated {formatDate(tool.updatedAt)}</span>}
         </div>
+      </div>
+
+      {/* Reaction bar */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <ReactionBar targetType="tools" targetId={tool.id} counts={reactionCounts as { like: number; insightful: number; practical: number; question: number }} />
       </div>
 
       {/* Main layout: content + sidebar */}
@@ -586,19 +610,7 @@ function ToolTabs({ tool }: { tool: any }) {
 
       {/* Discussion section */}
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Discussion</h2>
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '2rem',
-            border: '1px dashed var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            color: 'var(--fg-muted)',
-            fontSize: '0.875rem',
-          }}
-        >
-          Discussion threads coming soon.
-        </div>
+        <DiscussionSection assetType="tools" assetId={tool.id} />
       </div>
     </div>
   )
