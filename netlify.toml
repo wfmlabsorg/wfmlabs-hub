@@ -6,6 +6,10 @@
   NODE_VERSION = "22"
   NEXT_PUBLIC_SERVER_URL = "https://wfmlabs-hub.netlify.app"
 
+[functions]
+  external_node_modules = ["sharp"]
+  included_files = ["node_modules/sharp/**/*"]
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
