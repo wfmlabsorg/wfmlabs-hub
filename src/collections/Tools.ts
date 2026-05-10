@@ -58,7 +58,7 @@ export const Tools: CollectionConfig = {
     },
   ],
   access: {
-    read: isMember,
+    read: () => true,
     create: isAdmin,
     update: isAdmin,
     delete: isAdmin,

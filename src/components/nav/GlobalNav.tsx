@@ -3,11 +3,11 @@
 import React, { useState } from 'react'
 
 const navLinks = [
-  { href: '/wiki', label: 'Wiki' },
-  { href: '/research', label: 'Research' },
   { href: '/tools', label: 'Tools' },
-  { href: '/articles', label: 'Articles' },
-  { href: '/compass', label: 'Compass' },
+  { href: '/research', label: 'Research' },
+  { href: '/wiki', label: 'Wiki' },
+  { href: '/frameworks', label: 'Frameworks' },
+  { href: '/scenarios', label: 'Scenarios' },
   { href: '/members', label: 'Members' },
 ]
 
