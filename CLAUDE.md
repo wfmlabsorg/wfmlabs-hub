@@ -5,15 +5,15 @@
 - **Current state:** `MEMORY/current-state.md` (what exists, what works, what's next)
 - **Open questions:** `MEMORY/open-questions.md`
 - **Phase:** 1 (Foundation — no commerce, no agents)
-- **Status:** Pre-build. Seed doc finalized, session infrastructure created.
+- **Status:** Week 1 in progress. Scaffold built, deploying to Netlify.
 
 ## Architecture
 - **CMS:** Payload CMS 3.x (ecosystem-wide headless backbone, not single-site)
-- **Frontend:** Next.js 15 App Router + React 19
-- **Database:** Neon Postgres (dedicated project `wfmlabs-hub`)
-- **Storage:** Cloudflare R2 (bucket `wfmlabshub-media`)
+- **Frontend:** Next.js 16 App Router + React 19
+- **Database:** Neon Postgres (dedicated project)
+- **Storage:** Cloudflare R2 (bucket `wfmlabs-media`)
 - **Email:** Resend + React Email
-- **Hosting:** Vercel
+- **Hosting:** Netlify (NOT Vercel — consolidated with 118 other WFM Labs sites)
 - **Search:** Postgres full-text search (no Meilisearch until content > 500)
 - **Styling:** Tailwind v4 + shadcn/ui
 - **Package manager:** Bun (NEVER npm/yarn/pnpm)
@@ -47,6 +47,7 @@ Build value, not commerce. Authenticated members browse curated content and enga
 | # | Decision |
 |---|----------|
 | 0001 | Payload as ecosystem-wide content backbone |
+| 0002 | Netlify hosting (supersedes Vercel) |
 | 0004 | Flat repo, no monorepo |
 | 0009 | Postgres FTS over Meilisearch |
 | 0010 | Commerce deferred to Phase 2 |

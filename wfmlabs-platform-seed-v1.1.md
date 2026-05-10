@@ -51,7 +51,7 @@ Where Mighty Networks is feed-based and chat-shaped, the Hub is a structured wor
 | Flat repo structure replaces monorepo | No Turborepo, no `packages/` — one Next.js + Payload app until a second consumer exists |
 | Commerce (Stripe, tiers, trials) deferred to Phase 2 | Build value first, monetize second — Ted needs to see the platform working before pricing decisions |
 | Meilisearch replaced with Postgres full-text search | 50–100 items don't need a dedicated search engine; reduces ops surface |
-| Services reduced from 9 to 5 | Vercel, Neon, Cloudflare, Resend, GitHub — everything else deferred |
+| Services reduced from 9 to 5 | Netlify, Neon, Cloudflare, Resend, GitHub — everything else deferred |
 | Collections phased across weeks, not all in Week 3 | 18 collections in one week is a sprint failure |
 | Flat discussions with schema supporting future one-level nesting | Simpler UI, better agent visibility, escape hatch preserved |
 | Content strategy: curate fresh over Mighty migration | 17 newsletters + 10–15 papers + 5 tools + fresh articles vs. mining Mighty comment threads |
@@ -110,7 +110,7 @@ WFM Labs Ecosystem — Payload as Content Backbone
 
                     ┌────────────────────────────┐
                     │    Payload CMS (Neon PG)    │
-                    │    Vercel deployment         │
+                    │    Netlify deployment        │
                     │                              │
                     │  Members / Identity           │
                     │  Papers / Articles / Tools    │
@@ -144,7 +144,7 @@ Current WFM Labs properties and their relationship to Payload:
 
 | Property | Current Stack | Payload Relationship | Timeline |
 |---|---|---|---|
-| `community.wfmlabs.com` | Not built | Primary frontend (Next.js, same Vercel deploy) | Phase 1 |
+| `community.wfmlabs.com` | Not built | Primary frontend (Next.js, same Netlify deploy) | Phase 1 |
 | `wfmlabs.com` | Hugo + Netlify | Consumes tool metadata from Payload API (bridge) | Phase 2+ |
 | `wiki.wfmlabs.org` | MediaWiki + Pro.wiki | Cross-references Payload content via API | Phase 4+ |
 | `roc.wfmlabs.com` | Not built | Reads/writes Scenarios, shares Member identity | Phase 4 |
@@ -292,14 +292,14 @@ Discussions are **flat with @-mentions.** Each discussion entry is a top-level c
 | Framework | **Next.js 15+ App Router** | Native Payload integration; React Server Components; full TypeScript |
 | CMS | **Payload CMS 3.x** | TypeScript-native; admin UI included; auto-generated REST + GraphQL APIs; runs as Next.js app; MIT licensed |
 | Database | **Neon Postgres (Serverless)** | Already in stack; branching for previews; auto-scaling; point-in-time recovery |
-| Object storage | **Cloudflare R2** | Already in stack; S3-compatible; cheaper than Vercel Blob |
-| Hosting | **Vercel** | Best Payload support; native Next.js; preview environments per PR |
+| Object storage | **Cloudflare R2** | Already in stack; S3-compatible |
+| Hosting | **Netlify** | Already hosts 118 WFM Labs sites; full Node.js via Functions; preview per PR |
 | Email | **Resend** | TypeScript-native; React Email templates; Ted already has account |
 | Auth | **Payload built-in auth** | Native to platform; minimal complexity |
 | Search | **Postgres full-text search** | No additional service for < 500 items |
-| CDN | **Vercel + Cloudflare** | Vercel CDN automatic; Cloudflare in front for caching, WAF |
+| CDN | **Netlify + Cloudflare** | Netlify CDN automatic; Cloudflare in front for caching, WAF |
 | Source control | **GitHub** (`wfmlabsorg`) | Existing org; Actions for CI/CD |
-| CI/CD | **Vercel automatic deployments** | Each PR gets preview URL; main branch deploys to production |
+| CI/CD | **Netlify automatic deployments** | Each PR gets preview URL; main branch deploys to production |
 | Package management | **Bun** | Ted's stack preference; fast installs |
 
 ### 5.2 What's NOT in Phase 1
@@ -308,9 +308,9 @@ Discussions are **flat with @-mentions.** Each discussion entry is a top-level c
 |---|---|---|
 | **Stripe** | Phase 2 (commerce) | Build value first, monetize second |
 | **Meilisearch** | When content > 500 items | Postgres FTS handles current scale |
-| **Sentry** | Phase 2 | Vercel error tracking suffices initially |
-| **Axiom** | Phase 2 | Vercel logs suffice initially |
-| **Better Uptime** | Phase 2 | Vercel has basic uptime monitoring |
+| **Sentry** | Phase 2 | Netlify error tracking suffices initially |
+| **Axiom** | Phase 2 | Netlify logs suffice initially |
+| **Better Uptime** | Phase 2 | Netlify has basic monitoring |
 | **Plausible / PostHog** | Phase 2 | Not needed for 20-member beta |
 | **Cloudflare Workers** | Phase 3 (agents) | No agents in Phase 1 |
 
@@ -320,13 +320,13 @@ Discussions are **flat with @-mentions.** Each discussion entry is a top-level c
 - **Strapi**: Node.js-coupled, separate deployment, more plugin-ecosystem-shaped. Fine choice but less elegant. Migration path if Payload becomes problematic.
 - **Sanity**: SaaS, vendor lock-in, proprietary schema format. Disqualified for ownership reasons.
 
-### 5.4 Why Vercel over Netlify and Cloudflare Pages
+### 5.4 Why Netlify over Vercel and Cloudflare Pages
 
 - **Cloudflare Pages** uses Workers runtime with limited Node.js compatibility. Payload 3.x requires full Node.js APIs. Disqualified for the main app, but used for agent runtimes where Worker model is correct.
-- **Netlify** works but the path is less battle-tested for Payload 3.x. Documented as fallback.
-- **Vercel** is where Next.js is developed and where Payload 3.x is most heavily tested. Free Hobby tier covers initial usage.
+- **Vercel** is where Next.js is developed and Payload 3.x is most heavily tested. However, advantages over Netlify are marginal (slightly faster cold starts, tighter integration) — optimization-tier, not capability.
+- **Netlify** already hosts 118 WFM Labs sites including all premium tools. Netlify Functions provide full Node.js runtime. Next.js deploys via `@netlify/plugin-nextjs`. Same auto-deploy-on-push, preview-per-PR workflow. Operational consistency wins over marginal optimization.
 
-Note: WFM Labs premium tools already deploy to Netlify. The Hub deploys to Vercel. These coexist — different deployment targets for different purposes. Netlify stays as the tool deployment platform; Vercel hosts the Payload + Next.js app.
+All WFM Labs hosting consolidated on Netlify. Vercel documented as escape hatch if Netlify's Next.js adapter has issues.
 
 ### 5.5 Packages and versions (initial pinning)
 
@@ -1101,7 +1101,7 @@ That's it for Phase 1. No weekly digest, no campaign emails, no trial notificati
 
 ### 13.3 Observability (Phase 1 minimal)
 
-**Vercel built-in:** error tracking, performance monitoring, deployment logs, basic uptime. Sufficient for 20-member beta.
+**Netlify built-in:** deployment logs, function logs, basic analytics. Sufficient for 20-member beta.
 
 **Phase 2 adds:** Sentry (error tracking), Axiom (structured logging), Better Uptime (synthetic monitoring), Plausible (privacy-respecting analytics).
 
@@ -1126,7 +1126,7 @@ That's it for Phase 1. No weekly digest, no campaign emails, no trial notificati
 
 ### 13.6 Security
 
-- HTTPS everywhere (Vercel automatic + Cloudflare)
+- HTTPS everywhere (Netlify automatic + Cloudflare)
 - HSTS enabled
 - CSP headers in `next.config.ts`
 - All input validated with Zod
@@ -1246,7 +1246,7 @@ Initial ADRs documenting v1.1 key decisions:
 | ADR | Title |
 |---|---|
 | 0001 | Payload CMS as ecosystem-wide content backbone |
-| 0002 | Vercel for application hosting |
+| 0002 | Netlify for application hosting (supersedes Vercel) |
 | 0003 | Two-platform strategy (Mighty free, Hub paid) |
 | 0004 | Flat repo structure, no monorepo for Phase 1 |
 | 0005 | Object-anchored architecture (no feed) |
@@ -1281,10 +1281,10 @@ Initial ADRs documenting v1.1 key decisions:
 4. Create `CLAUDE.md` session bootstrap
 5. Create `~/.claude/skills/WFMLabsHub/SKILL.md`
 6. Set up GitHub Actions CI workflow (lint, typecheck, test)
-7. Create Vercel project, link to GitHub, verify preview deployments
+7. Create Netlify site, link to GitHub, verify preview deployments
 8. Create Neon project `wfmlabs-hub`, get connection string
 9. Create Cloudflare R2 bucket `wfmlabshub-media`
-10. Configure environment variables in Vercel and `.env.local`
+10. Configure environment variables in Netlify and `.env.local`
 
 **End state:** Empty Next.js app deploys to a preview URL on every PR. TARS memory active.
 
@@ -1459,7 +1459,7 @@ Before declaring Phase 1 complete:
 | Risk | Probability | Impact | Mitigation |
 |---|---|---|---|
 | Payload 3.x production issues | Medium | High | Pin versions; Strapi as documented escape hatch |
-| Vercel pricing escalates | Low | Medium | Netlify fallback documented |
+| Netlify Next.js adapter issues | Low | Medium | Vercel as documented escape hatch |
 | Conversion rate too low (Phase 2) | Medium | High | Beta with 20 members validates value before pricing |
 | Solo developer hit by bus | Low | Catastrophic | Documentation, ADRs, session notes make handoff possible |
 | Content quality disappoints members | Medium | Medium | Curate high-quality initial library; Beacon validates in Phase 3 |
@@ -1653,7 +1653,7 @@ This template is used for the repo's `CLAUDE.md` file, updated after each sessio
 - **Status:** [CURRENT STATUS]
 
 ## Architecture
-- Payload CMS 3.x + Next.js 15 on Vercel
+- Payload CMS 3.x + Next.js on Netlify
 - Neon Postgres (serverless)
 - Cloudflare R2 (media)
 - Resend (email)

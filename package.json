@@ -19,6 +19,7 @@
     "seed:topics": "bun run scripts/seed-topics.ts"
   },
   "dependencies": {
+    "@netlify/plugin-nextjs": "^5.15.11",
     "@payloadcms/db-postgres": "^3.84.1",
     "@payloadcms/next": "^3.84.1",
     "@payloadcms/plugin-cloud-storage": "^3.84.1",

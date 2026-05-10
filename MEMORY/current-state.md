@@ -26,10 +26,8 @@
 
 ## What Does NOT Exist Yet
 
-- Neon database project
-- R2 bucket (`wfmlabshub-media`)
-- Vercel project
-- Environment variables configured
+- Netlify site (creating now)
+- Environment variables configured on Netlify
 - CI workflow (GitHub Actions)
 - Any collections beyond Media
 - Any content
@@ -37,13 +35,14 @@
 ## Current Phase: Week 1 (in progress)
 
 Remaining Week 1 items:
-1. Create Neon project `wfmlabs-hub`
-2. Create R2 bucket `wfmlabshub-media`
-3. Create Vercel project + link to GitHub
-4. Configure environment variables
-5. Set up GitHub Actions CI
-6. Verify preview deployment works
-7. Verify Payload admin UI connects to database
+1. Create Netlify site + link to GitHub
+2. Configure environment variables (Neon + R2 credentials in sops)
+3. Set up GitHub Actions CI
+4. Verify preview deployment works
+5. Verify Payload admin UI connects to Neon database
+
+Neon database: provisioned (credentials in sops as WFMLABS_HUB_DATABASE_URL)
+R2 bucket: `wfmlabs-media` (credentials in sops as WFMLABS_HUB_R2_*)
 
 ## Decisions Made
 
