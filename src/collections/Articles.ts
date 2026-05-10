@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access/isAdmin'
 import { isMember } from '@/access/isMember'
 import { isAuthor } from '@/access/isAuthor'
+import { baseAssetFields } from './_baseAssetFields'
 
 export const Articles: CollectionConfig = {
   slug: 'articles',
@@ -14,17 +15,15 @@ export const Articles: CollectionConfig = {
       type: 'text',
       required: true,
     },
-    {
-      name: 'slug',
-      type: 'text',
-      required: true,
-      unique: true,
-    },
+    ...baseAssetFields,
+    // Article-specific fields
     {
       name: 'author',
       type: 'relationship',
       relationTo: 'members',
-      required: true,
+      admin: {
+        description: 'Original author (primaryContributor is the curator)',
+      },
     },
     {
       name: 'publishDate',
@@ -39,34 +38,11 @@ export const Articles: CollectionConfig = {
       name: 'excerpt',
       type: 'textarea',
     },
-    {
-      name: 'coverImage',
-      type: 'upload',
-      relationTo: 'media',
-    },
-    {
-      name: 'topics',
-      type: 'relationship',
-      relationTo: 'topics',
-      hasMany: true,
-    },
-    {
-      name: 'discussionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
-    },
-    {
-      name: 'reactionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
-    },
   ],
   access: {
     read: isMember,
     create: isAdmin,
-    update: isAuthor('author'),
+    update: isAuthor('primaryContributor'),
     delete: isAdmin,
   },
 }

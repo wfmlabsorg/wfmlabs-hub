@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access/isAdmin'
 import { isMember } from '@/access/isMember'
 import { isAuthor } from '@/access/isAuthor'
+import { baseAssetFields } from './_baseAssetFields'
 
 export const Papers: CollectionConfig = {
   slug: 'papers',
@@ -14,20 +15,8 @@ export const Papers: CollectionConfig = {
       type: 'text',
       required: true,
     },
-    {
-      name: 'slug',
-      type: 'text',
-      required: true,
-      unique: true,
-    },
-    {
-      name: 'authors',
-      type: 'array',
-      fields: [
-        { name: 'name', type: 'text', required: true },
-        { name: 'affiliation', type: 'text' },
-      ],
-    },
+    ...baseAssetFields,
+    // Paper-specific fields
     {
       name: 'sourceUrl',
       type: 'text',
@@ -47,14 +36,12 @@ export const Papers: CollectionConfig = {
       ],
     },
     {
-      name: 'publishedDate',
-      type: 'date',
-    },
-    {
-      name: 'addedBy',
-      type: 'relationship',
-      relationTo: 'members',
-      required: true,
+      name: 'authors',
+      type: 'array',
+      fields: [
+        { name: 'name', type: 'text', required: true },
+        { name: 'affiliation', type: 'text' },
+      ],
     },
     {
       name: 'abstract',
@@ -80,39 +67,15 @@ export const Papers: CollectionConfig = {
       type: 'richText',
     },
     {
-      name: 'topics',
-      type: 'relationship',
-      relationTo: 'topics',
-      hasMany: true,
-    },
-    {
       name: 'pdfFile',
       type: 'upload',
       relationTo: 'media',
-    },
-    {
-      name: 'discussionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
-    },
-    {
-      name: 'reactionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
-    },
-    {
-      name: 'savedByCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
     },
   ],
   access: {
     read: isMember,
     create: isAdmin,
-    update: isAuthor('addedBy'),
+    update: isAuthor('primaryContributor'),
     delete: isAdmin,
   },
 }

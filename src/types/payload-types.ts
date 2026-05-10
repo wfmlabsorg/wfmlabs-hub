@@ -73,7 +73,13 @@ export interface Config {
     articles: Article;
     tools: Tool;
     'newsletter-issues': NewsletterIssue;
+    'wiki-entries': WikiEntry;
     media: Media;
+    discussions: Discussion;
+    'asset-versions': AssetVersion;
+    'asset-relationships': AssetRelationship;
+    'asset-contributions': AssetContribution;
+    reactions: Reaction;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -87,7 +93,13 @@ export interface Config {
     articles: ArticlesSelect<false> | ArticlesSelect<true>;
     tools: ToolsSelect<false> | ToolsSelect<true>;
     'newsletter-issues': NewsletterIssuesSelect<false> | NewsletterIssuesSelect<true>;
+    'wiki-entries': WikiEntriesSelect<false> | WikiEntriesSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
+    discussions: DiscussionsSelect<false> | DiscussionsSelect<true>;
+    'asset-versions': AssetVersionsSelect<false> | AssetVersionsSelect<true>;
+    'asset-relationships': AssetRelationshipsSelect<false> | AssetRelationshipsSelect<true>;
+    'asset-contributions': AssetContributionsSelect<false> | AssetContributionsSelect<true>;
+    reactions: ReactionsSelect<false> | ReactionsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -203,7 +215,35 @@ export interface Topic {
 export interface Paper {
   id: number;
   title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
   slug: string;
+  primaryContributor: number | Member;
+  description?: string | null;
+  topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
+  sourceUrl: string;
+  sourceType?: ('arxiv' | 'ssrn' | 'journal' | 'industry-report' | 'blog' | 'vendor-research' | 'manual') | null;
   authors?:
     | {
         name: string;
@@ -211,10 +251,6 @@ export interface Paper {
         id?: string | null;
       }[]
     | null;
-  sourceUrl: string;
-  sourceType?: ('arxiv' | 'ssrn' | 'journal' | 'industry-report' | 'blog' | 'vendor-research' | 'manual') | null;
-  publishedDate?: string | null;
-  addedBy: number | Member;
   abstract?: string | null;
   fullText?: string | null;
   /**
@@ -265,11 +301,7 @@ export interface Paper {
     };
     [k: string]: unknown;
   } | null;
-  topics?: (number | Topic)[] | null;
   pdfFile?: (number | null) | Media;
-  discussionCount?: number | null;
-  reactionCount?: number | null;
-  savedByCount?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -280,8 +312,37 @@ export interface Paper {
 export interface Article {
   id: number;
   title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
   slug: string;
-  author: number | Member;
+  primaryContributor: number | Member;
+  description?: string | null;
+  topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
+  /**
+   * Original author (primaryContributor is the curator)
+   */
+  author?: (number | null) | Member;
   publishDate?: string | null;
   body: {
     root: {
@@ -299,10 +360,6 @@ export interface Article {
     [k: string]: unknown;
   };
   excerpt?: string | null;
-  coverImage?: (number | null) | Media;
-  topics?: (number | Topic)[] | null;
-  discussionCount?: number | null;
-  reactionCount?: number | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -312,10 +369,37 @@ export interface Article {
  */
 export interface Tool {
   id: number;
-  name: string;
+  /**
+   * Display name of the tool
+   */
+  title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
   slug: string;
-  description: string;
-  category?: ('capacity-planning' | 'forecasting' | 'scheduling' | 'analytics' | 'value-planning' | 'staffing') | null;
+  primaryContributor: number | Member;
+  description?: string | null;
+  topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
   /**
    * URL of the live tool (e.g., montecarlo.wfmlabs.com)
    */
@@ -324,8 +408,7 @@ export interface Tool {
    * GitHub repo URL if open source
    */
   sourceCodeUrl?: string | null;
-  createdBy?: (number | null) | Member;
-  version?: string | null;
+  category?: ('capacity-planning' | 'forecasting' | 'scheduling' | 'analytics' | 'value-planning' | 'staffing') | null;
   /**
    * How practitioners use this tool — the value narrative
    */
@@ -344,9 +427,7 @@ export interface Tool {
     };
     [k: string]: unknown;
   } | null;
-  topics?: (number | Topic)[] | null;
-  discussionCount?: number | null;
-  reactionCount?: number | null;
+  version?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -356,11 +437,36 @@ export interface Tool {
  */
 export interface NewsletterIssue {
   id: number;
-  issueNumber: number;
   title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
   slug: string;
+  primaryContributor: number | Member;
+  description?: string | null;
+  topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
+  issueNumber: number;
   publishDate: string;
-  author?: (number | null) | Member;
   body: {
     root: {
       type: string;
@@ -376,9 +482,327 @@ export interface NewsletterIssue {
     };
     [k: string]: unknown;
   };
-  coverImage?: (number | null) | Media;
   summary?: string | null;
+  author?: (number | null) | Member;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "wiki-entries".
+ */
+export interface WikiEntry {
+  id: number;
+  title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
+  slug: string;
+  primaryContributor: number | Member;
+  description?: string | null;
   topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
+  category?: ('concept' | 'process' | 'metric' | 'technology' | 'framework' | 'role' | 'glossary') | null;
+  body: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  relatedEntries?: (number | WikiEntry)[] | null;
+  definedTerms?:
+    | {
+        term: string;
+        definition: string;
+        id?: string | null;
+      }[]
+    | null;
+  sources?:
+    | {
+        label: string;
+        url?: string | null;
+        note?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  seeAlso?:
+    | (
+        | {
+            relationTo: 'papers';
+            value: number | Paper;
+          }
+        | {
+            relationTo: 'articles';
+            value: number | Article;
+          }
+        | {
+            relationTo: 'tools';
+            value: number | Tool;
+          }
+        | {
+            relationTo: 'newsletter-issues';
+            value: number | NewsletterIssue;
+          }
+        | {
+            relationTo: 'wiki-entries';
+            value: number | WikiEntry;
+          }
+      )[]
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "discussions".
+ */
+export interface Discussion {
+  id: number;
+  asset:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      };
+  parentDiscussion?: (number | null) | Discussion;
+  author: number | Member;
+  body: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  isResolved?: boolean | null;
+  reactionCount?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-versions".
+ */
+export interface AssetVersion {
+  id: number;
+  asset:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      };
+  versionNumber: string;
+  changedBy: number | Member;
+  changeDescription?: string | null;
+  snapshot?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  changeType?: ('create' | 'update' | 'status-change' | 'major-revision' | 'minor-edit') | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-relationships".
+ */
+export interface AssetRelationship {
+  id: number;
+  fromAsset:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      };
+  toAsset:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      };
+  relationshipType:
+    | 'cites'
+    | 'implements'
+    | 'documents'
+    | 'critiques'
+    | 'extends'
+    | 'supersedes'
+    | 'requires'
+    | 'related-to'
+    | 'derived-from'
+    | 'mentions';
+  createdBy?: (number | null) | Member;
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-contributions".
+ */
+export interface AssetContribution {
+  id: number;
+  asset:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      };
+  contributor: number | Member;
+  contributionType: 'primary-author' | 'co-author' | 'editor' | 'reviewer' | 'curator' | 'updater';
+  contributedAt?: string | null;
+  contributionNote?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reactions".
+ */
+export interface Reaction {
+  id: number;
+  target:
+    | {
+        relationTo: 'papers';
+        value: number | Paper;
+      }
+    | {
+        relationTo: 'articles';
+        value: number | Article;
+      }
+    | {
+        relationTo: 'tools';
+        value: number | Tool;
+      }
+    | {
+        relationTo: 'newsletter-issues';
+        value: number | NewsletterIssue;
+      }
+    | {
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      }
+    | {
+        relationTo: 'discussions';
+        value: number | Discussion;
+      };
+  member: number | Member;
+  type: 'like' | 'insightful' | 'practical' | 'question';
   updatedAt: string;
   createdAt: string;
 }
@@ -431,8 +855,32 @@ export interface PayloadLockedDocument {
         value: number | NewsletterIssue;
       } | null)
     | ({
+        relationTo: 'wiki-entries';
+        value: number | WikiEntry;
+      } | null)
+    | ({
         relationTo: 'media';
         value: number | Media;
+      } | null)
+    | ({
+        relationTo: 'discussions';
+        value: number | Discussion;
+      } | null)
+    | ({
+        relationTo: 'asset-versions';
+        value: number | AssetVersion;
+      } | null)
+    | ({
+        relationTo: 'asset-relationships';
+        value: number | AssetRelationship;
+      } | null)
+    | ({
+        relationTo: 'asset-contributions';
+        value: number | AssetContribution;
+      } | null)
+    | ({
+        relationTo: 'reactions';
+        value: number | Reaction;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -525,6 +973,27 @@ export interface TopicsSelect<T extends boolean = true> {
 export interface PapersSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
+  primaryContributor?: T;
+  description?: T;
+  topics?: T;
+  coverImage?: T;
+  status?: T;
+  publishedAt?: T;
+  reviewedAt?: T;
+  reviewIntervalDays?: T;
+  tier?: T;
+  isFeatured?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        contributorCount?: T;
+        viewCount?: T;
+        citationCount?: T;
+      };
+  sourceUrl?: T;
+  sourceType?: T;
   authors?:
     | T
     | {
@@ -532,20 +1001,12 @@ export interface PapersSelect<T extends boolean = true> {
         affiliation?: T;
         id?: T;
       };
-  sourceUrl?: T;
-  sourceType?: T;
-  publishedDate?: T;
-  addedBy?: T;
   abstract?: T;
   fullText?: T;
   curatorSummary?: T;
   whyItMatters?: T;
   caveats?: T;
-  topics?: T;
   pdfFile?: T;
-  discussionCount?: T;
-  reactionCount?: T;
-  savedByCount?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -556,14 +1017,29 @@ export interface PapersSelect<T extends boolean = true> {
 export interface ArticlesSelect<T extends boolean = true> {
   title?: T;
   slug?: T;
+  primaryContributor?: T;
+  description?: T;
+  topics?: T;
+  coverImage?: T;
+  status?: T;
+  publishedAt?: T;
+  reviewedAt?: T;
+  reviewIntervalDays?: T;
+  tier?: T;
+  isFeatured?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        contributorCount?: T;
+        viewCount?: T;
+        citationCount?: T;
+      };
   author?: T;
   publishDate?: T;
   body?: T;
   excerpt?: T;
-  coverImage?: T;
-  topics?: T;
-  discussionCount?: T;
-  reactionCount?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -572,18 +1048,32 @@ export interface ArticlesSelect<T extends boolean = true> {
  * via the `definition` "tools_select".
  */
 export interface ToolsSelect<T extends boolean = true> {
-  name?: T;
+  title?: T;
   slug?: T;
+  primaryContributor?: T;
   description?: T;
-  category?: T;
+  topics?: T;
+  coverImage?: T;
+  status?: T;
+  publishedAt?: T;
+  reviewedAt?: T;
+  reviewIntervalDays?: T;
+  tier?: T;
+  isFeatured?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        contributorCount?: T;
+        viewCount?: T;
+        citationCount?: T;
+      };
   embedUrl?: T;
   sourceCodeUrl?: T;
-  createdBy?: T;
-  version?: T;
+  category?: T;
   methodology?: T;
-  topics?: T;
-  discussionCount?: T;
-  reactionCount?: T;
+  version?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -592,15 +1082,80 @@ export interface ToolsSelect<T extends boolean = true> {
  * via the `definition` "newsletter-issues_select".
  */
 export interface NewsletterIssuesSelect<T extends boolean = true> {
-  issueNumber?: T;
   title?: T;
   slug?: T;
-  publishDate?: T;
-  author?: T;
-  body?: T;
-  coverImage?: T;
-  summary?: T;
+  primaryContributor?: T;
+  description?: T;
   topics?: T;
+  coverImage?: T;
+  status?: T;
+  publishedAt?: T;
+  reviewedAt?: T;
+  reviewIntervalDays?: T;
+  tier?: T;
+  isFeatured?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        contributorCount?: T;
+        viewCount?: T;
+        citationCount?: T;
+      };
+  issueNumber?: T;
+  publishDate?: T;
+  body?: T;
+  summary?: T;
+  author?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "wiki-entries_select".
+ */
+export interface WikiEntriesSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  primaryContributor?: T;
+  description?: T;
+  topics?: T;
+  coverImage?: T;
+  status?: T;
+  publishedAt?: T;
+  reviewedAt?: T;
+  reviewIntervalDays?: T;
+  tier?: T;
+  isFeatured?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        contributorCount?: T;
+        viewCount?: T;
+        citationCount?: T;
+      };
+  category?: T;
+  body?: T;
+  relatedEntries?: T;
+  definedTerms?:
+    | T
+    | {
+        term?: T;
+        definition?: T;
+        id?: T;
+      };
+  sources?:
+    | T
+    | {
+        label?: T;
+        url?: T;
+        note?: T;
+        id?: T;
+      };
+  seeAlso?: T;
   updatedAt?: T;
   createdAt?: T;
 }
@@ -622,6 +1177,71 @@ export interface MediaSelect<T extends boolean = true> {
   height?: T;
   focalX?: T;
   focalY?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "discussions_select".
+ */
+export interface DiscussionsSelect<T extends boolean = true> {
+  asset?: T;
+  parentDiscussion?: T;
+  author?: T;
+  body?: T;
+  isResolved?: T;
+  reactionCount?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-versions_select".
+ */
+export interface AssetVersionsSelect<T extends boolean = true> {
+  asset?: T;
+  versionNumber?: T;
+  changedBy?: T;
+  changeDescription?: T;
+  snapshot?: T;
+  changeType?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-relationships_select".
+ */
+export interface AssetRelationshipsSelect<T extends boolean = true> {
+  fromAsset?: T;
+  toAsset?: T;
+  relationshipType?: T;
+  createdBy?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "asset-contributions_select".
+ */
+export interface AssetContributionsSelect<T extends boolean = true> {
+  asset?: T;
+  contributor?: T;
+  contributionType?: T;
+  contributedAt?: T;
+  contributionNote?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "reactions_select".
+ */
+export interface ReactionsSelect<T extends boolean = true> {
+  target?: T;
+  member?: T;
+  type?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

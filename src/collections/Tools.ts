@@ -1,41 +1,24 @@
 import type { CollectionConfig } from 'payload'
 import { isAdmin } from '@/access/isAdmin'
 import { isMember } from '@/access/isMember'
+import { baseAssetFields } from './_baseAssetFields'
 
 export const Tools: CollectionConfig = {
   slug: 'tools',
   admin: {
-    useAsTitle: 'name',
+    useAsTitle: 'title',
   },
   fields: [
     {
-      name: 'name',
+      name: 'title',
       type: 'text',
       required: true,
+      admin: {
+        description: 'Display name of the tool',
+      },
     },
-    {
-      name: 'slug',
-      type: 'text',
-      required: true,
-      unique: true,
-    },
-    {
-      name: 'description',
-      type: 'textarea',
-      required: true,
-    },
-    {
-      name: 'category',
-      type: 'select',
-      options: [
-        { label: 'Capacity Planning', value: 'capacity-planning' },
-        { label: 'Forecasting', value: 'forecasting' },
-        { label: 'Scheduling', value: 'scheduling' },
-        { label: 'Analytics', value: 'analytics' },
-        { label: 'Value Planning', value: 'value-planning' },
-        { label: 'Staffing', value: 'staffing' },
-      ],
-    },
+    ...baseAssetFields,
+    // Tool-specific fields
     {
       name: 'embedUrl',
       type: 'text',
@@ -51,13 +34,16 @@ export const Tools: CollectionConfig = {
       },
     },
     {
-      name: 'createdBy',
-      type: 'relationship',
-      relationTo: 'members',
-    },
-    {
-      name: 'version',
-      type: 'text',
+      name: 'category',
+      type: 'select',
+      options: [
+        { label: 'Capacity Planning', value: 'capacity-planning' },
+        { label: 'Forecasting', value: 'forecasting' },
+        { label: 'Scheduling', value: 'scheduling' },
+        { label: 'Analytics', value: 'analytics' },
+        { label: 'Value Planning', value: 'value-planning' },
+        { label: 'Staffing', value: 'staffing' },
+      ],
     },
     {
       name: 'methodology',
@@ -67,22 +53,8 @@ export const Tools: CollectionConfig = {
       },
     },
     {
-      name: 'topics',
-      type: 'relationship',
-      relationTo: 'topics',
-      hasMany: true,
-    },
-    {
-      name: 'discussionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
-    },
-    {
-      name: 'reactionCount',
-      type: 'number',
-      defaultValue: 0,
-      admin: { readOnly: true },
+      name: 'version',
+      type: 'text',
     },
   ],
   access: {

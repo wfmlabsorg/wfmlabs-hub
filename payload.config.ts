@@ -13,7 +13,15 @@ import { Papers } from '@/collections/Papers'
 import { Articles } from '@/collections/Articles'
 import { Tools } from '@/collections/Tools'
 import { NewsletterIssues } from '@/collections/NewsletterIssues'
+import { WikiEntries } from '@/collections/WikiEntries'
 import { Media } from '@/collections/Media'
+
+// Cross-cutting collections
+import { Discussions } from '@/collections/Discussions'
+import { AssetVersions } from '@/collections/AssetVersions'
+import { AssetRelationships } from '@/collections/AssetRelationships'
+import { AssetContributions } from '@/collections/AssetContributions'
+import { Reactions } from '@/collections/Reactions'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -63,7 +71,14 @@ export default buildConfig({
     Articles,
     Tools,
     NewsletterIssues,
+    WikiEntries,
     Media,
+    // Cross-cutting
+    Discussions,
+    AssetVersions,
+    AssetRelationships,
+    AssetContributions,
+    Reactions,
   ],
 
   secret: process.env.PAYLOAD_SECRET || 'CHANGE-ME-IN-PRODUCTION',
