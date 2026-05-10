@@ -16,9 +16,9 @@
 | CLAUDE.md session bootstrap | Done | |
 | Documentation structure | Done | |
 | WFMLabsHub TARS skill | Done | |
-| Git repo initialized | Not started | |
-| GitHub repo created | Not started | `wfmlabsorg/wfmlabs-hub` |
-| Next.js + Payload scaffolded | Not started | |
+| Git repo initialized | Done | |
+| GitHub repo created | Done | `wfmlabsorg/wfmlabs-hub` (private) |
+| Next.js + Payload scaffolded | Done | Next.js 16.2.6 + Payload 3.84.1, build verified |
 | Vercel project created | Not started | |
 | Neon project created | Not started | `wfmlabs-hub` |
 | R2 bucket created | Not started | `wfmlabshub-media` |
@@ -93,7 +93,11 @@
 ---
 
 ## What Works
-Nothing yet (pre-build).
+- Next.js 16 + Payload 3.84 builds successfully
+- Payload admin UI route (`/admin`)
+- Payload REST API route (`/api`)
+- Frontend homepage placeholder
+- Tailwind v4.3 CSS processing
 
 ## What's Broken
 Nothing yet (pre-build).
