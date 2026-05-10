@@ -8,6 +8,11 @@ import sharp from 'sharp'
 
 // Collections
 import { Members } from '@/collections/Members'
+import { Topics } from '@/collections/Topics'
+import { Papers } from '@/collections/Papers'
+import { Articles } from '@/collections/Articles'
+import { Tools } from '@/collections/Tools'
+import { NewsletterIssues } from '@/collections/NewsletterIssues'
 import { Media } from '@/collections/Media'
 
 const filename = fileURLToPath(import.meta.url)
@@ -53,6 +58,11 @@ export default buildConfig({
 
   collections: [
     Members,
+    Topics,
+    Papers,
+    Articles,
+    Tools,
+    NewsletterIssues,
     Media,
   ],
 
