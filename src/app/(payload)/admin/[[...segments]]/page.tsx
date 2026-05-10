@@ -18,7 +18,30 @@ type Args = {
 export const generateMetadata = ({ params, searchParams }: Args): Promise<Metadata> =>
   generatePageMetadata({ config, params, searchParams })
 
-const Page = ({ params, searchParams }: Args) =>
-  RootPage({ config, importMap, params, searchParams })
+const Page = async ({ params, searchParams }: Args) => {
+  try {
+    return await RootPage({ config, importMap, params, searchParams })
+  } catch (error: unknown) {
+    const err = error as Error
+    // Re-throw redirects (they use throw for control flow)
+    if (err && typeof err === 'object' && 'digest' in err) {
+      const digest = (err as { digest: string }).digest
+      if (digest.startsWith('NEXT_REDIRECT') || digest.startsWith('NEXT_NOT_FOUND')) {
+        throw error
+      }
+    }
+    // For real errors, render them visibly in the HTML
+    return (
+      <div style={{ padding: '2rem', fontFamily: 'monospace', color: 'red' }}>
+        <h1>Server Error in Admin Page</h1>
+        <p><strong>Name:</strong> {err?.name}</p>
+        <p><strong>Message:</strong> {err?.message}</p>
+        <pre style={{ whiteSpace: 'pre-wrap', background: '#fff0f0', padding: '1rem', border: '1px solid red' }}>
+          {err?.stack}
+        </pre>
+      </div>
+    )
+  }
+}
 
 export default Page
