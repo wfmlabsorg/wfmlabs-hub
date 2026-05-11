@@ -9,6 +9,7 @@ declare module 'next-auth' {
       image?: string | null
       payloadMemberId?: string
       role?: string // admin | moderator | member
+      needsSetup?: boolean
     }
   }
 }

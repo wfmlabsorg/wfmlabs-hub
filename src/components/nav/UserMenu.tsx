@@ -6,6 +6,7 @@ import { useSession, signOut } from 'next-auth/react'
 export function UserMenu() {
   const { data: session, status } = useSession()
   const [open, setOpen] = useState(false)
+  const [username, setUsername] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -17,6 +18,18 @@ export function UserMenu() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  // Fetch username for profile link
+  useEffect(() => {
+    if (session?.user?.payloadMemberId) {
+      fetch(`/api/members/${session.user.payloadMemberId}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.username) setUsername(data.username)
+        })
+        .catch(() => {})
+    }
+  }, [session?.user?.payloadMemberId])
 
   if (status === 'loading') {
     return (
@@ -50,8 +63,29 @@ export function UserMenu() {
     .join('')
     .toUpperCase()
 
+  const needsSetup = session.user.needsSetup
+
   return (
-    <div ref={menuRef} style={{ position: 'relative' }}>
+    <div ref={menuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      {/* Setup banner nudge */}
+      {needsSetup && (
+        <a
+          href="/me/setup"
+          style={{
+            fontSize: '0.75rem',
+            fontWeight: 500,
+            color: 'var(--accent-text)',
+            background: 'var(--accent)',
+            padding: '0.25rem 0.625rem',
+            borderRadius: 'var(--radius)',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Complete profile
+        </a>
+      )}
+
       <button
         onClick={() => setOpen(!open)}
         style={{
@@ -97,7 +131,7 @@ export function UserMenu() {
             position: 'absolute',
             right: 0,
             top: '2.5rem',
-            width: '12rem',
+            width: '14rem',
             background: 'var(--bg)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
@@ -115,8 +149,45 @@ export function UserMenu() {
             <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{session.user.name}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>{session.user.email}</div>
           </div>
+
+          {needsSetup && (
+            <a
+              href="/me/setup"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                color: 'var(--accent-text)',
+                background: 'var(--accent-light)',
+                textDecoration: 'none',
+                fontWeight: 500,
+              }}
+              onClick={() => setOpen(false)}
+            >
+              Complete your profile
+            </a>
+          )}
+
+          {username && (
+            <a
+              href={`/member/${username}`}
+              style={{
+                display: 'block',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                color: 'var(--fg)',
+                textDecoration: 'none',
+              }}
+              onClick={() => setOpen(false)}
+            >
+              Profile
+            </a>
+          )}
+
           <a
-            href="/admin"
+            href="/me/settings"
             style={{
               display: 'block',
               padding: '0.5rem 1rem',
@@ -126,8 +197,25 @@ export function UserMenu() {
             }}
             onClick={() => setOpen(false)}
           >
-            Admin Panel
+            Settings
           </a>
+
+          {session.user.role === 'admin' && (
+            <a
+              href="/admin"
+              style={{
+                display: 'block',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                color: 'var(--fg)',
+                textDecoration: 'none',
+              }}
+              onClick={() => setOpen(false)}
+            >
+              Admin Panel
+            </a>
+          )}
+
           <button
             onClick={() => signOut({ callbackUrl: '/' })}
             style={{

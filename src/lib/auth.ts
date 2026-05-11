@@ -16,7 +16,7 @@ const ADMIN_EMAILS = [
 async function findOrCreateMember(
   user: { email?: string | null; name?: string | null; image?: string | null },
   account: { provider: string },
-): Promise<{ id: string | number; role: string } | null> {
+): Promise<{ id: string | number; role: string; isNew?: boolean } | null> {
   const payload = await getPayload({ config })
 
   if (!user.email) return null
@@ -42,10 +42,13 @@ async function findOrCreateMember(
         data: { role: 'admin' },
         overrideAccess: true,
       })
-      return { id: member.id, role: 'admin' }
+      return { id: member.id, role: 'admin', isNew: false }
     }
 
-    return { id: member.id, role: (member.role as string) || 'member' }
+    // Check if profile is incomplete (no bio AND no title)
+    const needsSetup = !member.bio && !(member.profile as Record<string, unknown>)?.title
+
+    return { id: member.id, role: (member.role as string) || 'member', isNew: needsSetup ? true : false }
   }
 
   // Generate username from email
@@ -85,7 +88,7 @@ async function findOrCreateMember(
     overrideAccess: true,
   })
 
-  return { id: member.id, role }
+  return { id: member.id, role, isNew: true }
 }
 
 // Build providers conditionally
@@ -172,6 +175,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (result) {
             token.payloadMemberId = result.id
             token.role = result.role
+            token.needsSetup = result.isNew || false
           }
         }
       }
@@ -183,6 +187,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       if (token.role) {
         session.user.role = token.role as string
+      }
+      if (token.needsSetup) {
+        session.user.needsSetup = true
       }
       return session
     },
