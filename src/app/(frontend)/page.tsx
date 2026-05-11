@@ -188,6 +188,7 @@ export default async function HomePage() {
                   description={item.description || item.abstract || item.excerpt}
                   slug={item.slug}
                   assetType={meta.type}
+                  category={item.category || null}
                   status={item.status}
                   tier={item.tier}
                   topics={item.topics}
