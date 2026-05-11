@@ -3,6 +3,79 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { AssetCard } from '@/components/cards/AssetCard'
 
+const ovixDomains = [
+  { name: 'weather', color: '#3b82f6' },
+  { name: 'seismic', color: '#ef4444' },
+  { name: 'disaster', color: '#f97316' },
+  { name: 'infrastructure', color: '#8b5cf6' },
+  { name: 'cyber', color: '#22c55e' },
+  { name: 'health', color: '#ec4899' },
+  { name: 'financial', color: '#f59e0b' },
+  { name: 'environmental', color: '#14b8a6' },
+  { name: 'news', color: '#64748b' },
+]
+
+async function OvixStatusCard() {
+  const data = await fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', {
+    next: { revalidate: 300 },
+  })
+    .then((r) => r.json())
+    .catch(() => null)
+
+  if (!data) return null
+
+  const totalFeeds = data.totalFeeds || 0
+  const healthy = data.healthy || 0
+  const stale = totalFeeds - healthy
+
+  return (
+    <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
+      <a
+        href="/data-sources"
+        className="card"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '1rem 1.25rem',
+          textDecoration: 'none',
+          color: 'inherit',
+          gap: '1rem',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontSize: '1.25rem' }}>📡</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>OVIX Status</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
+              {totalFeeds} feeds · {healthy} healthy · {stale} stale
+            </div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+          {ovixDomains.map((d) => (
+            <span
+              key={d.name}
+              title={d.name}
+              style={{
+                display: 'inline-block',
+                width: '0.5rem',
+                height: '0.5rem',
+                borderRadius: '50%',
+                background: d.color,
+              }}
+            />
+          ))}
+          <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.5rem' }}>
+            View all →
+          </span>
+        </div>
+      </a>
+    </section>
+  )
+}
+
 const assetTypeMap: Record<string, { label: string; path: string; type: string }> = {
   'wiki-entries': { label: 'Wiki', path: '/wiki', type: 'wiki-entry' },
   papers: { label: 'Research', path: '/research', type: 'paper' },
@@ -218,6 +291,9 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      {/* OVIX Status */}
+      <OvixStatusCard />
 
       {/* Quick links */}
       <section

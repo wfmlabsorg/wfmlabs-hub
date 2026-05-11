@@ -592,3 +592,32 @@ a:hover {
   font-weight: 500;
   font-size: 0.75rem;
 }
+
+/* === OVIX Domain Gradients === */
+
+.ovix-gradient-weather { background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%); }
+.ovix-gradient-seismic { background: linear-gradient(135deg, #ef4444 0%, #f97316 100%); }
+.ovix-gradient-disaster { background: linear-gradient(135deg, #f97316 0%, #f59e0b 100%); }
+.ovix-gradient-infrastructure { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); }
+.ovix-gradient-cyber { background: linear-gradient(135deg, #22c55e 0%, #10b981 100%); }
+.ovix-gradient-health { background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%); }
+.ovix-gradient-financial { background: linear-gradient(135deg, #f59e0b 0%, #eab308 100%); }
+.ovix-gradient-environmental { background: linear-gradient(135deg, #14b8a6 0%, #22c55e 100%); }
+.ovix-gradient-news { background: linear-gradient(135deg, #64748b 0%, #6b7280 100%); }
+
+.ovix-domain-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.ovix-domain-dot-weather { background: #3b82f6; }
+.ovix-domain-dot-seismic { background: #ef4444; }
+.ovix-domain-dot-disaster { background: #f97316; }
+.ovix-domain-dot-infrastructure { background: #8b5cf6; }
+.ovix-domain-dot-cyber { background: #22c55e; }
+.ovix-domain-dot-health { background: #ec4899; }
+.ovix-domain-dot-financial { background: #f59e0b; }
+.ovix-domain-dot-environmental { background: #14b8a6; }
+.ovix-domain-dot-news { background: #64748b; }
