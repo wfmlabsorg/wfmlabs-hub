@@ -1,10 +1,9 @@
 import type { Access } from 'payload'
 
 export const isAuthor = (authorField: string): Access =>
-  ({ req: { user }, id }) => {
+  ({ req: { user } }) => {
     if (!user) return false
-    if (user.type === 'admin') return true
-    // For update/delete, restrict to where author matches current user
+    if (user.role === 'admin') return true
     return {
       [authorField]: { equals: user.id },
     }

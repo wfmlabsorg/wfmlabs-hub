@@ -1,10 +1,35 @@
 import type { CollectionConfig } from 'payload'
 
+// Admin emails — these get auto-promoted on login/creation
+export const ADMIN_EMAILS = [
+  'tedlango@gmail.com',
+  'ted@kyodosolutions.com',
+  'ted@roc.cloud',
+  'ted@wfmlabs.com',
+]
+
 export const Members: CollectionConfig = {
   slug: 'members',
   auth: true,
   admin: {
     useAsTitle: 'displayName',
+    defaultColumns: ['displayName', 'email', 'role', 'type', 'lastActiveAt'],
+  },
+  access: {
+    // Anyone can read member profiles
+    read: () => true,
+    // Only admins can create members directly (OAuth auto-creates)
+    create: ({ req: { user } }) => user?.role === 'admin',
+    // Members can update their own profile, admins can update anyone
+    update: ({ req: { user }, id }) => {
+      if (!user) return false
+      if (user.role === 'admin') return true
+      return user.id === id
+    },
+    // Only admins can delete
+    delete: ({ req: { user } }) => user?.role === 'admin',
+    // Only admins can access the admin panel
+    admin: ({ req: { user } }) => user?.role === 'admin',
   },
   fields: [
     {
@@ -32,8 +57,24 @@ export const Members: CollectionConfig = {
       options: [
         { label: 'Human', value: 'human' },
         { label: 'Agent', value: 'agent' },
-        { label: 'Admin', value: 'admin' },
       ],
+      admin: {
+        description: 'Entity type — human practitioner or AI agent',
+      },
+    },
+    {
+      name: 'role',
+      type: 'select',
+      required: true,
+      defaultValue: 'member',
+      options: [
+        { label: 'Admin', value: 'admin' },
+        { label: 'Moderator', value: 'moderator' },
+        { label: 'Member', value: 'member' },
+      ],
+      admin: {
+        description: 'Permission level. Admin: full access. Moderator: can edit/flag content. Member: standard access.',
+      },
     },
     {
       name: 'bio',
@@ -43,6 +84,34 @@ export const Members: CollectionConfig = {
       name: 'avatar',
       type: 'upload',
       relationTo: 'media',
+    },
+    // Profile fields
+    {
+      name: 'profile',
+      type: 'group',
+      fields: [
+        { name: 'title', type: 'text', admin: { description: 'e.g., VP Operations' } },
+        { name: 'company', type: 'text' },
+        { name: 'location', type: 'text' },
+        { name: 'linkedinUrl', type: 'text' },
+        { name: 'githubUsername', type: 'text' },
+        { name: 'websiteUrl', type: 'text' },
+      ],
+    },
+    // Agent-specific metadata
+    {
+      name: 'agentMetadata',
+      type: 'group',
+      admin: {
+        condition: (data) => data?.type === 'agent',
+        description: 'Agent-specific configuration',
+      },
+      fields: [
+        { name: 'tagline', type: 'text' },
+        { name: 'agentRole', type: 'text', admin: { description: 'e.g., Research Librarian' } },
+        { name: 'mcpEndpoint', type: 'text' },
+        { name: 'a2aCardUrl', type: 'text' },
+      ],
     },
     {
       name: 'foundingMember',

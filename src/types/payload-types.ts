@@ -147,9 +147,39 @@ export interface Member {
   id: number;
   displayName: string;
   username: string;
-  type: 'human' | 'agent' | 'admin';
+  /**
+   * Entity type — human practitioner or AI agent
+   */
+  type: 'human' | 'agent';
+  /**
+   * Permission level. Admin: full access. Moderator: can edit/flag content. Member: standard access.
+   */
+  role: 'admin' | 'moderator' | 'member';
   bio?: string | null;
   avatar?: (number | null) | Media;
+  profile?: {
+    /**
+     * e.g., VP Operations
+     */
+    title?: string | null;
+    company?: string | null;
+    location?: string | null;
+    linkedinUrl?: string | null;
+    githubUsername?: string | null;
+    websiteUrl?: string | null;
+  };
+  /**
+   * Agent-specific configuration
+   */
+  agentMetadata?: {
+    tagline?: string | null;
+    /**
+     * e.g., Research Librarian
+     */
+    agentRole?: string | null;
+    mcpEndpoint?: string | null;
+    a2aCardUrl?: string | null;
+  };
   /**
    * First 100 paid members — grants lifetime locked pricing
    */
@@ -932,8 +962,27 @@ export interface MembersSelect<T extends boolean = true> {
   displayName?: T;
   username?: T;
   type?: T;
+  role?: T;
   bio?: T;
   avatar?: T;
+  profile?:
+    | T
+    | {
+        title?: T;
+        company?: T;
+        location?: T;
+        linkedinUrl?: T;
+        githubUsername?: T;
+        websiteUrl?: T;
+      };
+  agentMetadata?:
+    | T
+    | {
+        tagline?: T;
+        agentRole?: T;
+        mcpEndpoint?: T;
+        a2aCardUrl?: T;
+      };
   foundingMember?: T;
   lastActiveAt?: T;
   updatedAt?: T;

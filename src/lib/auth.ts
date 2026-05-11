@@ -5,23 +5,47 @@ import Credentials from 'next-auth/providers/credentials'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
+// Admin emails get auto-promoted to admin role on creation/login
+const ADMIN_EMAILS = [
+  'tedlango@gmail.com',
+  'ted@kyodosolutions.com',
+  'ted@roc.cloud',
+  'ted@wfmlabs.com',
+]
+
 async function findOrCreateMember(
   user: { email?: string | null; name?: string | null; image?: string | null },
   account: { provider: string },
-) {
+): Promise<{ id: string | number; role: string } | null> {
   const payload = await getPayload({ config })
 
   if (!user.email) return null
+
+  const isAdminEmail = ADMIN_EMAILS.includes(user.email.toLowerCase())
 
   // Look for existing member by email
   const existing = await payload.find({
     collection: 'members',
     where: { email: { equals: user.email } },
     limit: 1,
+    overrideAccess: true,
   })
 
   if (existing.docs.length > 0) {
-    return existing.docs[0].id
+    const member = existing.docs[0]
+
+    // Auto-promote admin emails if they're not already admin
+    if (isAdminEmail && member.role !== 'admin') {
+      await payload.update({
+        collection: 'members',
+        id: member.id,
+        data: { role: 'admin' },
+        overrideAccess: true,
+      })
+      return { id: member.id, role: 'admin' }
+    }
+
+    return { id: member.id, role: (member.role as string) || 'member' }
   }
 
   // Generate username from email
@@ -39,6 +63,7 @@ async function findOrCreateMember(
       collection: 'members',
       where: { username: { equals: username } },
       limit: 1,
+      overrideAccess: true,
     })
     if (check.docs.length === 0) break
     username = `${baseUsername}-${suffix}`
@@ -46,6 +71,7 @@ async function findOrCreateMember(
   }
 
   // Create new member (no password — OAuth-only)
+  const role = isAdminEmail ? 'admin' : 'member'
   const member = await payload.create({
     collection: 'members',
     data: {
@@ -53,12 +79,13 @@ async function findOrCreateMember(
       displayName: user.name || user.email.split('@')[0],
       username,
       type: 'human',
-      password: crypto.randomUUID() + crypto.randomUUID(), // random unusable password
+      role,
+      password: crypto.randomUUID() + crypto.randomUUID(),
     },
     overrideAccess: true,
   })
 
-  return member.id
+  return { id: member.id, role }
 }
 
 // Build providers conditionally
@@ -130,11 +157,22 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user, account }) {
       if (account && user) {
         if (account.provider === 'credentials') {
-          // user.id is already the Payload member ID
           token.payloadMemberId = user.id
+          // Look up role for credential users
+          const payload = await getPayload({ config })
+          const member = await payload.findByID({
+            collection: 'members',
+            id: Number(user.id),
+            overrideAccess: true,
+          })
+          token.role = (member?.role as string) || 'member'
         } else {
           // OAuth — find or create member
-          token.payloadMemberId = await findOrCreateMember(user, account)
+          const result = await findOrCreateMember(user, account)
+          if (result) {
+            token.payloadMemberId = result.id
+            token.role = result.role
+          }
         }
       }
       return token
@@ -142,6 +180,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (token.payloadMemberId) {
         session.user.payloadMemberId = token.payloadMemberId as string
+      }
+      if (token.role) {
+        session.user.role = token.role as string
       }
       return session
     },
