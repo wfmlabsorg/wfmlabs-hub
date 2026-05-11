@@ -91,30 +91,17 @@ async function findOrCreateMember(
   return { id: member.id, role, isNew: true }
 }
 
-// Build providers conditionally
-const providers = []
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  providers.push(
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    }),
-  )
-}
-
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  providers.push(
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    }),
-  )
-}
-
-// Always add credentials provider for Payload email/password login
-providers.push(
-  Credentials({
+function getProviders() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p: any[] = []
+  if (process.env.AUTH_GOOGLE_ID) {
+    p.push(Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET! }))
+  }
+  if (process.env.AUTH_GITHUB_ID) {
+    p.push(GitHub({ clientId: process.env.AUTH_GITHUB_ID, clientSecret: process.env.AUTH_GITHUB_SECRET! }))
+  }
+  // Credentials provider for admin password login
+  p.push(Credentials({
     name: 'Email & Password',
     credentials: {
       email: { label: 'Email', type: 'email' },
@@ -145,11 +132,12 @@ providers.push(
         return null
       }
     },
-  }),
-)
+  }))
+  return p
+}
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers,
+export const { handlers, signIn, signOut, auth } = NextAuth(function () { return {
+  providers: getProviders(),
   pages: {
     signIn: '/login',
   },
@@ -194,4 +182,4 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session
     },
   },
-})
+}})
