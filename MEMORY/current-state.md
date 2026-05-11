@@ -1,57 +1,75 @@
 # Current State — WFM Labs Hub
 
-**Last updated:** 2026-05-09
-**Phase:** Pre-build (seed document finalized, infrastructure not yet created)
-**Seed doc version:** v1.1
+**Last updated:** 2026-05-10
+**Phase:** 1B/1C (Frontend + cross-cutting infrastructure)
+**Version:** v0.3.0
+**Seed doc:** v1.1
+
+## Live Deployment
+
+- **URL:** https://wfmlabs-hub-local.vercel.app
+- **Admin:** https://wfmlabs-hub-local.vercel.app/admin
+- **Admin user:** ted@wfmlabs.com
+- **Hosting:** Vercel (Hobby tier)
+- **Database:** Neon Postgres (dedicated project)
+- **Storage:** Cloudflare R2 (wfmlabs-media bucket)
 
 ## What Exists
 
-- Seed document v1.1 (`wfmlabs-platform-seed-v1.1.md`) — source of truth
-- Seed document v1.0 (`wfmlabs-platform-seed-v1.md`) — archived for reference
-- MEMORY directory with 15 initial ADRs
-- TARS session infrastructure (CLAUDE.md, WFMLabsHub skill)
-- Documentation structure (`docs/`)
+### Infrastructure
+- Git repo: wfmlabsorg/wfmlabs-hub (public)
+- Payload CMS 3.84.1 + Next.js 15.5.18
+- 14 collections (7 asset types + 5 cross-cutting + Members + Media)
+- WLAA asset architecture with shared base fields
+- TARS session infrastructure (CLAUDE.md, MEMORY, ADRs, WFMLabsHub skill)
 
-## What Does NOT Exist Yet
+### Frontend
+- HF-inspired design system (yellow accent, dark/light mode)
+- GlobalNav: Tools, Research, Wiki, Frameworks, Scenarios, Members
+- Homepage with live stats + content grid
+- HF Spaces-style gradient cards
+- Tool browse + detail pages (with embedded iframe)
+- Research browse + detail pages
+- Discussion + Reactions components (cross-cutting, wired into Tools + Research)
+- Wiki, Frameworks, Scenarios browse pages (stubbed)
+- Member profiles, About page
 
-- Git repository (not initialized)
-- GitHub repo (`wfmlabsorg/wfmlabs-hub`)
-- Next.js application
-- Payload CMS configuration
-- Neon database project
-- R2 bucket
-- Vercel project
-- Any collections or content
-- Any frontend pages
+### Content
+- 5 tools seeded (Monte Carlo, Erlang Suite, Variance Analyzer, Value-Based Planning, ABA Curve)
+- 15 research papers seeded from FOW-Value evidence library
+- 0 wiki entries, 0 frameworks, 0 scenarios, 0 articles
 
-## Current Phase: Pre-Build
+### Dev Environment
+- Cloud dir (git): ~/cloud/projects/wfmlabs-hub/
+- Local dev dir (node_modules): ~/projects/wfmlabs-hub-local/
+- NOTE: R2 sync deletes .git directory periodically — clone from GitHub to restore
 
-Next step is Week 1 execution:
-1. Initialize git repo
-2. Push to GitHub
-3. Scaffold Next.js + Payload app
-4. Create Vercel project
-5. Create Neon project
-6. Create R2 bucket
-7. Configure environment variables
-8. Verify preview deployment works
+## What's Next (see docs/ROADMAP.md)
 
-## Decisions Made
+**Immediate (Phase 1B/1C completion):**
+1. Build Wiki browse + detail pages (Beacon-curated model)
+2. Create Frameworks collection + browse/detail pages
+3. Seed Frameworks (Value-Based Planning, Maturity Model)
+4. Seed Topics taxonomy
+5. Wire Discussion + Reactions into Research detail pages
+6. Add remaining 5+ tools
 
-See `decisions/` for full ADRs. Key decisions:
-- Payload CMS as ecosystem-wide content backbone (not single-site CMS)
-- Flat repo structure (no monorepo for Phase 1)
-- Commerce (Stripe, tiers) deferred to Phase 2
-- Postgres FTS over Meilisearch for Phase 1
-- Flat discussions with @-mentions
-- 5 services only: Vercel, Neon, R2, Resend, GitHub
-- Curate fresh content over Mighty migration
-- Tailwind v4
-
-## Open Questions
-
-See `open-questions.md` for unresolved items.
+**Next phase (2A/2B):**
+1. Beacon agent — read-only posting from wiki pipeline
+2. Scenarios collection + browse/detail
+3. More content seeding
 
 ## Known Issues
 
-None yet (pre-build).
+- R2 sync periodically removes .git from cloud dir — use /tmp clone workflow for commits
+- Vercel API auth (Bearer token) returns 500 — cookie auth + overrideAccess works fine
+- No CI/CD pipeline yet (GitHub Actions not configured)
+- No search functionality implemented yet (Postgres FTS ready but no UI)
+
+## Planning Documents
+
+- **Roadmap:** `docs/ROADMAP.md` — phased plan with status tracking
+- **Release notes:** `docs/RELEASE-NOTES.md` — what shipped per version
+- **Beacon spec:** `~/cloud/projects/wfmlabs-wiki/02-working/beacon-agent-spec.md`
+- **Asset architecture:** `wfmlabs-asset-architecture-v1.md` (WLAA)
+- **Seed doc:** `wfmlabs-platform-seed-v1.1.md`
