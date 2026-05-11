@@ -114,6 +114,49 @@ export const Members: CollectionConfig = {
       ],
     },
     {
+      name: 'expertise',
+      type: 'relationship',
+      relationTo: 'topics',
+      hasMany: true,
+      admin: { description: 'Self-selected expertise topics — shown on profile and used for directory filtering' },
+    },
+    {
+      name: 'visibility',
+      type: 'group',
+      admin: { description: 'Control what other members can see on your profile' },
+      fields: [
+        {
+          name: 'showProfessional',
+          type: 'checkbox',
+          defaultValue: true,
+          admin: { description: 'Show title, company, location' },
+        },
+        {
+          name: 'showBio',
+          type: 'checkbox',
+          defaultValue: true,
+        },
+        {
+          name: 'showLinks',
+          type: 'checkbox',
+          defaultValue: true,
+          admin: { description: 'Show LinkedIn, GitHub, website' },
+        },
+        {
+          name: 'showInDirectory',
+          type: 'checkbox',
+          defaultValue: true,
+          admin: { description: 'Appear in the member directory' },
+        },
+        {
+          name: 'showEmail',
+          type: 'checkbox',
+          defaultValue: false,
+          admin: { description: 'Show email to other members' },
+        },
+      ],
+    },
+    {
       name: 'foundingMember',
       type: 'checkbox',
       defaultValue: false,

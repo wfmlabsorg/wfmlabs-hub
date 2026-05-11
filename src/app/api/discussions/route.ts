@@ -1,7 +1,5 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { headers } from 'next/headers'
-import { auth } from '@/lib/auth'
 
 function textToLexical(text: string) {
   return {
@@ -37,47 +35,54 @@ function textToLexical(text: string) {
 }
 
 export async function POST(req: Request) {
-  const payload = await getPayload({ config })
+  try {
+    const payload = await getPayload({ config })
 
-  // Try NextAuth session first
-  const session = await auth()
-  let memberId: string | number | null = null
+    // Read Payload JWT from cookie in the request
+    let memberId: string | number | null = null
+    const cookieHeader = req.headers.get('cookie') || ''
+    const tokenMatch = cookieHeader.match(/payload-token=([^;]+)/)
 
-  if (session?.user?.payloadMemberId) {
-    memberId = session.user.payloadMemberId
-  } else {
-    // Fall back to Payload cookie auth
-    const headersList = await headers()
-    const { user } = await payload.auth({ headers: headersList })
-    if (user) {
-      memberId = user.id
+    if (tokenMatch) {
+      try {
+        const authHeaders = new Headers()
+        authHeaders.set('Authorization', `JWT ${tokenMatch[1]}`)
+        const { user } = await payload.auth({ headers: authHeaders })
+        if (user) {
+          memberId = user.id
+        }
+      } catch (e) {
+        return Response.json({ error: 'Auth failed', detail: String(e) }, { status: 401 })
+      }
     }
-  }
 
-  if (!memberId) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+    if (!memberId) {
+      return Response.json({ error: 'Unauthorized', hasCookie: !!tokenMatch }, { status: 401 })
+    }
 
-  const { assetType, assetId, body } = await req.json()
+    const { assetType, assetId, body } = await req.json()
 
-  if (!assetType || !assetId || !body) {
-    return Response.json({ error: 'Missing required fields' }, { status: 400 })
-  }
+    if (!assetType || !assetId || !body) {
+      return Response.json({ error: 'Missing required fields' }, { status: 400 })
+    }
 
-  const discussion = await payload.create({
-    collection: 'discussions',
-    data: {
-      asset: {
-        relationTo: assetType,
-        value: assetId,
+    const discussion = await payload.create({
+      collection: 'discussions',
+      data: {
+        asset: {
+          relationTo: assetType,
+          value: Number(assetId),
+        },
+        author: Number(memberId),
+        body: textToLexical(body),
+        isResolved: false,
+        reactionCount: 0,
       },
-      author: Number(memberId),
-      body: textToLexical(body),
-      isResolved: false,
-      reactionCount: 0,
-    },
-    overrideAccess: true,
-  })
+      overrideAccess: true,
+    })
 
-  return Response.json({ discussion }, { status: 201 })
+    return Response.json({ discussion }, { status: 201 })
+  } catch (e) {
+    return Response.json({ error: 'Server error', detail: String(e) }, { status: 500 })
+  }
 }

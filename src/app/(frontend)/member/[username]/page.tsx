@@ -29,6 +29,20 @@ export default async function MemberProfilePage({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const profile = (member.profile || {}) as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const visibility = (member as any).visibility || {}
+
+  // Resolve visibility (defaults to true for all except showEmail)
+  const showProfessional = isOwnProfile || visibility.showProfessional !== false
+  const showBio = isOwnProfile || visibility.showBio !== false
+  const showLinks = isOwnProfile || visibility.showLinks !== false
+  const showEmail = isOwnProfile || visibility.showEmail === true
+
+  // Resolve expertise topics
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const expertise = ((member as any).expertise || []).map((t: any) =>
+    typeof t === 'object' ? t : null,
+  ).filter(Boolean) as { id: number; name: string; slug: string }[]
 
   // Fetch member's contributions across collections
   const collections = [
@@ -68,6 +82,25 @@ export default async function MemberProfilePage({
     })
     .then((r) => r.totalDocs)
     .catch(() => 0)
+
+  // Count tools contributed to
+  const toolsCount = contributions[2]?.length || 0
+  // Count papers contributed to
+  const papersCount = contributions[1]?.length || 0
+
+  // Hidden label helper
+  const hiddenLabel = (
+    <span
+      style={{
+        fontSize: '0.6875rem',
+        color: 'var(--fg-faint)',
+        fontStyle: 'italic',
+        marginLeft: '0.5rem',
+      }}
+    >
+      (hidden from others)
+    </span>
+  )
 
   return (
     <div style={{ maxWidth: '50rem', margin: '0 auto', padding: '2rem 1rem' }}>
@@ -136,16 +169,25 @@ export default async function MemberProfilePage({
             @{member.username}
           </div>
 
+          {/* Email (only if showEmail or own profile) */}
+          {showEmail && member.email && (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginBottom: '0.375rem' }}>
+              {member.email}
+              {isOwnProfile && visibility.showEmail !== true && hiddenLabel}
+            </div>
+          )}
+
           {/* Title & Company */}
-          {(profile.title || profile.company) && (
+          {showProfessional && (profile.title || profile.company) && (
             <div style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', marginBottom: '0.375rem' }}>
               {profile.title}
               {profile.title && profile.company && ' at '}
               {profile.company && <span style={{ fontWeight: 500 }}>{profile.company}</span>}
+              {isOwnProfile && visibility.showProfessional === false && hiddenLabel}
             </div>
           )}
 
-          {/* Badges and location row */}
+          {/* Badges, location row */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.5rem' }}>
             {member.type && <span className="badge badge-type">{member.type}</span>}
             {member.foundingMember && (
@@ -153,21 +195,42 @@ export default async function MemberProfilePage({
                 Founding Member
               </span>
             )}
-            {profile.location && (
+            {showProfessional && profile.location && (
               <span style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)' }}>
                 {profile.location}
+                {isOwnProfile && visibility.showProfessional === false && hiddenLabel}
               </span>
             )}
           </div>
 
+          {/* Expertise pills */}
+          {expertise.length > 0 && (
+            <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              {expertise.map((topic) => (
+                <span
+                  key={topic.id}
+                  className="topic-pill"
+                  style={{
+                    background: 'var(--accent-light)',
+                    color: 'var(--accent)',
+                    borderColor: 'var(--accent)',
+                  }}
+                >
+                  {topic.name}
+                </span>
+              ))}
+            </div>
+          )}
+
           {/* Links */}
-          {(profile.linkedinUrl || profile.githubUsername || profile.websiteUrl) && (
+          {showLinks && (profile.linkedinUrl || profile.githubUsername || profile.websiteUrl) && (
             <div
               style={{
                 display: 'flex',
                 gap: '0.75rem',
                 marginTop: '0.75rem',
                 flexWrap: 'wrap',
+                alignItems: 'center',
               }}
             >
               {profile.linkedinUrl && (
@@ -200,13 +263,14 @@ export default async function MemberProfilePage({
                   Website
                 </a>
               )}
+              {isOwnProfile && visibility.showLinks === false && hiddenLabel}
             </div>
           )}
         </div>
       </div>
 
       {/* Bio */}
-      {member.bio && (
+      {showBio && member.bio && (
         <div
           style={{
             marginBottom: '2rem',
@@ -217,6 +281,9 @@ export default async function MemberProfilePage({
           <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', lineHeight: 1.6, margin: 0 }}>
             {member.bio}
           </p>
+          {isOwnProfile && visibility.showBio === false && (
+            <div style={{ marginTop: '0.25rem' }}>{hiddenLabel}</div>
+          )}
         </div>
       )}
 
@@ -258,6 +325,36 @@ export default async function MemberProfilePage({
             }}
           >
             Discussions
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+            {toolsCount}
+          </div>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--fg-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Tools
+          </div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+            {papersCount}
+          </div>
+          <div
+            style={{
+              fontSize: '0.75rem',
+              color: 'var(--fg-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+            }}
+          >
+            Papers
           </div>
         </div>
       </div>

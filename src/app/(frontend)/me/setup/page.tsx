@@ -4,6 +4,12 @@ import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
+interface Topic {
+  id: number
+  name: string
+  slug: string
+}
+
 interface MemberData {
   id: number
   displayName: string
@@ -33,6 +39,17 @@ export default function SetupPage() {
   const [company, setCompany] = useState('')
   const [bio, setBio] = useState('')
   const [location, setLocation] = useState('')
+
+  // Expertise state
+  const [topics, setTopics] = useState<Topic[]>([])
+  const [selectedExpertise, setSelectedExpertise] = useState<number[]>([])
+
+  useEffect(() => {
+    fetch('/api/topics?limit=100')
+      .then((r) => r.json())
+      .then((data) => setTopics(data.docs || []))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -70,6 +87,12 @@ export default function SetupPage() {
     }
   }
 
+  function toggleExpertise(topicId: number) {
+    setSelectedExpertise((prev) =>
+      prev.includes(topicId) ? prev.filter((id) => id !== topicId) : [...prev, topicId],
+    )
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (usernameError) return
@@ -80,7 +103,15 @@ export default function SetupPage() {
       const res = await fetch('/api/members/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ displayName, username, title, company, bio, location }),
+        body: JSON.stringify({
+          displayName,
+          username,
+          title,
+          company,
+          bio,
+          location,
+          expertise: selectedExpertise,
+        }),
       })
 
       const data = await res.json()
@@ -106,6 +137,16 @@ export default function SetupPage() {
   }
 
   const avatarInitial = (session?.user?.name || session?.user?.email || '?').charAt(0).toUpperCase()
+  const inputStyle: React.CSSProperties = {
+    width: '100%',
+    padding: '0.625rem 0.75rem',
+    background: 'var(--bg)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    color: 'var(--fg)',
+    fontSize: '0.9375rem',
+    outline: 'none',
+  }
 
   return (
     <div style={{ maxWidth: '36rem', margin: '3rem auto', padding: '0 1rem 3rem' }}>
@@ -213,7 +254,15 @@ export default function SetupPage() {
         <form onSubmit={handleSubmit}>
           {/* Identity section */}
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Display Name
             </label>
             <input
@@ -221,21 +270,20 @@ export default function SetupPage() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               required
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.75rem',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--fg)',
-                fontSize: '0.9375rem',
-                outline: 'none',
-              }}
+              style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Username
             </label>
             <div style={{ position: 'relative' }}>
@@ -258,14 +306,9 @@ export default function SetupPage() {
                 onChange={(e) => validateUsername(e.target.value)}
                 required
                 style={{
-                  width: '100%',
-                  padding: '0.625rem 0.75rem 0.625rem 1.75rem',
-                  background: 'var(--bg)',
-                  border: `1px solid ${usernameError ? 'var(--error)' : 'var(--border)'}`,
-                  borderRadius: 'var(--radius)',
-                  color: 'var(--fg)',
-                  fontSize: '0.9375rem',
-                  outline: 'none',
+                  ...inputStyle,
+                  paddingLeft: '1.75rem',
+                  borderColor: usernameError ? 'var(--error)' : 'var(--border)',
                 }}
               />
             </div>
@@ -282,7 +325,13 @@ export default function SetupPage() {
           </div>
 
           {/* Divider */}
-          <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', position: 'relative' }}>
+          <div
+            style={{
+              borderTop: '1px solid var(--border)',
+              margin: '1.5rem 0',
+              position: 'relative',
+            }}
+          >
             <span
               style={{
                 position: 'absolute',
@@ -302,7 +351,15 @@ export default function SetupPage() {
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Professional Title
             </label>
             <input
@@ -310,21 +367,20 @@ export default function SetupPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g., WFM Manager, Operations Director"
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.75rem',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--fg)',
-                fontSize: '0.9375rem',
-                outline: 'none',
-              }}
+              style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Company
             </label>
             <input
@@ -332,21 +388,20 @@ export default function SetupPage() {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               placeholder="Where you work"
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.75rem',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--fg)',
-                fontSize: '0.9375rem',
-                outline: 'none',
-              }}
+              style={inputStyle}
             />
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Bio
             </label>
             <textarea
@@ -355,22 +410,23 @@ export default function SetupPage() {
               placeholder="Tell the community about your WFM experience..."
               rows={3}
               style={{
-                width: '100%',
-                padding: '0.625rem 0.75rem',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--fg)',
-                fontSize: '0.9375rem',
-                outline: 'none',
+                ...inputStyle,
                 resize: 'vertical',
                 fontFamily: 'inherit',
               }}
             />
           </div>
 
-          <div style={{ marginBottom: '2rem' }}>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem', color: 'var(--fg)' }}>
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label
+              style={{
+                display: 'block',
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                marginBottom: '0.375rem',
+                color: 'var(--fg)',
+              }}
+            >
               Location
             </label>
             <input
@@ -378,18 +434,84 @@ export default function SetupPage() {
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               placeholder="e.g., Chicago, IL"
-              style={{
-                width: '100%',
-                padding: '0.625rem 0.75rem',
-                background: 'var(--bg)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)',
-                color: 'var(--fg)',
-                fontSize: '0.9375rem',
-                outline: 'none',
-              }}
+              style={inputStyle}
             />
           </div>
+
+          {/* Expertise section */}
+          {topics.length > 0 && (
+            <>
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  margin: '1.5rem 0',
+                  position: 'relative',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-0.625rem',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'var(--bg-card)',
+                    padding: '0 0.75rem',
+                    fontSize: '0.75rem',
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Expertise
+                </span>
+              </div>
+
+              <div style={{ marginBottom: '0.75rem' }}>
+                <p
+                  style={{
+                    fontSize: '0.8125rem',
+                    color: 'var(--fg-muted)',
+                    lineHeight: 1.5,
+                    margin: 0,
+                  }}
+                >
+                  Choose topics you&apos;re experienced in — this helps others find you.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '0.5rem',
+                  marginBottom: '2rem',
+                }}
+              >
+                {topics.map((topic) => {
+                  const isSelected = selectedExpertise.includes(topic.id)
+                  return (
+                    <button
+                      key={topic.id}
+                      type="button"
+                      onClick={() => toggleExpertise(topic.id)}
+                      className="topic-pill"
+                      style={{
+                        cursor: 'pointer',
+                        background: isSelected ? 'var(--accent-light)' : 'var(--bg-secondary)',
+                        color: isSelected ? 'var(--accent)' : 'var(--fg-muted)',
+                        borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                        fontWeight: isSelected ? 600 : 400,
+                        padding: '0.375rem 0.75rem',
+                        fontSize: '0.8125rem',
+                      }}
+                    >
+                      {topic.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
 
           <button
             type="submit"
@@ -397,13 +519,20 @@ export default function SetupPage() {
             style={{
               width: '100%',
               padding: '0.75rem 1.5rem',
-              background: saving || usernameError || !displayName || !username ? 'var(--border)' : 'var(--accent)',
-              color: saving || usernameError || !displayName || !username ? 'var(--fg-muted)' : 'var(--accent-text)',
+              background:
+                saving || usernameError || !displayName || !username
+                  ? 'var(--border)'
+                  : 'var(--accent)',
+              color:
+                saving || usernameError || !displayName || !username
+                  ? 'var(--fg-muted)'
+                  : 'var(--accent-text)',
               border: 'none',
               borderRadius: 'var(--radius)',
               fontSize: '1rem',
               fontWeight: 600,
-              cursor: saving || usernameError || !displayName || !username ? 'not-allowed' : 'pointer',
+              cursor:
+                saving || usernameError || !displayName || !username ? 'not-allowed' : 'pointer',
               transition: 'background 0.15s, transform 0.1s',
             }}
           >

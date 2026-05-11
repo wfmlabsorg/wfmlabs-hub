@@ -181,6 +181,32 @@ export interface Member {
     a2aCardUrl?: string | null;
   };
   /**
+   * Self-selected expertise topics — shown on profile and used for directory filtering
+   */
+  expertise?: (number | Topic)[] | null;
+  /**
+   * Control what other members can see on your profile
+   */
+  visibility?: {
+    /**
+     * Show title, company, location
+     */
+    showProfessional?: boolean | null;
+    showBio?: boolean | null;
+    /**
+     * Show LinkedIn, GitHub, website
+     */
+    showLinks?: boolean | null;
+    /**
+     * Appear in the member directory
+     */
+    showInDirectory?: boolean | null;
+    /**
+     * Show email to other members
+     */
+    showEmail?: boolean | null;
+  };
+  /**
    * First 100 paid members — grants lifetime locked pricing
    */
   foundingMember?: boolean | null;
@@ -982,6 +1008,16 @@ export interface MembersSelect<T extends boolean = true> {
         agentRole?: T;
         mcpEndpoint?: T;
         a2aCardUrl?: T;
+      };
+  expertise?: T;
+  visibility?:
+    | T
+    | {
+        showProfessional?: T;
+        showBio?: T;
+        showLinks?: T;
+        showInDirectory?: T;
+        showEmail?: T;
       };
   foundingMember?: T;
   lastActiveAt?: T;

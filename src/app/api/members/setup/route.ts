@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { displayName, username, title, company, bio, location, linkedinUrl, githubUsername, websiteUrl } = body
+    const { displayName, username, title, company, bio, location, linkedinUrl, githubUsername, websiteUrl, expertise, visibility } = body
 
     // Validate required fields
     if (!displayName || !username) {
@@ -80,6 +80,22 @@ export async function POST(req: Request) {
         githubUsername: githubUsername || undefined,
         websiteUrl: websiteUrl || undefined,
       },
+    }
+
+    // Add expertise if provided (array of topic IDs)
+    if (expertise !== undefined) {
+      updateData.expertise = Array.isArray(expertise) ? expertise : []
+    }
+
+    // Add visibility settings if provided
+    if (visibility && typeof visibility === 'object') {
+      updateData.visibility = {
+        showProfessional: visibility.showProfessional !== false,
+        showBio: visibility.showBio !== false,
+        showLinks: visibility.showLinks !== false,
+        showInDirectory: visibility.showInDirectory !== false,
+        showEmail: visibility.showEmail === true,
+      }
     }
 
     const updated = await payload.update({
