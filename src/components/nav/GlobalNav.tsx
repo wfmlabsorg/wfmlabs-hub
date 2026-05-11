@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { UserMenu } from './UserMenu'
 
 const navLinks = [
   { href: '/tools', label: 'Tools' },
@@ -112,13 +113,7 @@ export function GlobalNav() {
 
         {/* Right side */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <a
-            href="/admin"
-            className="btn btn-secondary"
-            style={{ fontSize: '0.8125rem', padding: '0.25rem 0.75rem' }}
-          >
-            Admin
-          </a>
+          <UserMenu />
         </div>
 
         {/* Mobile hamburger */}

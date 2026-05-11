@@ -1,6 +1,7 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { headers } from 'next/headers'
+import { auth } from '@/lib/auth'
 
 function textToLexical(text: string) {
   return {
@@ -37,10 +38,23 @@ function textToLexical(text: string) {
 
 export async function POST(req: Request) {
   const payload = await getPayload({ config })
-  const headersList = await headers()
-  const { user } = await payload.auth({ headers: headersList })
 
-  if (!user) {
+  // Try NextAuth session first
+  const session = await auth()
+  let memberId: string | number | null = null
+
+  if (session?.user?.payloadMemberId) {
+    memberId = session.user.payloadMemberId
+  } else {
+    // Fall back to Payload cookie auth
+    const headersList = await headers()
+    const { user } = await payload.auth({ headers: headersList })
+    if (user) {
+      memberId = user.id
+    }
+  }
+
+  if (!memberId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -57,7 +71,7 @@ export async function POST(req: Request) {
         relationTo: assetType,
         value: assetId,
       },
-      author: user.id,
+      author: Number(memberId),
       body: textToLexical(body),
       isResolved: false,
       reactionCount: 0,

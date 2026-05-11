@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
 interface DiscussionFormProps {
   assetType: string
@@ -9,10 +10,32 @@ interface DiscussionFormProps {
 }
 
 export function DiscussionForm({ assetType, assetId }: DiscussionFormProps) {
+  const { data: session, status } = useSession()
   const [body, setBody] = useState('')
   const [error, setError] = useState('')
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+
+  if (status === 'loading') {
+    return (
+      <div className="discussion-form">
+        <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>Loading...</p>
+      </div>
+    )
+  }
+
+  if (!session?.user) {
+    return (
+      <div className="discussion-form">
+        <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
+          <a href="/login" style={{ color: 'var(--link)', fontWeight: 500 }}>
+            Sign in
+          </a>{' '}
+          to join the discussion.
+        </p>
+      </div>
+    )
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,7 +47,12 @@ export function DiscussionForm({ assetType, assetId }: DiscussionFormProps) {
       const res = await fetch('/api/discussions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assetType, assetId, body: body.trim() }),
+        body: JSON.stringify({
+          assetType,
+          assetId,
+          body: body.trim(),
+          memberId: session?.user?.payloadMemberId,
+        }),
       })
 
       if (res.status === 401) {
@@ -51,7 +79,10 @@ export function DiscussionForm({ assetType, assetId }: DiscussionFormProps) {
     return (
       <div className="discussion-form">
         <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
-          <a href="/admin" style={{ color: 'var(--link)', fontWeight: 500 }}>Log in</a> to join the discussion.
+          <a href="/login" style={{ color: 'var(--link)', fontWeight: 500 }}>
+            Sign in
+          </a>{' '}
+          to join the discussion.
         </p>
       </div>
     )
@@ -59,6 +90,9 @@ export function DiscussionForm({ assetType, assetId }: DiscussionFormProps) {
 
   return (
     <form className="discussion-form" onSubmit={handleSubmit}>
+      <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginBottom: '0.5rem' }}>
+        Posting as <strong>{session.user.name || session.user.email}</strong>
+      </div>
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -73,9 +107,7 @@ export function DiscussionForm({ assetType, assetId }: DiscussionFormProps) {
         }}
       />
       {error && (
-        <p style={{ color: 'var(--error)', fontSize: '0.8125rem', marginBottom: '0.5rem' }}>
-          {error}
-        </p>
+        <p style={{ color: 'var(--error)', fontSize: '0.8125rem', marginBottom: '0.5rem' }}>{error}</p>
       )}
       <button
         type="submit"
