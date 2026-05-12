@@ -34,11 +34,11 @@ export async function POST(req: Request) {
       member: {
         id: user.id,
         email: user.email,
-        displayName: (user as Record<string, unknown>).displayName,
-        username: (user as Record<string, unknown>).username,
-        role: (user as Record<string, unknown>).role,
-        type: (user as Record<string, unknown>).type,
-        rocUserId: (user as Record<string, unknown>).rocUserId || null,
+        displayName: (user as unknown as Record<string, unknown>).displayName,
+        username: (user as unknown as Record<string, unknown>).username,
+        role: (user as unknown as Record<string, unknown>).role,
+        type: (user as unknown as Record<string, unknown>).type,
+        rocUserId: (user as unknown as Record<string, unknown>).rocUserId || null,
       },
     })
   } catch {
