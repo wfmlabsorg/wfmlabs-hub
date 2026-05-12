@@ -2322,8 +2322,9 @@
       if (user) {
         currentUser = user;
         showUserMenu(user);
-        // Check if profile needs completion (OAuth users may lack handle/industry)
-        if (!user.industry || (user.handle && /^[a-z]+\d+$/.test(user.handle))) {
+        // Skip ROC profile completion if authenticated via Hub — profile lives at /me/setup
+        var isHubUser = localStorage.getItem('roc-hub-session');
+        if (!isHubUser && (!user.industry || (user.handle && /^[a-z]+\d+$/.test(user.handle)))) {
           showProfileCompletion(user);
         }
       }
