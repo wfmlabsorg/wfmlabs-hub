@@ -29,6 +29,16 @@ function timeAgo(date: string): string {
   return `${Math.floor(seconds / 86400)}d ago`
 }
 
+const sourceTypeGradientOverrides: Record<string, string> = {
+  arxiv: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+  ssrn: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+  journal: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+  'industry-report': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+  blog: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+  'vendor-research': 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+  manual: 'linear-gradient(135deg, #4b5563 0%, #6b7280 100%)',
+}
+
 interface AssetCardProps {
   title: string
   description?: string | null
@@ -39,6 +49,12 @@ interface AssetCardProps {
   tier?: string | null
   topics?: Array<{ name: string; slug: string } | string | number> | null
   primaryContributor?: { displayName: string; username: string } | string | number | null
+  /** Paper-specific: publication name */
+  sourceName?: string | null
+  /** Paper-specific: source type key */
+  sourceType?: string | null
+  /** Paper-specific: authors array */
+  authors?: Array<{ name: string }> | null
   stats?: {
     discussionCount?: number | null
     reactionCount?: number | null
@@ -57,16 +73,23 @@ export function AssetCard({
   category,
   status,
   primaryContributor,
+  sourceName,
+  sourceType,
+  authors,
   stats,
   href,
   isFeatured,
   updatedAt,
   createdAt,
 }: AssetCardProps) {
-  const gradient =
-    (category ? categoryGradients[category] : undefined) ||
-    assetTypeGradients[assetType] ||
-    defaultGradient
+  const isPaper = assetType === 'paper'
+  const gradient = isPaper
+    ? (sourceType ? sourceTypeGradientOverrides[sourceType] : undefined) ||
+      assetTypeGradients['paper'] ||
+      defaultGradient
+    : (category ? categoryGradients[category] : undefined) ||
+      assetTypeGradients[assetType] ||
+      defaultGradient
   const contributor =
     typeof primaryContributor === 'object' &&
     primaryContributor !== null &&
@@ -74,6 +97,25 @@ export function AssetCard({
       ? primaryContributor
       : null
   const dateStr = updatedAt || createdAt
+
+  // Paper attribution: sourceName or sourceType label
+  const sourceTypeLabels: Record<string, string> = {
+    arxiv: 'arXiv',
+    ssrn: 'SSRN',
+    journal: 'Journal',
+    'industry-report': 'Industry Report',
+    blog: 'Blog',
+    'vendor-research': 'Vendor Research',
+    manual: 'Manual',
+  }
+  const paperAttribution = isPaper
+    ? sourceName || (sourceType ? sourceTypeLabels[sourceType] || sourceType : null)
+    : null
+  const paperAuthorsLine = isPaper && authors && authors.length > 0
+    ? authors.length === 1
+      ? authors[0].name
+      : `${authors[0].name} et al.`
+    : null
 
   return (
     <a href={href} className="asset-card-link">
@@ -103,20 +145,36 @@ export function AssetCard({
           {/* Title */}
           <h3 className="asset-card-title">{title}</h3>
 
+          {/* Authors line (papers only) */}
+          {paperAuthorsLine && (
+            <p style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginBottom: '0.25rem', lineHeight: 1.4 }}>
+              {paperAuthorsLine}
+            </p>
+          )}
+
           {/* Description */}
           {description && (
             <p className="asset-card-description">{description}</p>
           )}
-          {!description && <div style={{ flex: 1 }} />}
+          {!description && !paperAuthorsLine && <div style={{ flex: 1 }} />}
 
           {/* Footer */}
           <div className="asset-card-footer">
-            <div className="asset-card-contributor">
-              <div className="asset-card-avatar">
-                {contributor ? contributor.displayName.charAt(0).toUpperCase() : '?'}
+            {isPaper && paperAttribution ? (
+              <div className="asset-card-contributor">
+                <div className="asset-card-avatar" style={{ fontSize: '0.5rem' }}>
+                  {paperAttribution.charAt(0).toUpperCase()}
+                </div>
+                <span>{paperAttribution}</span>
               </div>
-              <span>{contributor ? contributor.displayName : 'Unknown'}</span>
-            </div>
+            ) : (
+              <div className="asset-card-contributor">
+                <div className="asset-card-avatar">
+                  {contributor ? contributor.displayName.charAt(0).toUpperCase() : '?'}
+                </div>
+                <span>{contributor ? contributor.displayName : 'Unknown'}</span>
+              </div>
+            )}
             {dateStr && (
               <span className="asset-card-time">{timeAgo(dateStr)}</span>
             )}

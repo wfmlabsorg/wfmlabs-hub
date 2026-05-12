@@ -8,12 +8,16 @@ export const dynamic = 'force-dynamic'
 
 const categories = [
   { value: 'all', label: 'All' },
-  { value: 'queueing-theory', label: 'Queueing Theory' },
-  { value: 'ai-in-operations', label: 'AI in Operations' },
-  { value: 'workforce-economics', label: 'Workforce Economics' },
-  { value: 'value-model', label: 'Value Model' },
-  { value: 'agent-experience', label: 'Agent Experience' },
-  { value: 'forecasting', label: 'Forecasting' },
+  { value: 'queuing-theory', label: 'Queuing Theory' },
+  { value: 'ai-machine-learning', label: 'AI & Machine Learning' },
+  { value: 'operations-management', label: 'Operations Management' },
+  { value: 'workforce-management', label: 'Workforce Management' },
+  { value: 'customer-experience', label: 'Customer Experience' },
+  { value: 'analytics-forecasting', label: 'Analytics & Forecasting' },
+  { value: 'process-optimization', label: 'Process Optimization' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'economics-finance', label: 'Economics & Finance' },
+  { value: 'other', label: 'Other' },
 ]
 
 const sourceTypeLabels: Record<string, string> = {
@@ -34,6 +38,16 @@ const sourceTypeColors: Record<string, string> = {
   blog: '#10b981',
   'vendor-research': '#6366f1',
   manual: '#6b7280',
+}
+
+const sourceTypeGradients: Record<string, string> = {
+  arxiv: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
+  ssrn: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+  journal: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+  'industry-report': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+  blog: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+  'vendor-research': 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+  manual: 'linear-gradient(135deg, #4b5563 0%, #6b7280 100%)',
 }
 
 export default async function ResearchBrowsePage() {
@@ -109,13 +123,17 @@ export default async function ResearchBrowsePage() {
           {papers.docs.map((paper: any) => {
             const stColor = sourceTypeColors[paper.sourceType || ''] || '#6b7280'
             const stLabel = sourceTypeLabels[paper.sourceType || ''] || paper.sourceType || ''
-            const authorNames = paper.authors?.map((a: { name: string }) => a.name).join(', ')
+            const authorNames = paper.authors && paper.authors.length > 0
+              ? paper.authors.length === 1
+                ? (paper.authors[0] as { name: string }).name
+                : `${(paper.authors[0] as { name: string }).name} et al.`
+              : null
 
             return (
               <a key={paper.id} href={`/research/${paper.slug}`} className="asset-card-link">
                 <div className="asset-card">
                   {/* Gradient header — blue/indigo for research */}
-                  <div className="asset-card-gradient" style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)' }}>
+                  <div className="asset-card-gradient" style={{ background: sourceTypeGradients[paper.sourceType || ''] || 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)' }}>
                     <div className="asset-card-badges">
                       <div className="asset-card-badges-left">
                         {stLabel && (
@@ -151,15 +169,11 @@ export default async function ResearchBrowsePage() {
 
                     <div className="asset-card-footer">
                       <div className="asset-card-contributor">
-                        <div className="asset-card-avatar">
-                          {typeof paper.primaryContributor === 'object' && paper.primaryContributor?.displayName
-                            ? paper.primaryContributor.displayName.charAt(0).toUpperCase()
-                            : '?'}
+                        <div className="asset-card-avatar" style={{ fontSize: '0.5rem' }}>
+                          {(paper.sourceName || stLabel || '?').charAt(0).toUpperCase()}
                         </div>
                         <span>
-                          {typeof paper.primaryContributor === 'object' && paper.primaryContributor?.displayName
-                            ? paper.primaryContributor.displayName
-                            : 'Unknown'}
+                          {paper.sourceName || stLabel || 'Unknown'}
                         </span>
                       </div>
                       {paper.createdAt && (

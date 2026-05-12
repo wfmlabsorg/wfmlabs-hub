@@ -36,6 +36,29 @@ export const Papers: CollectionConfig = {
       ],
     },
     {
+      name: 'sourceName',
+      type: 'text',
+      admin: {
+        description: 'Publication name (e.g., "Harvard Business Review", "Operations Research")',
+      },
+    },
+    {
+      name: 'category',
+      type: 'select',
+      options: [
+        { label: 'Queuing Theory', value: 'queuing-theory' },
+        { label: 'AI & Machine Learning', value: 'ai-machine-learning' },
+        { label: 'Operations Management', value: 'operations-management' },
+        { label: 'Workforce Management', value: 'workforce-management' },
+        { label: 'Customer Experience', value: 'customer-experience' },
+        { label: 'Analytics & Forecasting', value: 'analytics-forecasting' },
+        { label: 'Process Optimization', value: 'process-optimization' },
+        { label: 'Technology', value: 'technology' },
+        { label: 'Economics & Finance', value: 'economics-finance' },
+        { label: 'Other', value: 'other' },
+      ],
+    },
+    {
       name: 'authors',
       type: 'array',
       fields: [

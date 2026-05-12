@@ -511,6 +511,11 @@ export interface Paper {
   };
   sourceUrl: string;
   sourceType?: ('arxiv' | 'ssrn' | 'journal' | 'industry-report' | 'blog' | 'vendor-research' | 'manual') | null;
+  /**
+   * Publication name (e.g., "Harvard Business Review", "Operations Research")
+   */
+  sourceName?: string | null;
+  category?: ('queuing-theory' | 'ai-machine-learning' | 'operations-management' | 'workforce-management' | 'customer-experience' | 'analytics-forecasting' | 'process-optimization' | 'technology' | 'economics-finance' | 'other') | null;
   authors?:
     | {
         name: string;
@@ -1390,6 +1395,8 @@ export interface PapersSelect<T extends boolean = true> {
       };
   sourceUrl?: T;
   sourceType?: T;
+  sourceName?: T;
+  category?: T;
   authors?:
     | T
     | {
