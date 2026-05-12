@@ -837,7 +837,7 @@
       // Globe URL with API keys
       // In production, keys are injected by Cloudflare Worker proxy
       // For local dev, they're read from the globe page's own config
-      var GLOBE_URL = '/globe/globe.html';
+      var GLOBE_URL = '/roc/globe/globe.html';
 
       var VIEWS = [
         { name: 'OVIX Globe', url: GLOBE_URL },
@@ -1592,7 +1592,7 @@
               return {
                 show: function (el) {
                   iframe = document.createElement('iframe');
-                  iframe.src = '/maps/windy.html';
+                  iframe.src = '/roc/maps/windy.html';
                   iframe.style.cssText = 'width:100%;height:100%;border:none;background:#08081a;';
                   iframe.setAttribute('allowfullscreen', 'true');
                   el.appendChild(iframe);
@@ -1653,25 +1653,25 @@
                   identifier: id,
                   type: 'roc.dashboard.panel',
                   name: 'OVIX Domain Scores',
-                  dashboardUrl: '/dashboards/scores.html'
+                  dashboardUrl: '/roc/dashboards/scores.html'
                 });
               }
               if (id.key === 'weather-intel') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Weather Intelligence', dashboardUrl: '/dashboards/weather.html'
+                  name: 'Weather Intelligence', dashboardUrl: '/roc/dashboards/weather.html'
                 });
               }
               if (id.key === 'seismic-activity') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Seismic Activity', dashboardUrl: '/dashboards/seismic.html'
+                  name: 'Seismic Activity', dashboardUrl: '/roc/dashboards/seismic.html'
                 });
               }
               if (id.key === 'disaster-monitor') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Disaster Monitor', dashboardUrl: '/dashboards/disaster.html'
+                  name: 'Disaster Monitor', dashboardUrl: '/roc/dashboards/disaster.html'
                 });
               }
               if (id.key === 'cyber-threat-intel') {
@@ -1679,7 +1679,7 @@
                   identifier: id,
                   type: 'roc.dashboard.panel',
                   name: 'Cyber Threat Intel',
-                  dashboardUrl: '/dashboards/cyber.html'
+                  dashboardUrl: '/roc/dashboards/cyber.html'
                 });
               }
               if (id.key === 'health-surveillance') {
@@ -1687,37 +1687,37 @@
                   identifier: id,
                   type: 'roc.dashboard.panel',
                   name: 'Health Surveillance',
-                  dashboardUrl: '/dashboards/health.html'
+                  dashboardUrl: '/roc/dashboards/health.html'
                 });
               }
               if (id.key === 'environmental-monitor') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Environmental Monitor', dashboardUrl: '/dashboards/environmental.html'
+                  name: 'Environmental Monitor', dashboardUrl: '/roc/dashboards/environmental.html'
                 });
               }
               if (id.key === 'geopolitical-risk') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Geopolitical Risk', dashboardUrl: '/dashboards/geopolitical.html'
+                  name: 'Geopolitical Risk', dashboardUrl: '/roc/dashboards/geopolitical.html'
                 });
               }
               if (id.key === 'travel-aviation') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Travel & Aviation', dashboardUrl: '/dashboards/travel.html'
+                  name: 'Travel & Aviation', dashboardUrl: '/roc/dashboards/travel.html'
                 });
               }
               if (id.key === 'feed-health') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Feed Health Monitor', dashboardUrl: '/dashboards/feed-health.html'
+                  name: 'Feed Health Monitor', dashboardUrl: '/roc/dashboards/feed-health.html'
                 });
               }
               if (id.key === 'infrastructure-status') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
-                  name: 'Infrastructure Status', dashboardUrl: '/dashboards/infrastructure.html'
+                  name: 'Infrastructure Status', dashboardUrl: '/roc/dashboards/infrastructure.html'
                 });
               }
               if (id.key === 'financial-markets') {
@@ -1725,7 +1725,7 @@
                   identifier: id,
                   type: 'roc.dashboard.panel',
                   name: 'Financial Markets',
-                  dashboardUrl: '/dashboards/financial.html'
+                  dashboardUrl: '/roc/dashboards/financial.html'
                 });
               }
               return Promise.resolve(undefined);
@@ -1764,7 +1764,7 @@
               return {
                 show: function (el) {
                   iframe = document.createElement('iframe');
-                  iframe.src = domainObject.dashboardUrl || '/dashboards/cyber.html';
+                  iframe.src = domainObject.dashboardUrl || '/roc/dashboards/cyber.html';
                   iframe.style.cssText = 'width:100%;height:100%;border:none;background:#08081a;';
                   iframe.setAttribute('allowfullscreen', 'true');
                   el.appendChild(iframe);
