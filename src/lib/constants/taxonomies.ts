@@ -23,6 +23,10 @@ export const INDUSTRIES = [
 export const WORKFORCE_TYPES = [
   { label: 'Contact Center', value: 'contact-center' },
   { label: 'Back Office', value: 'back-office' },
+  { label: 'Help Desk / IT Support', value: 'help-desk' },
+  { label: 'Claims Processing', value: 'claims-processing' },
+  { label: 'Collections', value: 'collections' },
+  { label: 'Sales / Inside Sales', value: 'sales' },
   { label: 'Field Service', value: 'field-service' },
   { label: 'Consultant / Advisory', value: 'consultant-advisory' },
   { label: 'Other', value: 'other' },
@@ -36,6 +40,11 @@ export const SOURCING_TYPES = [
 export const FOOTPRINT_WORKFORCE_TYPES = [
   { label: 'Contact Center', value: 'contact-center' },
   { label: 'Back Office', value: 'back-office' },
+  { label: 'Help Desk / IT Support', value: 'help-desk' },
+  { label: 'Claims Processing', value: 'claims-processing' },
+  { label: 'Collections', value: 'collections' },
+  { label: 'Sales / Inside Sales', value: 'sales' },
+  { label: 'Field Service', value: 'field-service' },
   { label: 'Other', value: 'other' },
 ] as const
 

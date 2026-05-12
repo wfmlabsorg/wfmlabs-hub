@@ -623,15 +623,15 @@ export default function SetupPage() {
               style={{
                 padding: '1.25rem',
                 marginBottom: '1.5rem',
-                background: 'var(--accent-light)',
-                border: '1px solid var(--accent)',
+                background: 'rgba(24, 188, 156, 0.08)',
+                border: '1px solid rgba(24, 188, 156, 0.25)',
                 borderRadius: 'var(--radius-lg)',
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: '0.5rem', color: 'var(--accent-text)' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: '0.5rem', color: 'var(--fg)' }}>
                 OVIX Contributor Network
               </div>
-              <p style={{ fontSize: '0.8125rem', lineHeight: 1.6, margin: 0, color: 'var(--accent-text)' }}>
+              <p style={{ fontSize: '0.8125rem', lineHeight: 1.6, margin: 0, color: 'var(--fg-muted)' }}>
                 Share your workforce footprint and customer geography so OVIX agents can alert you
                 when incidents — power outages, network disruptions, severe weather — affect your
                 operations. Contributors get personalized incident notifications matched to their
