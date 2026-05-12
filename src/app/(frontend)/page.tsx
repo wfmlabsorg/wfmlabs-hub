@@ -2,6 +2,7 @@ import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { AssetCard } from '@/components/cards/AssetCard'
+import { SignalFeed } from '@/components/signals/SignalFeed'
 
 const ovixDomains = [
   { name: 'weather', color: '#3b82f6' },
@@ -294,6 +295,25 @@ export default async function HomePage() {
 
       {/* OVIX Status */}
       <OvixStatusCard />
+
+      {/* Signal Feed */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
+        <div
+          className="card"
+          style={{ padding: '1.25rem' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
+              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>ROC Signal Feed</h3>
+            </div>
+            <a href="/roc" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
+              Open ROC {'\u2192'}
+            </a>
+          </div>
+          <SignalFeed limit={8} />
+        </div>
+      </section>
 
       {/* Quick links */}
       <section
