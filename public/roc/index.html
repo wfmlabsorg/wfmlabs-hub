@@ -251,36 +251,34 @@
   </style>
   <script>
     // =============================================
-    // Hub Session Bridge
-    // When running under community.wfmlabs.com, fetch Hub session
-    // and use it for ROC API authentication.
+    // Hub Session Bridge (blocking)
+    // Checks Hub session BEFORE page renders.
+    // Sets roc-hub-session in localStorage so the login gate auto-dismisses.
     // =============================================
-    (function hubAuthBridge() {
-      // If we already have a token, skip
-      if (localStorage.getItem('roc-token')) return;
+    window.__hubSessionReady = new Promise(function (resolve) {
+      // If we already have a ROC token or hub session, skip fetch
+      if (localStorage.getItem('roc-token') || localStorage.getItem('roc-hub-session')) {
+        resolve(true);
+        return;
+      }
 
-      // Check if we're on the Hub domain (same-origin session cookie available)
       fetch('/api/auth/session', { credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (session) {
           if (session && session.user && session.user.payloadMemberId) {
-            // Fetch Payload JWT for cross-platform use
-            fetch('/api/members/' + session.user.payloadMemberId + '?depth=0', { credentials: 'same-origin' })
-              .then(function () {
-                // The NextAuth session cookie is enough — store a marker
-                // so ROC knows we're authenticated via Hub
-                localStorage.setItem('roc-hub-session', JSON.stringify({
-                  memberId: session.user.payloadMemberId,
-                  role: session.user.role || 'member',
-                  name: session.user.name || '',
-                  email: session.user.email || '',
-                }));
-              })
-              .catch(function () {});
+            localStorage.setItem('roc-hub-session', JSON.stringify({
+              memberId: session.user.payloadMemberId,
+              role: session.user.role || 'member',
+              name: session.user.name || '',
+              email: session.user.email || '',
+            }));
+            resolve(true);
+          } else {
+            resolve(false);
           }
         })
-        .catch(function () {});
-    })();
+        .catch(function () { resolve(false); });
+    });
 
     document.addEventListener('DOMContentLoaded', function () {
       var THIRTY_SECONDS = 30 * 1000;
@@ -2508,24 +2506,28 @@
       if (token) {
         loadUserAndUnlock(token);
       } else {
-        // Hub session bridge: check if authenticated via Hub (same-origin)
-        var hubSession = localStorage.getItem('roc-hub-session');
-        if (hubSession) {
-          try {
-            var hs = JSON.parse(hubSession);
-            // Auto-unlock with Hub session data (no ROC API call needed for public endpoints)
-            unlockROC({
-              id: hs.memberId,
-              handle: hs.name || hs.email.split('@')[0],
-              firstName: hs.name ? hs.name.split(' ')[0] : '',
-              lastName: hs.name ? hs.name.split(' ').slice(1).join(' ') : '',
-              email: hs.email,
-              role: hs.role,
-              industry: '',
-              jobRole: '',
-            });
-          } catch(e) {}
-        }
+        // Wait for Hub session bridge to complete, then check
+        window.__hubSessionReady.then(function (hasSession) {
+          if (hasSession) {
+            var hubSession = localStorage.getItem('roc-hub-session');
+            if (hubSession) {
+              try {
+                var hs = JSON.parse(hubSession);
+                unlockROC({
+                  id: hs.memberId,
+                  handle: hs.name || hs.email.split('@')[0],
+                  firstName: hs.name ? hs.name.split(' ')[0] : '',
+                  lastName: hs.name ? hs.name.split(' ').slice(1).join(' ') : '',
+                  email: hs.email,
+                  role: hs.role,
+                  industry: '',
+                  jobRole: '',
+                });
+              } catch(e) {}
+            }
+          }
+          // If no Hub session either, the login gate stays visible
+        });
       }
     }
   })();
