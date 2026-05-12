@@ -30,50 +30,48 @@ async function OvixStatusCard() {
   const stale = totalFeeds - healthy
 
   return (
-    <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
-      <a
-        href="/data-sources"
-        className="card"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '1rem 1.25rem',
-          textDecoration: 'none',
-          color: 'inherit',
-          gap: '1rem',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span style={{ fontSize: '1.25rem' }}>📡</span>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>OVIX Status</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-              {totalFeeds} feeds · {healthy} healthy · {stale} stale
-            </div>
+    <a
+      href="/data-sources"
+      className="card"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '1rem 1.25rem',
+        textDecoration: 'none',
+        color: 'inherit',
+        gap: '1rem',
+        flexWrap: 'wrap',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span style={{ fontSize: '1.25rem' }}>{'\uD83D\uDCE1'}</span>
+        <div>
+          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>OVIX Status</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
+            {totalFeeds} feeds · {healthy} healthy · {stale} stale
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
-          {ovixDomains.map((d) => (
-            <span
-              key={d.name}
-              title={d.name}
-              style={{
-                display: 'inline-block',
-                width: '0.5rem',
-                height: '0.5rem',
-                borderRadius: '50%',
-                background: d.color,
-              }}
-            />
-          ))}
-          <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.5rem' }}>
-            View all →
-          </span>
-        </div>
-      </a>
-    </section>
+      </div>
+      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+        {ovixDomains.map((d) => (
+          <span
+            key={d.name}
+            title={d.name}
+            style={{
+              display: 'inline-block',
+              width: '0.5rem',
+              height: '0.5rem',
+              borderRadius: '50%',
+              background: d.color,
+            }}
+          />
+        ))}
+        <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.5rem' }}>
+          View all {'\u2192'}
+        </span>
+      </div>
+    </a>
   )
 }
 
@@ -239,8 +237,27 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Signal Feed + OVIX Status — side by side */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
+              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>ROC Signal Feed</h3>
+            </div>
+            <a href="/roc" target="_blank" rel="noopener" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
+              Open ROC {'\u2192'}
+            </a>
+          </div>
+          <SignalFeed limit={6} compact />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <OvixStatusCard />
+        </div>
+      </section>
+
       {/* Featured / Recent content */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '3rem 1rem' }}>
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>
           {featured.length > 0 ? 'Featured' : 'Recent Activity'}
         </h2>
@@ -291,28 +308,6 @@ export default async function HomePage() {
             </p>
           </div>
         )}
-      </section>
-
-      {/* OVIX Status */}
-      <OvixStatusCard />
-
-      {/* Signal Feed */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 0' }}>
-        <div
-          className="card"
-          style={{ padding: '1.25rem' }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
-              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>ROC Signal Feed</h3>
-            </div>
-            <a href="/roc" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
-              Open ROC {'\u2192'}
-            </a>
-          </div>
-          <SignalFeed limit={8} />
-        </div>
       </section>
 
       {/* Quick links */}

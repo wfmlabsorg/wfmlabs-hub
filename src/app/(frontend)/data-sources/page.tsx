@@ -170,6 +170,8 @@ export default async function DataSourcesPage({
           </span>
           <a
             href="/roc"
+            target="_blank"
+            rel="noopener"
             style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 500 }}
           >
             Powered by ROC →

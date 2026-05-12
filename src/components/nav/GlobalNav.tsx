@@ -4,7 +4,7 @@ import React, { useState } from 'react'
 import { UserMenu } from './UserMenu'
 
 const navLinks = [
-  { href: '/roc', label: 'ROC', accent: true },
+  { href: '/roc', label: 'ROC', accent: true, newTab: true },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/wiki', label: 'Wiki' },
@@ -81,6 +81,8 @@ export function GlobalNav() {
             <a
               key={link.href}
               href={link.href}
+              target={link.newTab ? '_blank' : undefined}
+              rel={link.newTab ? 'noopener' : undefined}
               style={{
                 padding: '0.375rem 0.75rem',
                 fontSize: '0.875rem',
@@ -152,6 +154,8 @@ export function GlobalNav() {
             <a
               key={link.href}
               href={link.href}
+              target={link.newTab ? '_blank' : undefined}
+              rel={link.newTab ? 'noopener' : undefined}
               style={{
                 display: 'block',
                 padding: '0.5rem 0',

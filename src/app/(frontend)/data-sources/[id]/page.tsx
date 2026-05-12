@@ -40,6 +40,30 @@ interface FeedRegistry {
   docs: string
 }
 
+const domainDashboardMap: Record<string, string> = {
+  weather: 'weather',
+  seismic: 'seismic',
+  disaster: 'disaster',
+  infrastructure: 'infrastructure',
+  cyber: 'cyber',
+  health: 'health',
+  financial: 'financial',
+  environmental: 'environmental',
+  news: 'geopolitical',
+}
+
+const domainDashboardLabel: Record<string, string> = {
+  weather: 'Weather Intelligence',
+  seismic: 'Seismic Activity',
+  disaster: 'Disaster Monitor',
+  infrastructure: 'Infrastructure Status',
+  cyber: 'Cyber Threat',
+  health: 'Health Surveillance',
+  financial: 'Financial',
+  environmental: 'Environmental',
+  news: 'Geopolitical Risk',
+}
+
 interface FeedHealth {
   source: string
   domain: string
@@ -283,11 +307,13 @@ export default async function DataSourceDetailPage({
         {/* View in ROC button */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
           <a
-            href="/roc"
+            href={`/roc/dashboards/${domainDashboardMap[feed.domain] || 'scores'}.html`}
+            target="_blank"
+            rel="noopener"
             className="btn btn-primary"
             style={{ padding: '0.625rem 1.5rem' }}
           >
-            View in ROC Dashboard →
+            View {domainDashboardLabel[feed.domain] || 'Scores'} Dashboard →
           </a>
           <a
             href="/data-sources"
@@ -308,7 +334,7 @@ export default async function DataSourceDetailPage({
         }}>
           <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', margin: 0 }}>
             Discussions coming soon — this feed is powered by the{' '}
-            <a href="/roc">
+            <a href="/roc" target="_blank" rel="noopener">
               ROC operational platform
             </a>.
           </p>
