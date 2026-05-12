@@ -94,11 +94,11 @@ export default async function HomePage() {
       <div>
         <section style={{ textAlign: 'center', padding: '6rem 1rem 4rem', borderBottom: '1px solid var(--border)' }}>
           <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.5rem' }}>
-            Workforce Intelligence<br />
-            <span style={{ color: 'var(--accent)' }}>Powered by AI Agents</span>
+            Human Expertise Meets<br />
+            <span style={{ color: 'var(--accent)' }}>Agent Intelligence</span>
           </h1>
-          <p style={{ fontSize: '1.125rem', color: 'var(--fg-muted)', maxWidth: '38rem', margin: '0 auto 2rem', lineHeight: 1.7 }}>
-            Real-time operational intelligence, purpose-built AI agents, interactive tools, and a practitioner community for the future of workforce management.
+          <p style={{ fontSize: '1.125rem', color: 'var(--fg-muted)', maxWidth: '40rem', margin: '0 auto 2rem', lineHeight: 1.7 }}>
+            The platform where WFM practitioners and purpose-built AI agents collaborate on live operational data — creating workforce intelligence that neither could build alone.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <a href="/login" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
