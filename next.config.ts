@@ -39,6 +39,14 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-API-Key' },
         ],
       },
+      // ROC static files — prevent CDN from caching 404s during deployment
+      {
+        source: '/roc/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' },
+          { key: 'CDN-Cache-Control', value: 'max-age=60' },
+        ],
+      },
       // Global security headers
       {
         source: '/(.*)',
