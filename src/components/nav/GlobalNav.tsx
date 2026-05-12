@@ -12,6 +12,7 @@ const navLinks = [
   { href: '/data-sources', label: 'APIs' },
   { href: '/scenarios', label: 'Scenarios' },
   { href: '/members', label: 'Members' },
+  { href: '/discussions', label: 'Discussions' },
 ]
 
 export function GlobalNav() {
