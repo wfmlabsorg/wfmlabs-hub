@@ -1,5 +1,6 @@
 import React from 'react'
 import { notFound } from 'next/navigation'
+import { FEED_DESCRIPTIONS } from '@/lib/constants/feed-descriptions'
 
 export const dynamic = 'force-dynamic'
 
@@ -224,6 +225,62 @@ export default async function DataSourceDetailPage({
             </div>
           ))}
         </div>
+
+        {/* About this Data Source */}
+        {FEED_DESCRIPTIONS[feed.id] && (() => {
+          const desc = FEED_DESCRIPTIONS[feed.id]
+          const fields = [
+            { label: 'Operator', value: desc.operator },
+            { label: 'License', value: desc.license },
+            { label: 'Registration', value: desc.registration },
+            { label: 'Cost', value: desc.cost },
+          ]
+          return (
+            <>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                About this Data Source
+              </h2>
+              <div style={{
+                padding: '1rem',
+                background: 'var(--bg-secondary)',
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                marginBottom: '2rem',
+              }}>
+                <p style={{ fontSize: '0.875rem', lineHeight: 1.7, marginBottom: '1rem' }}>
+                  {desc.summary}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(12rem, 1fr))',
+                  gap: '0.5rem',
+                }}>
+                  {fields.map((f) => (
+                    <div key={f.label} style={{
+                      padding: '0.5rem 0.75rem',
+                      background: 'var(--bg-card)',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--border)',
+                    }}>
+                      <div style={{
+                        fontSize: '0.625rem',
+                        color: 'var(--fg-faint)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        marginBottom: '0.125rem',
+                      }}>
+                        {f.label}
+                      </div>
+                      <div style={{ fontSize: '0.8125rem', fontWeight: 500 }}>
+                        {f.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )
+        })()}
 
         {/* Scoring section */}
         <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem' }}>
