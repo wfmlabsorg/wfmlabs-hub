@@ -283,9 +283,7 @@ export default async function DataSourceDetailPage({
         {/* View in ROC button */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
           <a
-            href="https://roc-beta.wfmlabs.com"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/roc"
             className="btn btn-primary"
             style={{ padding: '0.625rem 1.5rem' }}
           >
@@ -310,7 +308,7 @@ export default async function DataSourceDetailPage({
         }}>
           <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', margin: 0 }}>
             Discussions coming soon — this feed is powered by the{' '}
-            <a href="https://roc-beta.wfmlabs.com" target="_blank" rel="noopener noreferrer">
+            <a href="/roc">
               ROC operational platform
             </a>.
           </p>

@@ -169,9 +169,7 @@ export default async function DataSourcesPage({
             <span style={{ color: '#f59e0b', fontWeight: 600 }}>{staleCount}</span> stale
           </span>
           <a
-            href="https://roc-beta.wfmlabs.com"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/roc"
             style={{ marginLeft: 'auto', fontSize: '0.75rem', fontWeight: 500 }}
           >
             Powered by ROC →
