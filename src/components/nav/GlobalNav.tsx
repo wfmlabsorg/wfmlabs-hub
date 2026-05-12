@@ -8,7 +8,7 @@ const navLinks = [
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/articles', label: 'Articles' },
-  { href: '/wiki', label: 'Wiki' },
+  { href: '/wiki', label: 'Docs' },
   { href: '/frameworks', label: 'Frameworks' },
   { href: '/data-sources', label: 'APIs' },
   { href: '/scenarios', label: 'Scenarios' },
