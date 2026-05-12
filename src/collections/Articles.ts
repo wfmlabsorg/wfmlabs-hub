@@ -15,6 +15,19 @@ export const Articles: CollectionConfig = {
       type: 'text',
       required: true,
     },
+    {
+      name: 'category',
+      type: 'select',
+      options: [
+        { label: 'Think Tank', value: 'think-tank' },
+        { label: 'Topic Surface', value: 'topic-surface' },
+        { label: 'Wiki Highlight', value: 'wiki-highlight' },
+        { label: 'Research Finding', value: 'research-finding' },
+        { label: 'Opinion', value: 'opinion' },
+        { label: 'Tutorial', value: 'tutorial' },
+        { label: 'Industry Analysis', value: 'industry-analysis' },
+      ],
+    },
     ...baseAssetFields,
     // Article-specific fields
     {

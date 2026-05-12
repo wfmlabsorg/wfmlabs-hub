@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { notFound } from 'next/navigation'
 import { DetailPageLayout } from '@/components/pages/DetailPageLayout'
 import { RichTextContent } from '@/components/ui/RichTextContent'
+import { DiscussionSection } from '@/components/discussion/DiscussionSection'
 import React from 'react'
 
 export default async function WikiDetailPage({
@@ -99,6 +100,9 @@ export default async function WikiDetailPage({
         </p>
       )}
       <RichTextContent content={entry.body} />
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem', marginTop: '2rem' }}>
+        <DiscussionSection assetType="wiki-entries" assetId={entry.id} />
+      </div>
     </DetailPageLayout>
   )
 }

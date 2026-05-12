@@ -7,6 +7,7 @@ const navLinks = [
   { href: '/roc', label: 'ROC', accent: true, newTab: true },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
+  { href: '/articles', label: 'Articles' },
   { href: '/wiki', label: 'Wiki' },
   { href: '/frameworks', label: 'Frameworks' },
   { href: '/data-sources', label: 'APIs' },
