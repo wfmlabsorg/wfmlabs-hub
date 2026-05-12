@@ -4,21 +4,50 @@ import config from '@payload-config'
 /**
  * Cross-platform token verification endpoint for ROC/OVIX.
  *
- * ROC Worker calls this to validate a Hub-issued Payload JWT.
- * Returns minimal member identity for session mapping.
+ * ROC Worker calls this to validate a Hub-issued JWT.
+ * Accepts token via Authorization header OR POST body.
+ * Validates ROC_API_KEY for server-to-server auth.
  *
  * POST /api/auth/verify
- * Headers: Authorization: Bearer <payload-jwt>
+ * Headers: X-ROC-API-Key: <shared-secret>
+ * Body: { token: "<hub-jwt>" }
+ *   OR
+ * Headers: Authorization: Bearer <hub-jwt>
  */
 export async function POST(req: Request) {
-  const payload = await getPayload({ config })
-
+  // Validate ROC API key for server-to-server calls
+  const apiKey = req.headers.get('x-roc-api-key')
   const authHeader = req.headers.get('authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return Response.json({ valid: false, error: 'Missing bearer token' }, { status: 401 })
+
+  // Must have either API key or direct bearer token
+  if (!apiKey && !authHeader) {
+    return Response.json({ valid: false, error: 'Missing authentication' }, { status: 401 })
   }
 
-  const token = authHeader.slice(7)
+  // If API key provided, validate it
+  if (apiKey && process.env.ROC_API_KEY && apiKey !== process.env.ROC_API_KEY) {
+    return Response.json({ valid: false, error: 'Invalid API key' }, { status: 403 })
+  }
+
+  // Extract token: from body (ROC Worker pattern) or from Authorization header
+  let token: string | null = null
+
+  if (req.headers.get('content-type')?.includes('application/json')) {
+    try {
+      const body = await req.json() as { token?: string }
+      if (body.token) token = body.token
+    } catch {}
+  }
+
+  if (!token && authHeader?.startsWith('Bearer ')) {
+    token = authHeader.slice(7)
+  }
+
+  if (!token) {
+    return Response.json({ valid: false, error: 'Missing token' }, { status: 401 })
+  }
+
+  const payload = await getPayload({ config })
 
   try {
     const headers = new Headers()
@@ -53,7 +82,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': process.env.ROC_ORIGIN || 'https://roc.cloud',
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-ROC-API-Key',
       'Access-Control-Max-Age': '86400',
     },
   })
