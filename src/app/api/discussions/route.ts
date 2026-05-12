@@ -34,6 +34,30 @@ function textToLexical(text: string) {
   }
 }
 
+export async function GET(req: Request) {
+  const payload = await getPayload({ config })
+  const url = new URL(req.url)
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100)
+  const sort = url.searchParams.get('sort') || '-createdAt'
+  const assetId = url.searchParams.get('where[asset][equals]')
+  const depth = parseInt(url.searchParams.get('depth') || '1')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {}
+  if (assetId) where.asset = { equals: Number(assetId) }
+
+  const result = await payload.find({
+    collection: 'discussions',
+    where: Object.keys(where).length > 0 ? where : undefined,
+    limit,
+    sort,
+    depth,
+    overrideAccess: true,
+  })
+
+  return Response.json(result)
+}
+
 export async function POST(req: Request) {
   try {
     const payload = await getPayload({ config })
