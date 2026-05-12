@@ -39,17 +39,17 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-API-Key' },
         ],
       },
-      // ROC static files — prevent CDN from caching 404s during deployment
+      // ROC static files — allow iframing from same origin (dashboards, globe)
       {
         source: '/roc/:path*',
         headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' },
-          { key: 'CDN-Cache-Control', value: 'max-age=60' },
         ],
       },
-      // Global security headers
+      // Global security headers (excludes /roc/ which has its own above)
       {
-        source: '/(.*)',
+        source: '/((?!roc/).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
