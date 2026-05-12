@@ -35,6 +35,9 @@ export default buildConfig({
     importMap: {
       baseDir: path.resolve(dirname),
     },
+    components: {
+      beforeLogin: ['/src/components/admin/OAuthLoginButton'],
+    },
   },
 
   editor: lexicalEditor(),
