@@ -22,7 +22,7 @@ export const Members: CollectionConfig = {
   auth: true,
   admin: {
     useAsTitle: 'displayName',
-    defaultColumns: ['displayName', 'email', 'role', 'type', 'industry', 'lastActiveAt'],
+    defaultColumns: ['displayName', 'email', 'role', 'membershipTier', 'type', 'industry', 'lastActiveAt'],
   },
   access: {
     // Anyone can read member profiles
@@ -85,6 +85,45 @@ export const Members: CollectionConfig = {
       admin: {
         description:
           'Permission level. Admin: full access. Moderator: can edit/flag content. Member: standard access.',
+      },
+    },
+    {
+      name: 'membershipTier',
+      type: 'select',
+      defaultValue: 'free',
+      options: [
+        { label: 'Free', value: 'free' },
+        { label: 'Trial', value: 'trial' },
+        { label: 'Practitioner', value: 'practitioner' },
+        { label: 'Practitioner+', value: 'practitioner-plus' },
+      ],
+      admin: {
+        description: 'Membership tier — determines content access and features available',
+      },
+    },
+    {
+      name: 'trialExpiresAt',
+      type: 'date',
+      admin: {
+        description: 'When trial period ends (only relevant for trial tier)',
+        condition: (data) => data?.membershipTier === 'trial',
+        date: {
+          pickerAppearance: 'dayOnly',
+          displayFormat: 'MMM d, yyyy',
+        },
+      },
+    },
+    {
+      name: 'memberSince',
+      type: 'date',
+      admin: {
+        description: 'When they became a paid member',
+        condition: (data) =>
+          data?.membershipTier === 'practitioner' || data?.membershipTier === 'practitioner-plus',
+        date: {
+          pickerAppearance: 'dayOnly',
+          displayFormat: 'MMM d, yyyy',
+        },
       },
     },
 

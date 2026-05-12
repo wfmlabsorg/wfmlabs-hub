@@ -454,6 +454,40 @@ export default function SettingsPage() {
               )}
             </button>
           ))}
+
+          {/* Admin Panel link — only visible to admins */}
+          {session?.user?.role === 'admin' && (
+            <>
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  margin: '0.5rem 0',
+                }}
+              />
+              <a
+                href="/admin"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  background: 'transparent',
+                  border: 'none',
+                  borderRadius: 'var(--radius)',
+                  fontSize: '0.875rem',
+                  fontWeight: 400,
+                  color: 'var(--accent)',
+                  textDecoration: 'none',
+                  width: '100%',
+                }}
+              >
+                Admin Panel
+                <span style={{ marginLeft: 'auto', fontSize: '0.75rem', opacity: 0.6 }}>&#8599;</span>
+              </a>
+            </>
+          )}
         </nav>
 
         {/* Main content */}
