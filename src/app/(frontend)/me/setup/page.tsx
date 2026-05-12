@@ -42,6 +42,7 @@ interface FootprintRow {
   headcount: number | ''
   sourcing: string
   workforceType: string
+  otherWorkforceType: string
 }
 
 const emptyFootprintRow: FootprintRow = {
@@ -51,6 +52,7 @@ const emptyFootprintRow: FootprintRow = {
   headcount: '',
   sourcing: '',
   workforceType: '',
+  otherWorkforceType: '',
 }
 
 export default function SetupPage() {
@@ -629,10 +631,10 @@ export default function SetupPage() {
               }}
             >
               <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: '0.5rem', color: 'var(--fg)' }}>
-                OVIX Contributor Network
+                ROC Contributor Network
               </div>
               <p style={{ fontSize: '0.8125rem', lineHeight: 1.6, margin: 0, color: 'var(--fg-muted)' }}>
-                Share your workforce footprint and customer geography so OVIX agents can alert you
+                Share your workforce footprint and customer geography so ROC agents can alert you
                 when incidents — power outages, network disruptions, severe weather — affect your
                 operations. Contributors get personalized incident notifications matched to their
                 locations and can validate real-world impact for the community.
@@ -660,7 +662,7 @@ export default function SetupPage() {
               />
               <div>
                 <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
-                  I&apos;d like to participate as an OVIX contributor
+                  I&apos;d like to participate as an ROC contributor
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', marginTop: '0.25rem' }}>
                   Your data is only used for incident correlation. You control visibility in settings.
@@ -875,6 +877,18 @@ export default function SetupPage() {
                           </button>
                         )}
                       </div>
+                      {row.workforceType === 'other' && (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Describe workforce type</label>
+                          <input
+                            type="text"
+                            placeholder="e.g., Underwriting, Compliance Review, Data Entry"
+                            value={row.otherWorkforceType}
+                            onChange={(e) => updateFootprintRow(i, 'otherWorkforceType', e.target.value)}
+                            style={{ ...inputStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
