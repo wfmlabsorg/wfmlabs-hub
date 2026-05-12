@@ -8,6 +8,7 @@ import {
   WORKFORCE_TYPES,
   SOURCING_TYPES,
   FOOTPRINT_WORKFORCE_TYPES,
+  FOOTPRINT_COUNTRIES,
   CUSTOMER_GEO_SCOPES,
   US_REGIONS,
   US_STATES,
@@ -754,87 +755,126 @@ export default function SetupPage() {
                   Where is your workforce located? This helps agents match incidents to your operations.
                 </p>
 
-                {/* Footprint grid */}
+                {/* Footprint cards */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
                   {footprint.map((row, i) => (
                     <div
                       key={i}
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 1fr 0.6fr 0.6fr 1fr 1fr auto',
-                        gap: '0.5rem',
-                        alignItems: 'center',
                         padding: '0.75rem',
                         background: 'var(--bg-secondary)',
                         borderRadius: 'var(--radius)',
+                        border: '1px solid var(--border)',
                       }}
                     >
-                      <input
-                        type="text"
-                        placeholder="City"
-                        value={row.city}
-                        onChange={(e) => updateFootprintRow(i, 'city', e.target.value)}
-                        style={{ ...inputStyle, padding: '0.5rem' }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="State"
-                        value={row.stateProvince}
-                        onChange={(e) => updateFootprintRow(i, 'stateProvince', e.target.value)}
-                        style={{ ...inputStyle, padding: '0.5rem' }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Country"
-                        value={row.country}
-                        onChange={(e) => updateFootprintRow(i, 'country', e.target.value)}
-                        style={{ ...inputStyle, padding: '0.5rem' }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="HC"
-                        min={1}
-                        value={row.headcount}
-                        onChange={(e) => updateFootprintRow(i, 'headcount', e.target.value ? Number(e.target.value) : '')}
-                        style={{ ...inputStyle, padding: '0.5rem' }}
-                      />
-                      <select
-                        value={row.sourcing}
-                        onChange={(e) => updateFootprintRow(i, 'sourcing', e.target.value)}
-                        style={{ ...selectStyle, padding: '0.5rem' }}
-                      >
-                        <option value="">Sourcing</option>
-                        {SOURCING_TYPES.map((s) => (
-                          <option key={s.value} value={s.value}>{s.label}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={row.workforceType}
-                        onChange={(e) => updateFootprintRow(i, 'workforceType', e.target.value)}
-                        style={{ ...selectStyle, padding: '0.5rem' }}
-                      >
-                        <option value="">Type</option>
-                        {FOOTPRINT_WORKFORCE_TYPES.map((t) => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
-                      {footprint.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeFootprintRow(i)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--fg-faint)',
-                            cursor: 'pointer',
-                            fontSize: '1rem',
-                            padding: '0.25rem',
-                          }}
-                          title="Remove row"
-                        >
-                          &times;
-                        </button>
-                      )}
+                      {/* Row 1: Location */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Country</label>
+                          <select
+                            value={row.country}
+                            onChange={(e) => updateFootprintRow(i, 'country', e.target.value)}
+                            style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          >
+                            {FOOTPRINT_COUNTRIES.map((c) => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>
+                            {row.country === 'US' ? 'State' : 'State / Province'}
+                          </label>
+                          {row.country === 'US' ? (
+                            <select
+                              value={row.stateProvince}
+                              onChange={(e) => updateFootprintRow(i, 'stateProvince', e.target.value)}
+                              style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                            >
+                              <option value="">Select</option>
+                              {US_STATES.map((s) => (
+                                <option key={s.value} value={s.value}>{s.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              placeholder="Province / Region"
+                              value={row.stateProvince}
+                              onChange={(e) => updateFootprintRow(i, 'stateProvince', e.target.value)}
+                              style={{ ...inputStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>City</label>
+                          <input
+                            type="text"
+                            placeholder="City"
+                            value={row.city}
+                            onChange={(e) => updateFootprintRow(i, 'city', e.target.value)}
+                            style={{ ...inputStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          />
+                        </div>
+                      </div>
+                      {/* Row 2: Details */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '5rem 1fr 1fr auto', gap: '0.5rem', alignItems: 'end' }}>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Headcount</label>
+                          <input
+                            type="number"
+                            placeholder="HC"
+                            min={1}
+                            value={row.headcount}
+                            onChange={(e) => updateFootprintRow(i, 'headcount', e.target.value ? Number(e.target.value) : '')}
+                            style={{ ...inputStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Sourcing</label>
+                          <select
+                            value={row.sourcing}
+                            onChange={(e) => updateFootprintRow(i, 'sourcing', e.target.value)}
+                            style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          >
+                            <option value="">Select</option>
+                            {SOURCING_TYPES.map((s) => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Workforce Type</label>
+                          <select
+                            value={row.workforceType}
+                            onChange={(e) => updateFootprintRow(i, 'workforceType', e.target.value)}
+                            style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          >
+                            <option value="">Select</option>
+                            {FOOTPRINT_WORKFORCE_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {footprint.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeFootprintRow(i)}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--fg-faint)',
+                              cursor: 'pointer',
+                              fontSize: '1.125rem',
+                              padding: '0.25rem 0.5rem',
+                              marginBottom: '0.125rem',
+                            }}
+                            title="Remove location"
+                          >
+                            &times;
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
