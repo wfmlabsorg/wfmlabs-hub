@@ -155,6 +155,31 @@ export interface Member {
    * Permission level. Admin: full access. Moderator: can edit/flag content. Member: standard access.
    */
   role: 'admin' | 'moderator' | 'member';
+  /**
+   * Primary industry you work in
+   */
+  industry?:
+    | (
+        | 'finance'
+        | 'insurance'
+        | 'healthcare'
+        | 'telecom'
+        | 'retail'
+        | 'technology'
+        | 'government'
+        | 'energy-utilities'
+        | 'transportation-logistics'
+        | 'manufacturing'
+        | 'education'
+        | 'media-entertainment'
+        | 'hospitality-travel'
+        | 'other'
+      )
+    | null;
+  /**
+   * Types of workforce you manage or advise on
+   */
+  workforceTypes?: ('contact-center' | 'back-office' | 'field-service' | 'consultant-advisory' | 'other')[] | null;
   bio?: string | null;
   avatar?: (number | null) | Media;
   profile?: {
@@ -162,12 +187,22 @@ export interface Member {
      * e.g., VP Operations
      */
     title?: string | null;
+    /**
+     * Optional — not displayed publicly by default
+     */
     company?: string | null;
+    /**
+     * Your city/state/country
+     */
     location?: string | null;
     linkedinUrl?: string | null;
     githubUsername?: string | null;
     websiteUrl?: string | null;
   };
+  /**
+   * Self-selected expertise topics — shown on profile and used for directory filtering
+   */
+  expertise?: (number | Topic)[] | null;
   /**
    * Agent-specific configuration
    */
@@ -181,17 +216,160 @@ export interface Member {
     a2aCardUrl?: string | null;
   };
   /**
-   * Self-selected expertise topics — shown on profile and used for directory filtering
+   * OVIX Contributor Network — optional workforce and geography data for incident correlation
    */
-  expertise?: (number | Topic)[] | null;
+  ovixProfile?: {
+    /**
+     * Opt-in to the OVIX Contributor Network. As a contributor, your workforce footprint and customer geography data help OVIX agents detect and alert you about operational incidents affecting your regions and industries. Your data is only shared with OVIX intelligence agents — never displayed publicly unless you enable it in Privacy settings.
+     */
+    isOvixContributor?: boolean | null;
+    /**
+     * I am a BPO/outsourcer serving multiple clients across industries
+     */
+    isBpo?: boolean | null;
+    /**
+     * Industries of the clients you serve (BPO/outsourcers only)
+     */
+    clientIndustries?:
+      | (
+          | 'finance'
+          | 'insurance'
+          | 'healthcare'
+          | 'telecom'
+          | 'retail'
+          | 'technology'
+          | 'government'
+          | 'energy-utilities'
+          | 'transportation-logistics'
+          | 'manufacturing'
+          | 'education'
+          | 'media-entertainment'
+          | 'hospitality-travel'
+          | 'other'
+        )[]
+      | null;
+    /**
+     * Workforce locations — helps OVIX agents alert you about regional incidents
+     */
+    workforceFootprint?:
+      | {
+          /**
+           * e.g., Omaha
+           */
+          city?: string | null;
+          /**
+           * e.g., NE or Ontario
+           */
+          stateProvince?: string | null;
+          /**
+           * e.g., US, PH, CR
+           */
+          country: string;
+          /**
+           * Number of workers at this location
+           */
+          headcount?: number | null;
+          /**
+           * In-house employees or BPO vendor staff
+           */
+          sourcing?: ('in-house' | 'bpo-vendor') | null;
+          workforceType?: ('contact-center' | 'back-office' | 'other') | null;
+          id?: string | null;
+        }[]
+      | null;
+    /**
+     * Where your customers or clients are located
+     */
+    customerGeography?: {
+      /**
+       * Geographic scope of your customer base
+       */
+      scope?: ('single-state' | 'regional-us' | 'national-us' | 'us-plus-neighbors' | 'eu' | 'international') | null;
+      /**
+       * Which US regions you serve
+       */
+      usRegions?: ('northeast' | 'southeast' | 'midwest' | 'southwest' | 'west-coast')[] | null;
+      /**
+       * Which state you serve
+       */
+      usState?:
+        | (
+            | 'AL'
+            | 'AK'
+            | 'AZ'
+            | 'AR'
+            | 'CA'
+            | 'CO'
+            | 'CT'
+            | 'DE'
+            | 'FL'
+            | 'GA'
+            | 'HI'
+            | 'ID'
+            | 'IL'
+            | 'IN'
+            | 'IA'
+            | 'KS'
+            | 'KY'
+            | 'LA'
+            | 'ME'
+            | 'MD'
+            | 'MA'
+            | 'MI'
+            | 'MN'
+            | 'MS'
+            | 'MO'
+            | 'MT'
+            | 'NE'
+            | 'NV'
+            | 'NH'
+            | 'NJ'
+            | 'NM'
+            | 'NY'
+            | 'NC'
+            | 'ND'
+            | 'OH'
+            | 'OK'
+            | 'OR'
+            | 'PA'
+            | 'RI'
+            | 'SC'
+            | 'SD'
+            | 'TN'
+            | 'TX'
+            | 'UT'
+            | 'VT'
+            | 'VA'
+            | 'WA'
+            | 'WV'
+            | 'WI'
+            | 'WY'
+            | 'DC'
+            | 'PR'
+          )
+        | null;
+      /**
+       * EU countries served (comma-separated, e.g., DE, FR, ES)
+       */
+      euCountries?: string | null;
+      /**
+       * Countries or regions served (comma-separated)
+       */
+      internationalRegions?: string | null;
+    };
+  };
   /**
    * Control what other members can see on your profile
    */
   visibility?: {
     /**
-     * Show title, company, location
+     * Show title, location
      */
     showProfessional?: boolean | null;
+    /**
+     * Show industry and workforce types
+     */
+    showIndustry?: boolean | null;
     showBio?: boolean | null;
     /**
      * Show LinkedIn, GitHub, website
@@ -205,7 +383,15 @@ export interface Member {
      * Show email to other members
      */
     showEmail?: boolean | null;
+    /**
+     * Show OVIX contributor data (workforce footprint, customer geography) to other members
+     */
+    showOvixData?: boolean | null;
   };
+  /**
+   * Linked ROC/OVIX user ID — set during migration or first cross-platform login
+   */
+  rocUserId?: number | null;
   /**
    * First 100 paid members — grants lifetime locked pricing
    */
@@ -989,6 +1175,8 @@ export interface MembersSelect<T extends boolean = true> {
   username?: T;
   type?: T;
   role?: T;
+  industry?: T;
+  workforceTypes?: T;
   bio?: T;
   avatar?: T;
   profile?:
@@ -1001,6 +1189,7 @@ export interface MembersSelect<T extends boolean = true> {
         githubUsername?: T;
         websiteUrl?: T;
       };
+  expertise?: T;
   agentMetadata?:
     | T
     | {
@@ -1009,16 +1198,45 @@ export interface MembersSelect<T extends boolean = true> {
         mcpEndpoint?: T;
         a2aCardUrl?: T;
       };
-  expertise?: T;
+  ovixProfile?:
+    | T
+    | {
+        isOvixContributor?: T;
+        isBpo?: T;
+        clientIndustries?: T;
+        workforceFootprint?:
+          | T
+          | {
+              city?: T;
+              stateProvince?: T;
+              country?: T;
+              headcount?: T;
+              sourcing?: T;
+              workforceType?: T;
+              id?: T;
+            };
+        customerGeography?:
+          | T
+          | {
+              scope?: T;
+              usRegions?: T;
+              usState?: T;
+              euCountries?: T;
+              internationalRegions?: T;
+            };
+      };
   visibility?:
     | T
     | {
         showProfessional?: T;
+        showIndustry?: T;
         showBio?: T;
         showLinks?: T;
         showInDirectory?: T;
         showEmail?: T;
+        showOvixData?: T;
       };
+  rocUserId?: T;
   foundingMember?: T;
   lastActiveAt?: T;
   updatedAt?: T;
