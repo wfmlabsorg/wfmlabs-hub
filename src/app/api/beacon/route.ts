@@ -24,38 +24,112 @@ interface BeaconPayload {
   commentBody?: string
 }
 
-/** Convert plain text to Lexical JSON (matches existing discussions/route.ts pattern) */
-function textToLexical(text: string) {
-  return {
-    root: {
-      type: 'root' as const,
-      children: text
-        .split('\n')
-        .filter(Boolean)
-        .map((paragraph) => ({
-          type: 'paragraph' as const,
-          children: [
-            {
-              type: 'text' as const,
-              text: paragraph,
-              format: 0,
-              detail: 0,
-              mode: 'normal' as const,
-              style: '',
-              version: 1,
-            },
-          ],
-          direction: 'ltr' as const,
-          format: '' as const,
-          indent: 0,
-          version: 1,
-        })),
-      direction: 'ltr' as const,
-      format: '' as const,
-      indent: 0,
-      version: 1,
-    },
+/**
+ * Convert markdown text to Lexical JSON.
+ * Handles: **bold**, *italic*, [links](url), headings, paragraphs.
+ */
+function markdownToLexical(text: string) {
+  const blocks = text.split(/\n\n+/).filter(Boolean)
+
+  const children = blocks.map((block) => {
+    const trimmed = block.trim()
+
+    // Headings
+    const h2Match = trimmed.match(/^##\s+(.+)/)
+    if (h2Match) {
+      return {
+        type: 'heading' as const, tag: 'h2' as const,
+        children: parseInline(h2Match[1]),
+        direction: 'ltr' as const, format: '' as const, indent: 0, version: 1,
+      }
+    }
+    const h3Match = trimmed.match(/^###\s+(.+)/)
+    if (h3Match) {
+      return {
+        type: 'heading' as const, tag: 'h3' as const,
+        children: parseInline(h3Match[1]),
+        direction: 'ltr' as const, format: '' as const, indent: 0, version: 1,
+      }
+    }
+
+    // List items → paragraph (simplified)
+    if (trimmed.match(/^[-*]\s/m)) {
+      const items = trimmed.split(/\n/).filter(l => l.trim())
+      return {
+        type: 'paragraph' as const,
+        children: items.flatMap((line, i) => {
+          const cleaned = line.replace(/^[-*]\s+/, '• ')
+          const nodes = parseInline(cleaned)
+          if (i < items.length - 1) {
+            nodes.push({ type: 'linebreak' as const, version: 1 } as any)
+          }
+          return nodes
+        }),
+        direction: 'ltr' as const, format: '' as const, indent: 0, version: 1,
+      }
+    }
+
+    // Regular paragraph
+    return {
+      type: 'paragraph' as const,
+      children: parseInline(trimmed.replace(/\n/g, ' ')),
+      direction: 'ltr' as const, format: '' as const, indent: 0, version: 1,
+    }
+  })
+
+  return { root: { type: 'root', children, direction: 'ltr' as const, format: '' as const, indent: 0, version: 1 } }
+}
+
+/** Parse inline markdown: **bold**, *italic*, [links](url) */
+function parseInline(text: string): any[] {
+  const nodes: any[] = []
+  // Regex to match **bold**, *italic*, [text](url)
+  const pattern = /(\*\*(.+?)\*\*|\*(.+?)\*|\[(.+?)\]\((.+?)\))/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = pattern.exec(text)) !== null) {
+    // Text before this match
+    if (match.index > lastIndex) {
+      nodes.push(textNode(text.slice(lastIndex, match.index), 0))
+    }
+
+    if (match[2]) {
+      // **bold**
+      nodes.push(textNode(match[2], 1)) // format 1 = bold
+    } else if (match[3]) {
+      // *italic*
+      nodes.push(textNode(match[3], 2)) // format 2 = italic
+    } else if (match[4] && match[5]) {
+      // [text](url)
+      nodes.push({
+        type: 'link',
+        children: [textNode(match[4], 0)],
+        direction: 'ltr',
+        format: '',
+        indent: 0,
+        version: 3,
+        fields: { linkType: 'custom', url: match[5], newTab: match[5].startsWith('http') },
+      })
+    }
+
+    lastIndex = match.index + match[0].length
   }
+
+  // Remaining text
+  if (lastIndex < text.length) {
+    nodes.push(textNode(text.slice(lastIndex), 0))
+  }
+
+  if (nodes.length === 0) {
+    nodes.push(textNode(text, 0))
+  }
+
+  return nodes
+}
+
+function textNode(text: string, format: number) {
+  return { type: 'text', text, format, detail: 0, mode: 'normal', style: '', version: 1 }
 }
 
 async function getBeaconMemberId(payload: Awaited<ReturnType<typeof getPayload>>): Promise<number | null> {
@@ -117,7 +191,7 @@ export async function POST(req: Request) {
           data: {
             title: data.title,
             slug,
-            body: textToLexical(data.body),
+            body: markdownToLexical(data.body),
             primaryContributor: beaconId,
             author: beaconId,
             status: 'published',
@@ -147,7 +221,7 @@ export async function POST(req: Request) {
               value: Number(data.articleId),
             },
             author: beaconId,
-            body: textToLexical(data.commentBody),
+            body: markdownToLexical(data.commentBody),
             isResolved: false,
             reactionCount: 0,
           },
