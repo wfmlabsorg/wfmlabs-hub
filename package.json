@@ -18,7 +18,8 @@
     "generate:types": "payload generate:types",
     "seed": "bun run scripts/seed.ts",
     "seed:topics": "bun run scripts/seed-topics.ts",
-    "seed:beacon": "bun run scripts/seed-beacon.ts"
+    "seed:beacon": "bun run scripts/seed-beacon.ts",
+    "seed:sentinel": "bun run scripts/seed-sentinel.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
