@@ -192,40 +192,6 @@ export default async function DataSourceDetailPage({
         borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
         padding: '1.5rem',
       }}>
-        {/* Info grid */}
-        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Feed Details</h2>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))',
-          gap: '0.75rem',
-          marginBottom: '2rem',
-        }}>
-          {infoRows.map((row) => (
-            <div key={row.label} style={{
-              padding: '0.75rem',
-              background: 'var(--bg-secondary)',
-              borderRadius: 'var(--radius)',
-              border: '1px solid var(--border)',
-            }}>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
-                {row.label}
-              </div>
-              {row.href ? (
-                <a
-                  href={row.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}
-                >
-                  {row.value}
-                </a>
-              ) : (
-                <div style={{ fontSize: '0.8125rem', fontWeight: 500 }}>{row.value}</div>
-              )}
-            </div>
-          ))}
-        </div>
-
         {/* About this Data Source */}
         {FEED_DESCRIPTIONS[feed.id] && (() => {
           const desc = FEED_DESCRIPTIONS[feed.id]
@@ -281,6 +247,40 @@ export default async function DataSourceDetailPage({
             </>
           )
         })()}
+
+        {/* Info grid */}
+        <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '1rem' }}>Feed Details</h2>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(16rem, 1fr))',
+          gap: '0.75rem',
+          marginBottom: '2rem',
+        }}>
+          {infoRows.map((row) => (
+            <div key={row.label} style={{
+              padding: '0.75rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
+                {row.label}
+              </div>
+              {row.href ? (
+                <a
+                  href={row.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ fontSize: '0.8125rem', wordBreak: 'break-all' }}
+                >
+                  {row.value}
+                </a>
+              ) : (
+                <div style={{ fontSize: '0.8125rem', fontWeight: 500 }}>{row.value}</div>
+              )}
+            </div>
+          ))}
+        </div>
 
         {/* Scoring section */}
         <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.75rem' }}>
@@ -364,7 +364,7 @@ export default async function DataSourceDetailPage({
         {/* View in ROC button */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
           <a
-            href={`/roc/dashboards/${domainDashboardMap[feed.domain] || 'scores'}.html`}
+            href="/roc"
             target="_blank"
             rel="noopener"
             className="btn btn-primary"
