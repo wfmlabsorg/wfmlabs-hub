@@ -3,11 +3,29 @@
 import React, { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import {
+  INDUSTRIES,
+  WORKFORCE_TYPES,
+  SOURCING_TYPES,
+  FOOTPRINT_WORKFORCE_TYPES,
+  CUSTOMER_GEO_SCOPES,
+  US_REGIONS,
+  US_STATES,
+} from '@/lib/constants/taxonomies'
 
 interface Topic {
   id: number
   name: string
   slug: string
+}
+
+interface FootprintRow {
+  city: string
+  stateProvince: string
+  country: string
+  headcount: number | ''
+  sourcing: string
+  workforceType: string
 }
 
 interface MemberData {
@@ -16,13 +34,17 @@ interface MemberData {
   username: string
   email: string
   bio?: string
+  industry?: string
+  workforceTypes?: string[]
   expertise?: number[] | { id: number }[]
   visibility?: {
     showProfessional?: boolean
+    showIndustry?: boolean
     showBio?: boolean
     showLinks?: boolean
     showInDirectory?: boolean
     showEmail?: boolean
+    showOvixData?: boolean
   }
   profile?: {
     title?: string
@@ -32,11 +54,34 @@ interface MemberData {
     githubUsername?: string
     websiteUrl?: string
   }
+  ovixProfile?: {
+    isOvixContributor?: boolean
+    isBpo?: boolean
+    clientIndustries?: string[]
+    workforceFootprint?: FootprintRow[]
+    customerGeography?: {
+      scope?: string
+      usRegions?: string[]
+      usState?: string
+      euCountries?: string
+      internationalRegions?: string
+    }
+  }
+}
+
+const emptyFootprintRow: FootprintRow = {
+  city: '',
+  stateProvince: '',
+  country: 'US',
+  headcount: '',
+  sourcing: '',
+  workforceType: '',
 }
 
 const sidebarItems = [
   { key: 'profile', label: 'Profile' },
   { key: 'expertise', label: 'Expertise' },
+  { key: 'ovix', label: 'OVIX Contributor' },
   { key: 'privacy', label: 'Privacy' },
   { key: 'account', label: 'Account', disabled: true },
   { key: 'notifications', label: 'Notifications', disabled: true },
@@ -53,7 +98,7 @@ export default function SettingsPage() {
   const [usernameError, setUsernameError] = useState('')
   const [activeTab, setActiveTab] = useState('profile')
 
-  // Form state
+  // Profile fields
   const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [title, setTitle] = useState('')
@@ -63,20 +108,34 @@ export default function SettingsPage() {
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [githubUsername, setGithubUsername] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+  const [industry, setIndustry] = useState('')
+  const [workforceTypes, setWorkforceTypes] = useState<string[]>([])
 
-  // Expertise state
+  // Expertise
   const [topics, setTopics] = useState<Topic[]>([])
   const [selectedExpertise, setSelectedExpertise] = useState<number[]>([])
 
-  // Visibility state
+  // OVIX Contributor
+  const [isOvixContributor, setIsOvixContributor] = useState(false)
+  const [isBpo, setIsBpo] = useState(false)
+  const [clientIndustries, setClientIndustries] = useState<string[]>([])
+  const [footprint, setFootprint] = useState<FootprintRow[]>([{ ...emptyFootprintRow }])
+  const [geoScope, setGeoScope] = useState('')
+  const [usRegions, setUsRegions] = useState<string[]>([])
+  const [usState, setUsState] = useState('')
+  const [euCountries, setEuCountries] = useState('')
+  const [internationalRegions, setInternationalRegions] = useState('')
+
+  // Visibility
   const [showProfessional, setShowProfessional] = useState(true)
+  const [showIndustry, setShowIndustry] = useState(true)
   const [showBio, setShowBio] = useState(true)
   const [showLinks, setShowLinks] = useState(true)
   const [showInDirectory, setShowInDirectory] = useState(true)
   const [showEmail, setShowEmail] = useState(false)
+  const [showOvixData, setShowOvixData] = useState(false)
 
   useEffect(() => {
-    // Fetch topics
     fetch('/api/topics?limit=100')
       .then((r) => r.json())
       .then((data) => setTopics(data.docs || []))
@@ -91,7 +150,7 @@ export default function SettingsPage() {
     if (status === 'authenticated' && session?.user?.payloadMemberId) {
       fetch(`/api/members/${session.user.payloadMemberId}?depth=1`)
         .then((r) => r.json())
-        .then((data) => {
+        .then((data: MemberData) => {
           setMember(data)
           setDisplayName(data.displayName || '')
           setUsername(data.username || '')
@@ -102,8 +161,10 @@ export default function SettingsPage() {
           setLinkedinUrl(data.profile?.linkedinUrl || '')
           setGithubUsername(data.profile?.githubUsername || '')
           setWebsiteUrl(data.profile?.websiteUrl || '')
+          setIndustry(data.industry || '')
+          setWorkforceTypes(data.workforceTypes || [])
 
-          // Parse expertise IDs
+          // Expertise
           if (data.expertise) {
             const ids = data.expertise.map((e: number | { id: number }) =>
               typeof e === 'object' ? e.id : e,
@@ -111,13 +172,32 @@ export default function SettingsPage() {
             setSelectedExpertise(ids)
           }
 
-          // Parse visibility
+          // OVIX profile
+          if (data.ovixProfile) {
+            setIsOvixContributor(data.ovixProfile.isOvixContributor || false)
+            setIsBpo(data.ovixProfile.isBpo || false)
+            setClientIndustries(data.ovixProfile.clientIndustries || [])
+            if (data.ovixProfile.workforceFootprint?.length) {
+              setFootprint(data.ovixProfile.workforceFootprint)
+            }
+            if (data.ovixProfile.customerGeography) {
+              setGeoScope(data.ovixProfile.customerGeography.scope || '')
+              setUsRegions(data.ovixProfile.customerGeography.usRegions || [])
+              setUsState(data.ovixProfile.customerGeography.usState || '')
+              setEuCountries(data.ovixProfile.customerGeography.euCountries || '')
+              setInternationalRegions(data.ovixProfile.customerGeography.internationalRegions || '')
+            }
+          }
+
+          // Visibility
           if (data.visibility) {
             setShowProfessional(data.visibility.showProfessional !== false)
+            setShowIndustry(data.visibility.showIndustry !== false)
             setShowBio(data.visibility.showBio !== false)
             setShowLinks(data.visibility.showLinks !== false)
             setShowInDirectory(data.visibility.showInDirectory !== false)
             setShowEmail(data.visibility.showEmail === true)
+            setShowOvixData(data.visibility.showOvixData === true)
           }
 
           setLoading(false)
@@ -129,19 +209,47 @@ export default function SettingsPage() {
   function validateUsername(value: string) {
     const cleaned = value.toLowerCase().replace(/[^a-z0-9-]/g, '')
     setUsername(cleaned)
-    if (cleaned.length < 3) {
-      setUsernameError('At least 3 characters')
-    } else if (cleaned.length > 30) {
-      setUsernameError('Max 30 characters')
-    } else {
-      setUsernameError('')
-    }
+    if (cleaned.length < 3) setUsernameError('At least 3 characters')
+    else if (cleaned.length > 30) setUsernameError('Max 30 characters')
+    else setUsernameError('')
   }
 
   function toggleExpertise(topicId: number) {
     setSelectedExpertise((prev) =>
       prev.includes(topicId) ? prev.filter((id) => id !== topicId) : [...prev, topicId],
     )
+  }
+
+  function toggleWorkforceType(value: string) {
+    setWorkforceTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    )
+  }
+
+  function toggleClientIndustry(value: string) {
+    setClientIndustries((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    )
+  }
+
+  function toggleUsRegion(value: string) {
+    setUsRegions((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    )
+  }
+
+  function updateFootprintRow(index: number, field: keyof FootprintRow, value: string | number) {
+    setFootprint((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)),
+    )
+  }
+
+  function addFootprintRow() {
+    setFootprint((prev) => [...prev, { ...emptyFootprintRow }])
+  }
+
+  function removeFootprintRow(index: number) {
+    setFootprint((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -152,28 +260,49 @@ export default function SettingsPage() {
     setSaved(false)
 
     try {
+      const body: Record<string, unknown> = {
+        displayName,
+        username,
+        title,
+        company,
+        bio,
+        location,
+        linkedinUrl,
+        githubUsername,
+        websiteUrl,
+        industry: industry || undefined,
+        workforceTypes,
+        expertise: selectedExpertise,
+        visibility: {
+          showProfessional,
+          showIndustry,
+          showBio,
+          showLinks,
+          showInDirectory,
+          showEmail,
+          showOvixData,
+        },
+        ovixProfile: {
+          isOvixContributor,
+          isBpo,
+          clientIndustries: isBpo ? clientIndustries : [],
+          workforceFootprint: isOvixContributor ? footprint.filter((r) => r.country) : [],
+          customerGeography: isOvixContributor
+            ? {
+                scope: geoScope || undefined,
+                usRegions: geoScope === 'regional-us' ? usRegions : undefined,
+                usState: geoScope === 'single-state' ? usState : undefined,
+                euCountries: geoScope === 'eu' ? euCountries : undefined,
+                internationalRegions: geoScope === 'international' ? internationalRegions : undefined,
+              }
+            : {},
+        },
+      }
+
       const res = await fetch('/api/members/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          displayName,
-          username,
-          title,
-          company,
-          bio,
-          location,
-          linkedinUrl,
-          githubUsername,
-          websiteUrl,
-          expertise: selectedExpertise,
-          visibility: {
-            showProfessional,
-            showBio,
-            showLinks,
-            showInDirectory,
-            showEmail,
-          },
-        }),
+        body: JSON.stringify(body),
       })
 
       const data = await res.json()
@@ -210,7 +339,7 @@ export default function SettingsPage() {
     fontSize: '0.9375rem',
     outline: 'none',
   }
-
+  const selectStyle: React.CSSProperties = { ...inputStyle, cursor: 'pointer' }
   const labelStyle: React.CSSProperties = {
     display: 'block',
     fontSize: '0.8125rem',
@@ -218,7 +347,6 @@ export default function SettingsPage() {
     marginBottom: '0.375rem',
     color: 'var(--fg)',
   }
-
   const checkboxRowStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'flex-start',
@@ -226,10 +354,47 @@ export default function SettingsPage() {
     padding: '0.75rem 0',
     borderBottom: '1px solid var(--border)',
   }
+  const fieldGap = '1.5rem'
+
+  function PillSelect({
+    options,
+    selected,
+    onToggle,
+  }: {
+    options: readonly { label: string; value: string }[]
+    selected: string[]
+    onToggle: (value: string) => void
+  }) {
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+        {options.map((opt) => {
+          const isSelected = selected.includes(opt.value)
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => onToggle(opt.value)}
+              className="topic-pill"
+              style={{
+                cursor: 'pointer',
+                background: isSelected ? 'var(--accent-light)' : 'var(--bg-secondary)',
+                color: isSelected ? 'var(--accent)' : 'var(--fg-muted)',
+                borderColor: isSelected ? 'var(--accent)' : 'var(--border)',
+                fontWeight: isSelected ? 600 : 400,
+                padding: '0.375rem 0.75rem',
+                fontSize: '0.8125rem',
+              }}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: '56rem', margin: '2rem auto', padding: '0 1rem 3rem' }}>
-      {/* Header */}
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>Settings</h1>
         <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
@@ -331,35 +496,23 @@ export default function SettingsPage() {
             )}
 
             <form onSubmit={handleSubmit}>
-              {/* Profile Tab */}
+              {/* ── Profile Tab ── */}
               {activeTab === 'profile' && (
                 <>
-                  {/* Email (read-only) */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Email</label>
                     <input
                       type="email"
                       value={member?.email || session?.user?.email || ''}
                       disabled
-                      style={{
-                        ...inputStyle,
-                        opacity: 0.6,
-                        cursor: 'not-allowed',
-                      }}
+                      style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}
                     />
-                    <div
-                      style={{
-                        fontSize: '0.75rem',
-                        color: 'var(--fg-faint)',
-                        marginTop: '0.25rem',
-                      }}
-                    >
+                    <div style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginTop: '0.25rem' }}>
                       Managed by your OAuth provider
                     </div>
                   </div>
 
-                  {/* Display Name */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Display Name</label>
                     <input
                       type="text"
@@ -370,8 +523,7 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  {/* Username */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Username</label>
                     <div style={{ position: 'relative' }}>
                       <span
@@ -400,19 +552,12 @@ export default function SettingsPage() {
                       />
                     </div>
                     {usernameError && (
-                      <div
-                        style={{
-                          fontSize: '0.75rem',
-                          color: 'var(--error)',
-                          marginTop: '0.25rem',
-                        }}
-                      >
+                      <div style={{ fontSize: '0.75rem', color: 'var(--error)', marginTop: '0.25rem' }}>
                         {usernameError}
                       </div>
                     )}
                   </div>
 
-                  {/* Divider */}
                   <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0' }}>
                     <span
                       style={{
@@ -429,8 +574,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
 
-                  {/* Title */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Professional Title</label>
                     <input
                       type="text"
@@ -441,36 +585,33 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  {/* Company */}
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <label style={labelStyle}>Company</label>
-                    <input
-                      type="text"
-                      value={company}
-                      onChange={(e) => setCompany(e.target.value)}
-                      placeholder="Where you work"
-                      style={inputStyle}
-                    />
+                  <div style={{ marginBottom: fieldGap }}>
+                    <label style={labelStyle}>Industry</label>
+                    <select value={industry} onChange={(e) => setIndustry(e.target.value)} style={selectStyle}>
+                      <option value="">Select your industry</option>
+                      {INDUSTRIES.map((ind) => (
+                        <option key={ind.value} value={ind.value}>{ind.label}</option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* Bio */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
+                    <label style={labelStyle}>Workforce Types</label>
+                    <PillSelect options={WORKFORCE_TYPES} selected={workforceTypes} onToggle={toggleWorkforceType} />
+                  </div>
+
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Bio</label>
                     <textarea
                       value={bio}
                       onChange={(e) => setBio(e.target.value)}
                       placeholder="Tell the community about your WFM experience..."
                       rows={4}
-                      style={{
-                        ...inputStyle,
-                        resize: 'vertical',
-                        fontFamily: 'inherit',
-                      }}
+                      style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}
                     />
                   </div>
 
-                  {/* Location */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Location</label>
                     <input
                       type="text"
@@ -481,7 +622,19 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  {/* Divider */}
+                  <div style={{ marginBottom: fieldGap }}>
+                    <label style={{ ...labelStyle, color: 'var(--fg-faint)' }}>
+                      Company <span style={{ fontWeight: 400 }}>(optional, not displayed publicly)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={company}
+                      onChange={(e) => setCompany(e.target.value)}
+                      placeholder="Where you work"
+                      style={inputStyle}
+                    />
+                  </div>
+
                   <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0' }}>
                     <span
                       style={{
@@ -498,8 +651,7 @@ export default function SettingsPage() {
                     </span>
                   </div>
 
-                  {/* LinkedIn */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>LinkedIn URL</label>
                     <input
                       type="url"
@@ -510,8 +662,7 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  {/* GitHub */}
-                  <div style={{ marginBottom: '1.5rem' }}>
+                  <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>GitHub Username</label>
                     <input
                       type="text"
@@ -522,7 +673,6 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  {/* Website */}
                   <div style={{ marginBottom: '2rem' }}>
                     <label style={labelStyle}>Personal Website</label>
                     <input
@@ -536,33 +686,20 @@ export default function SettingsPage() {
                 </>
               )}
 
-              {/* Expertise Tab */}
+              {/* ── Expertise Tab ── */}
               {activeTab === 'expertise' && (
                 <>
                   <div style={{ marginBottom: '1rem' }}>
                     <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>
                       Expertise
                     </h2>
-                    <p
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg-muted)',
-                        lineHeight: 1.5,
-                      }}
-                    >
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                       Select topics you&apos;re experienced in. These appear on your profile and help
                       others find you in the directory.
                     </p>
                   </div>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '0.5rem',
-                      marginBottom: '2rem',
-                    }}
-                  >
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '2rem' }}>
                     {topics.map((topic) => {
                       const isSelected = selectedExpertise.includes(topic.id)
                       return (
@@ -586,134 +723,324 @@ export default function SettingsPage() {
                       )
                     })}
                     {topics.length === 0 && (
-                      <div
-                        style={{
-                          fontSize: '0.8125rem',
-                          color: 'var(--fg-faint)',
-                          padding: '1rem',
-                        }}
-                      >
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '1rem' }}>
                         No topics available yet.
                       </div>
                     )}
                   </div>
 
                   {selectedExpertise.length > 0 && (
-                    <div
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg-muted)',
-                        marginBottom: '1.5rem',
-                      }}
-                    >
-                      {selectedExpertise.length} topic
-                      {selectedExpertise.length !== 1 ? 's' : ''} selected
+                    <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginBottom: '1.5rem' }}>
+                      {selectedExpertise.length} topic{selectedExpertise.length !== 1 ? 's' : ''} selected
                     </div>
                   )}
                 </>
               )}
 
-              {/* Privacy Tab */}
+              {/* ── OVIX Contributor Tab ── */}
+              {activeTab === 'ovix' && (
+                <>
+                  <div
+                    style={{
+                      padding: '1.25rem',
+                      marginBottom: '1.5rem',
+                      background: 'var(--accent-light)',
+                      border: '1px solid var(--accent)',
+                      borderRadius: 'var(--radius-lg)',
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: '0.9375rem', marginBottom: '0.5rem', color: 'var(--accent-text)' }}>
+                      OVIX Contributor Network
+                    </div>
+                    <p style={{ fontSize: '0.8125rem', lineHeight: 1.6, margin: 0, color: 'var(--accent-text)' }}>
+                      Share your workforce footprint and customer geography so OVIX agents can alert you
+                      when incidents — power outages, network disruptions, severe weather — affect your
+                      operations. Contributors get personalized incident notifications matched to their locations.
+                    </p>
+                  </div>
+
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.75rem',
+                      padding: '1rem',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--radius)',
+                      cursor: 'pointer',
+                      marginBottom: '1.5rem',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isOvixContributor}
+                      onChange={(e) => setIsOvixContributor(e.target.checked)}
+                      style={{ marginTop: '0.15rem', accentColor: 'var(--accent)' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>
+                        I&apos;d like to participate as an OVIX contributor
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', marginTop: '0.25rem' }}>
+                        Your data is only used for incident correlation. Control visibility in the Privacy tab.
+                      </div>
+                    </div>
+                  </label>
+
+                  {isOvixContributor && (
+                    <>
+                      {/* BPO flag */}
+                      <label
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '0.75rem',
+                          padding: '0.75rem 1rem',
+                          cursor: 'pointer',
+                          marginBottom: fieldGap,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isBpo}
+                          onChange={(e) => setIsBpo(e.target.checked)}
+                          style={{ marginTop: '0.15rem', accentColor: 'var(--accent)' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+                            I am a BPO / outsourcer serving multiple clients
+                          </div>
+                        </div>
+                      </label>
+
+                      {isBpo && (
+                        <div style={{ marginBottom: fieldGap }}>
+                          <label style={labelStyle}>Client Industries</label>
+                          <PillSelect
+                            options={INDUSTRIES.filter((i) => i.value !== 'other')}
+                            selected={clientIndustries}
+                            onToggle={toggleClientIndustry}
+                          />
+                        </div>
+                      )}
+
+                      {/* Workforce Footprint */}
+                      <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', position: 'relative' }}>
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '-0.625rem',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            background: 'var(--bg-card)',
+                            padding: '0 0.75rem',
+                            fontSize: '0.75rem',
+                            color: 'var(--fg-faint)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Workforce Footprint
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5, margin: '0 0 1rem' }}>
+                        Where is your workforce located?
+                      </p>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+                        {footprint.map((row, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 1fr 0.6fr 0.6fr 1fr 1fr auto',
+                              gap: '0.5rem',
+                              alignItems: 'center',
+                              padding: '0.75rem',
+                              background: 'var(--bg-secondary)',
+                              borderRadius: 'var(--radius)',
+                            }}
+                          >
+                            <input type="text" placeholder="City" value={row.city} onChange={(e) => updateFootprintRow(i, 'city', e.target.value)} style={{ ...inputStyle, padding: '0.5rem' }} />
+                            <input type="text" placeholder="State" value={row.stateProvince} onChange={(e) => updateFootprintRow(i, 'stateProvince', e.target.value)} style={{ ...inputStyle, padding: '0.5rem' }} />
+                            <input type="text" placeholder="Country" value={row.country} onChange={(e) => updateFootprintRow(i, 'country', e.target.value)} style={{ ...inputStyle, padding: '0.5rem' }} />
+                            <input type="number" placeholder="HC" min={1} value={row.headcount} onChange={(e) => updateFootprintRow(i, 'headcount', e.target.value ? Number(e.target.value) : '')} style={{ ...inputStyle, padding: '0.5rem' }} />
+                            <select value={row.sourcing} onChange={(e) => updateFootprintRow(i, 'sourcing', e.target.value)} style={{ ...selectStyle, padding: '0.5rem' }}>
+                              <option value="">Sourcing</option>
+                              {SOURCING_TYPES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                            <select value={row.workforceType} onChange={(e) => updateFootprintRow(i, 'workforceType', e.target.value)} style={{ ...selectStyle, padding: '0.5rem' }}>
+                              <option value="">Type</option>
+                              {FOOTPRINT_WORKFORCE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                            </select>
+                            {footprint.length > 1 && (
+                              <button type="button" onClick={() => removeFootprintRow(i)} style={{ background: 'none', border: 'none', color: 'var(--fg-faint)', cursor: 'pointer', fontSize: '1rem', padding: '0.25rem' }} title="Remove">&times;</button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={addFootprintRow}
+                        style={{
+                          background: 'none',
+                          border: '1px dashed var(--border)',
+                          borderRadius: 'var(--radius)',
+                          padding: '0.5rem 1rem',
+                          color: 'var(--fg-muted)',
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer',
+                          width: '100%',
+                          marginBottom: fieldGap,
+                        }}
+                      >
+                        + Add location
+                      </button>
+
+                      {/* Customer Geography */}
+                      <div style={{ borderTop: '1px solid var(--border)', margin: '1.5rem 0', position: 'relative' }}>
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: '-0.625rem',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            background: 'var(--bg-card)',
+                            padding: '0 0.75rem',
+                            fontSize: '0.75rem',
+                            color: 'var(--fg-faint)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          Customer Geography
+                        </span>
+                      </div>
+
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5, margin: '0 0 1rem' }}>
+                        Where are your customers or clients located?
+                      </p>
+
+                      <div style={{ marginBottom: fieldGap }}>
+                        <label style={labelStyle}>Geographic Scope</label>
+                        <select value={geoScope} onChange={(e) => setGeoScope(e.target.value)} style={selectStyle}>
+                          <option value="">Select scope</option>
+                          {CUSTOMER_GEO_SCOPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+                        </select>
+                      </div>
+
+                      {geoScope === 'regional-us' && (
+                        <div style={{ marginBottom: fieldGap }}>
+                          <label style={labelStyle}>US Regions</label>
+                          <PillSelect options={US_REGIONS} selected={usRegions} onToggle={toggleUsRegion} />
+                        </div>
+                      )}
+
+                      {geoScope === 'single-state' && (
+                        <div style={{ marginBottom: fieldGap }}>
+                          <label style={labelStyle}>State</label>
+                          <select value={usState} onChange={(e) => setUsState(e.target.value)} style={selectStyle}>
+                            <option value="">Select state</option>
+                            {US_STATES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                        </div>
+                      )}
+
+                      {geoScope === 'eu' && (
+                        <div style={{ marginBottom: fieldGap }}>
+                          <label style={labelStyle}>EU Countries</label>
+                          <input
+                            type="text"
+                            value={euCountries}
+                            onChange={(e) => setEuCountries(e.target.value)}
+                            placeholder="e.g., DE, FR, ES, NL"
+                            style={inputStyle}
+                          />
+                        </div>
+                      )}
+
+                      {geoScope === 'international' && (
+                        <div style={{ marginBottom: fieldGap }}>
+                          <label style={labelStyle}>International Regions</label>
+                          <input
+                            type="text"
+                            value={internationalRegions}
+                            onChange={(e) => setInternationalRegions(e.target.value)}
+                            placeholder="e.g., UK, Philippines, Costa Rica"
+                            style={inputStyle}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* ── Privacy Tab ── */}
               {activeTab === 'privacy' && (
                 <>
                   <div style={{ marginBottom: '1.5rem' }}>
-                    <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                      Privacy
-                    </h2>
-                    <p
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg-muted)',
-                        lineHeight: 1.5,
-                      }}
-                    >
+                    <h2 style={{ fontSize: '1.125rem', fontWeight: 600, marginBottom: '0.25rem' }}>Privacy</h2>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                       Control what other members can see on your profile.
                     </p>
                   </div>
 
                   <div style={checkboxRowStyle}>
-                    <input
-                      type="checkbox"
-                      id="showProfessional"
-                      checked={showProfessional}
-                      onChange={(e) => setShowProfessional(e.target.checked)}
-                      style={{ marginTop: '0.125rem' }}
-                    />
+                    <input type="checkbox" id="showProfessional" checked={showProfessional} onChange={(e) => setShowProfessional(e.target.checked)} style={{ marginTop: '0.125rem' }} />
                     <label htmlFor="showProfessional" style={{ cursor: 'pointer' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                        Show professional info
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-                        Title, company, and location
-                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show professional info</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Title and location</div>
                     </label>
                   </div>
 
                   <div style={checkboxRowStyle}>
-                    <input
-                      type="checkbox"
-                      id="showBio"
-                      checked={showBio}
-                      onChange={(e) => setShowBio(e.target.checked)}
-                      style={{ marginTop: '0.125rem' }}
-                    />
+                    <input type="checkbox" id="showIndustry" checked={showIndustry} onChange={(e) => setShowIndustry(e.target.checked)} style={{ marginTop: '0.125rem' }} />
+                    <label htmlFor="showIndustry" style={{ cursor: 'pointer' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show industry and workforce types</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Your industry badge and workforce type pills on your profile</div>
+                    </label>
+                  </div>
+
+                  <div style={checkboxRowStyle}>
+                    <input type="checkbox" id="showBio" checked={showBio} onChange={(e) => setShowBio(e.target.checked)} style={{ marginTop: '0.125rem' }} />
                     <label htmlFor="showBio" style={{ cursor: 'pointer' }}>
                       <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show bio</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-                        Your bio text on your profile page
-                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Your bio text on your profile page</div>
                     </label>
                   </div>
 
                   <div style={checkboxRowStyle}>
-                    <input
-                      type="checkbox"
-                      id="showLinks"
-                      checked={showLinks}
-                      onChange={(e) => setShowLinks(e.target.checked)}
-                      style={{ marginTop: '0.125rem' }}
-                    />
+                    <input type="checkbox" id="showLinks" checked={showLinks} onChange={(e) => setShowLinks(e.target.checked)} style={{ marginTop: '0.125rem' }} />
                     <label htmlFor="showLinks" style={{ cursor: 'pointer' }}>
                       <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show links</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-                        LinkedIn, GitHub, and website URLs
-                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>LinkedIn, GitHub, and website URLs</div>
                     </label>
                   </div>
 
                   <div style={checkboxRowStyle}>
-                    <input
-                      type="checkbox"
-                      id="showInDirectory"
-                      checked={showInDirectory}
-                      onChange={(e) => setShowInDirectory(e.target.checked)}
-                      style={{ marginTop: '0.125rem' }}
-                    />
+                    <input type="checkbox" id="showInDirectory" checked={showInDirectory} onChange={(e) => setShowInDirectory(e.target.checked)} style={{ marginTop: '0.125rem' }} />
                     <label htmlFor="showInDirectory" style={{ cursor: 'pointer' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                        Appear in member directory
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-                        Show your card in the public member listing
-                      </div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Appear in member directory</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Show your card in the public member listing</div>
+                    </label>
+                  </div>
+
+                  <div style={checkboxRowStyle}>
+                    <input type="checkbox" id="showEmail" checked={showEmail} onChange={(e) => setShowEmail(e.target.checked)} style={{ marginTop: '0.125rem' }} />
+                    <label htmlFor="showEmail" style={{ cursor: 'pointer' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show email to members</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Let other logged-in members see your email address</div>
                     </label>
                   </div>
 
                   <div style={{ ...checkboxRowStyle, borderBottom: 'none' }}>
-                    <input
-                      type="checkbox"
-                      id="showEmail"
-                      checked={showEmail}
-                      onChange={(e) => setShowEmail(e.target.checked)}
-                      style={{ marginTop: '0.125rem' }}
-                    />
-                    <label htmlFor="showEmail" style={{ cursor: 'pointer' }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                        Show email to members
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-                        Let other logged-in members see your email address
-                      </div>
+                    <input type="checkbox" id="showOvixData" checked={showOvixData} onChange={(e) => setShowOvixData(e.target.checked)} style={{ marginTop: '0.125rem' }} />
+                    <label htmlFor="showOvixData" style={{ cursor: 'pointer' }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>Show OVIX contributor data</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>Display your workforce footprint and customer geography to other members</div>
                     </label>
                   </div>
 
@@ -739,9 +1066,7 @@ export default function SettingsPage() {
                   fontSize: '0.9375rem',
                   fontWeight: 600,
                   cursor:
-                    saving || usernameError || !displayName || !username
-                      ? 'not-allowed'
-                      : 'pointer',
+                    saving || usernameError || !displayName || !username ? 'not-allowed' : 'pointer',
                 }}
               >
                 {saving ? 'Saving...' : 'Save Changes'}

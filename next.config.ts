@@ -11,16 +11,37 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  headers: async () => [
-    {
-      source: '/(.*)',
-      headers: [
-        { key: 'X-Frame-Options', value: 'DENY' },
-        { key: 'X-Content-Type-Options', value: 'nosniff' },
-        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-      ],
-    },
-  ],
+  headers: async () => {
+    const rocOrigin = process.env.ROC_ORIGIN || 'https://roc.cloud'
+    return [
+      // Cross-platform auth endpoints — CORS for ROC/OVIX
+      {
+        source: '/api/auth/verify',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: rocOrigin },
+          { key: 'Access-Control-Allow-Methods', value: 'POST, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+        ],
+      },
+      {
+        source: '/api/members/profile/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Origin', value: rocOrigin },
+          { key: 'Access-Control-Allow-Methods', value: 'GET, OPTIONS' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-API-Key' },
+        ],
+      },
+      // Global security headers
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ]
+  },
 }
 
 export default withPayload(nextConfig)

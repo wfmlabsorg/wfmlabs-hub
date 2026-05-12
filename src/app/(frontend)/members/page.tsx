@@ -8,10 +8,13 @@ export const dynamic = 'force-dynamic'
 export default async function MembersBrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ topic?: string }>
+  searchParams: Promise<{ topic?: string; industry?: string; wftype?: string; ovix?: string }>
 }) {
   const resolvedParams = await searchParams
   const activeTopic = resolvedParams.topic || 'all'
+  const activeIndustry = resolvedParams.industry || 'all'
+  const activeWfType = resolvedParams.wftype || 'all'
+  const ovixOnly = resolvedParams.ovix === 'true'
   const payload = await getPayload({ config })
 
   // Fetch all topics for the filter bar
@@ -24,7 +27,6 @@ export default async function MembersBrowsePage({
   const whereConditions: any[] = [{ 'visibility.showInDirectory': { not_equals: false } }]
 
   if (activeTopic !== 'all') {
-    // Filter by expertise topic slug — need to find the topic ID first
     const topicMatch = topicsResult.docs.find(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (t: any) => t.slug === activeTopic,
@@ -32,6 +34,18 @@ export default async function MembersBrowsePage({
     if (topicMatch) {
       whereConditions.push({ expertise: { equals: topicMatch.id } })
     }
+  }
+
+  if (activeIndustry !== 'all') {
+    whereConditions.push({ industry: { equals: activeIndustry } })
+  }
+
+  if (activeWfType !== 'all') {
+    whereConditions.push({ workforceTypes: { contains: activeWfType } })
+  }
+
+  if (ovixOnly) {
+    whereConditions.push({ 'ovixProfile.isOvixContributor': { equals: true } })
   }
 
   const members = await payload
@@ -138,20 +152,33 @@ export default async function MembersBrowsePage({
         </div>
 
         {/* Professional info */}
-        {showProfessional && (profile.title || profile.company) && (
+        {showProfessional && profile.title && (
           <div
             style={{
               fontSize: '0.8125rem',
               color: 'var(--fg-muted)',
-              marginBottom: '0.5rem',
+              marginBottom: '0.25rem',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
             {profile.title}
-            {profile.title && profile.company && ' · '}
-            {profile.company}
+            {member.industry && ` · ${member.industry.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}`}
+          </div>
+        )}
+
+        {/* Workforce type pills */}
+        {member.workforceTypes?.length > 0 && (
+          <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+            {member.workforceTypes.slice(0, 2).map((wt: string) => (
+              <span key={wt} className="badge" style={{ fontSize: '0.625rem', background: 'var(--bg-secondary)', color: 'var(--fg-faint)' }}>
+                {wt.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+              </span>
+            ))}
+            {member.workforceTypes.length > 2 && (
+              <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)' }}>+{member.workforceTypes.length - 2}</span>
+            )}
           </div>
         )}
 
@@ -187,6 +214,11 @@ export default async function MembersBrowsePage({
           {member.type && member.type !== 'human' && (
             <span className="badge badge-type" style={{ fontSize: '0.6875rem' }}>
               {member.type}
+            </span>
+          )}
+          {member.ovixProfile?.isOvixContributor && (
+            <span className="badge" style={{ fontSize: '0.6875rem', background: 'var(--accent)', color: 'var(--accent-text)', fontWeight: 600 }}>
+              OVIX
             </span>
           )}
           {member.foundingMember && (
@@ -239,6 +271,36 @@ export default async function MembersBrowsePage({
           ))}
         </div>
       )}
+
+      {/* Secondary filters */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem' }}>
+        {[
+          { label: 'Finance', value: 'finance' },
+          { label: 'Healthcare', value: 'healthcare' },
+          { label: 'Telecom', value: 'telecom' },
+          { label: 'Insurance', value: 'insurance' },
+          { label: 'Technology', value: 'technology' },
+          { label: 'Retail', value: 'retail' },
+          { label: 'Government', value: 'government' },
+        ].map((ind) => (
+          <a
+            key={ind.value}
+            href={activeIndustry === ind.value ? '/members' : `/members?industry=${ind.value}`}
+            className={`category-chip ${activeIndustry === ind.value ? 'category-chip-active' : ''}`}
+            style={{ textDecoration: 'none', color: 'inherit', fontSize: '0.75rem' }}
+          >
+            {ind.label}
+          </a>
+        ))}
+        <span style={{ color: 'var(--border)', margin: '0 0.25rem' }}>|</span>
+        <a
+          href={ovixOnly ? '/members' : '/members?ovix=true'}
+          className={`category-chip ${ovixOnly ? 'category-chip-active' : ''}`}
+          style={{ textDecoration: 'none', color: 'inherit', fontSize: '0.75rem' }}
+        >
+          OVIX Contributors
+        </a>
+      </div>
 
       {/* Count */}
       <div

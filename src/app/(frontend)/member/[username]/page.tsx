@@ -31,12 +31,18 @@ export default async function MemberProfilePage({
   const profile = (member.profile || {}) as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const visibility = (member as any).visibility || {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ovixProfile = (member as any).ovixProfile || {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const memberAny = member as any
 
-  // Resolve visibility (defaults to true for all except showEmail)
+  // Resolve visibility (defaults to true for all except showEmail, showOvixData)
   const showProfessional = isOwnProfile || visibility.showProfessional !== false
+  const showIndustry = isOwnProfile || visibility.showIndustry !== false
   const showBio = isOwnProfile || visibility.showBio !== false
   const showLinks = isOwnProfile || visibility.showLinks !== false
   const showEmail = isOwnProfile || visibility.showEmail === true
+  const showOvixData = isOwnProfile || visibility.showOvixData === true
 
   // Resolve expertise topics
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -177,19 +183,39 @@ export default async function MemberProfilePage({
             </div>
           )}
 
-          {/* Title & Company */}
-          {showProfessional && (profile.title || profile.company) && (
+          {/* Title */}
+          {showProfessional && profile.title && (
             <div style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', marginBottom: '0.375rem' }}>
               {profile.title}
-              {profile.title && profile.company && ' at '}
-              {profile.company && <span style={{ fontWeight: 500 }}>{profile.company}</span>}
               {isOwnProfile && visibility.showProfessional === false && hiddenLabel}
+            </div>
+          )}
+
+          {/* Industry & Workforce Types */}
+          {showIndustry && (memberAny.industry || memberAny.workforceTypes?.length > 0) && (
+            <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', marginBottom: '0.375rem' }}>
+              {memberAny.industry && (
+                <span className="badge" style={{ background: 'var(--accent-light)', color: 'var(--accent)', fontWeight: 600 }}>
+                  {memberAny.industry.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
+              )}
+              {(memberAny.workforceTypes || []).map((wt: string) => (
+                <span key={wt} className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--fg-muted)' }}>
+                  {wt.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </span>
+              ))}
+              {isOwnProfile && visibility.showIndustry === false && hiddenLabel}
             </div>
           )}
 
           {/* Badges, location row */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginTop: '0.5rem' }}>
             {member.type && <span className="badge badge-type">{member.type}</span>}
+            {ovixProfile.isOvixContributor && (
+              <span className="badge" style={{ background: 'var(--accent)', color: 'var(--accent-text)', fontWeight: 600 }}>
+                OVIX Contributor
+              </span>
+            )}
             {member.foundingMember && (
               <span className="badge" style={{ background: '#3d2e00', color: '#ff9d00' }}>
                 Founding Member
@@ -283,6 +309,100 @@ export default async function MemberProfilePage({
           </p>
           {isOwnProfile && visibility.showBio === false && (
             <div style={{ marginTop: '0.25rem' }}>{hiddenLabel}</div>
+          )}
+        </div>
+      )}
+
+      {/* OVIX Contributor Data */}
+      {ovixProfile.isOvixContributor && showOvixData && (
+        <div
+          style={{
+            marginBottom: '2rem',
+            paddingBottom: '2rem',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            OVIX Contributor Profile
+            {isOwnProfile && visibility.showOvixData !== true && hiddenLabel}
+          </h2>
+
+          {ovixProfile.isBpo && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--fg-muted)' }}>BPO / Outsourcer</span>
+              {ovixProfile.clientIndustries?.length > 0 && (
+                <span style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', marginLeft: '0.5rem' }}>
+                  Serving: {ovixProfile.clientIndustries.map((i: string) => i.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())).join(', ')}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Workforce Footprint */}
+          {ovixProfile.workforceFootprint?.length > 0 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--fg-muted)', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Workforce Footprint
+              </div>
+              <div style={{ display: 'grid', gap: '0.375rem' }}>
+                {ovixProfile.workforceFootprint.map((row: { city?: string; stateProvince?: string; country: string; headcount?: number; sourcing?: string; workforceType?: string }, i: number) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.75rem',
+                      padding: '0.5rem 0.75rem',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--radius)',
+                      fontSize: '0.8125rem',
+                    }}
+                  >
+                    <span style={{ fontWeight: 500 }}>
+                      {[row.city, row.stateProvince, row.country].filter(Boolean).join(', ')}
+                    </span>
+                    {row.headcount && (
+                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{row.headcount} HC</span>
+                    )}
+                    {row.sourcing && (
+                      <span className="badge" style={{ fontSize: '0.625rem' }}>
+                        {row.sourcing === 'in-house' ? 'In-house' : 'BPO'}
+                      </span>
+                    )}
+                    {row.workforceType && (
+                      <span style={{ color: 'var(--fg-faint)', marginLeft: 'auto' }}>
+                        {row.workforceType.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Customer Geography */}
+          {ovixProfile.customerGeography?.scope && (
+            <div>
+              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--fg-muted)', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Customer Geography
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--fg)' }}>
+                {ovixProfile.customerGeography.scope === 'regional-us' && (
+                  <>Regional US: {(ovixProfile.customerGeography.usRegions || []).join(', ')}</>
+                )}
+                {ovixProfile.customerGeography.scope === 'single-state' && (
+                  <>Single State: {ovixProfile.customerGeography.usState}</>
+                )}
+                {ovixProfile.customerGeography.scope === 'national-us' && 'National US'}
+                {ovixProfile.customerGeography.scope === 'us-plus-neighbors' && 'US + Canada / Mexico'}
+                {ovixProfile.customerGeography.scope === 'eu' && (
+                  <>EU: {ovixProfile.customerGeography.euCountries || 'All EU'}</>
+                )}
+                {ovixProfile.customerGeography.scope === 'international' && (
+                  <>International: {ovixProfile.customerGeography.internationalRegions}</>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}

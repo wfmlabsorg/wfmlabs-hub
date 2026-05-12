@@ -47,3 +47,7 @@ test-results/
 # Claude Code
 .claude/
 .vercel
+
+# Misc
+_node_modules_old/
+*.tgz
