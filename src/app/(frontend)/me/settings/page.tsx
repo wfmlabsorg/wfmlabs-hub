@@ -465,9 +465,9 @@ export default function SettingsPage() {
                 }}
               />
               <a
-                href="/admin"
+                href="/api/admin/auth"
                 target="_blank"
-                rel="noopener noreferrer"
+                rel="noopener"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
