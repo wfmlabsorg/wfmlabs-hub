@@ -17,7 +17,8 @@
     "test:e2e": "playwright test",
     "generate:types": "payload generate:types",
     "seed": "bun run scripts/seed.ts",
-    "seed:topics": "bun run scripts/seed-topics.ts"
+    "seed:topics": "bun run scripts/seed-topics.ts",
+    "seed:beacon": "bun run scripts/seed-beacon.ts"
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
