@@ -83,12 +83,54 @@ async function findOrCreateMember(
       username,
       type: 'human',
       role,
+      membershipTier: 'trial',
       password: crypto.randomUUID() + crypto.randomUUID(),
     },
     overrideAccess: true,
   })
 
+  // Notify Ted of new signup
+  notifyNewMember(user.email, user.name || username, account.provider).catch(() => {})
+
   return { id: member.id, role, isNew: true }
+}
+
+async function notifyNewMember(email: string, name: string, provider: string) {
+  // Send notification via Resend if configured
+  if (process.env.RESEND_API_KEY) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: process.env.RESEND_FROM_EMAIL || 'hello@community.wfmlabs.com',
+        to: 'tedlango@gmail.com',
+        subject: `New WFM Labs Hub member: ${name}`,
+        text: `New member signed up:\n\nName: ${name}\nEmail: ${email}\nProvider: ${provider}\nTime: ${new Date().toISOString()}\n\nView in admin: https://community.wfmlabs.com/admin`,
+      }),
+    }).catch(() => {})
+  }
+
+  // Also log as a signal
+  try {
+    const { getPayload } = await import('payload')
+    const config = (await import('@payload-config')).default
+    const payload = await getPayload({ config })
+    await payload.create({
+      collection: 'signals',
+      data: {
+        signalType: 'alert' as const,
+        title: `New member: ${name}`,
+        message: `${name} (${email}) joined via ${provider}`,
+        source: 'system',
+        category: 'general' as const,
+        severityLabel: 'info' as const,
+      },
+      overrideAccess: true,
+    })
+  } catch {}
 }
 
 function getProviders() {

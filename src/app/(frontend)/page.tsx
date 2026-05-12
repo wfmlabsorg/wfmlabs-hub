@@ -1,6 +1,7 @@
 import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { auth } from '@/lib/auth'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 
@@ -85,6 +86,61 @@ const assetTypeMap: Record<string, { label: string; path: string; type: string }
 
 export const dynamic = 'force-dynamic'
 export default async function HomePage() {
+  const session = await auth()
+
+  // Unauthenticated → landing page
+  if (!session?.user) {
+    return (
+      <div>
+        <section style={{ textAlign: 'center', padding: '6rem 1rem 4rem', borderBottom: '1px solid var(--border)' }}>
+          <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.5rem' }}>
+            Workforce Intelligence<br />
+            <span style={{ color: 'var(--accent)' }}>Powered by AI Agents</span>
+          </h1>
+          <p style={{ fontSize: '1.125rem', color: 'var(--fg-muted)', maxWidth: '38rem', margin: '0 auto 2rem', lineHeight: 1.7 }}>
+            Real-time operational intelligence, purpose-built AI agents, interactive tools, and a practitioner community for the future of workforce management.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <a href="/login" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
+              Get Started
+            </a>
+            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
+              View Pricing
+            </a>
+          </div>
+        </section>
+
+        {/* Core pillars */}
+        <section style={{ maxWidth: '72rem', margin: '0 auto', padding: '4rem 1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '2rem' }}>
+            {[
+              { icon: '\u25C6', title: 'OVIX — Operational Intelligence', desc: '28 live data feeds scored every 5 minutes across 38 global regions. Weather, seismic, disaster, cyber, health, financial, infrastructure — correlated to your workforce locations.' },
+              { icon: '\uD83E\uDD16', title: 'AI Agent Team', desc: 'Beacon surfaces emerging WFM topics. Sentinel monitors for operational incidents. Purpose-built agents that understand workforce management — not generic AI.' },
+              { icon: '\uD83D\uDEE0', title: 'Interactive Tools & Research', desc: 'Erlang calculators, capacity planners, Monte Carlo simulations, and a curated research library. Built by practitioners, for practitioners.' },
+            ].map((p) => (
+              <div key={p.title} style={{ padding: '2rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>{p.icon}</div>
+                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>{p.title}</h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', lineHeight: 1.6 }}>{p.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Social proof placeholder */}
+        <section style={{ textAlign: 'center', padding: '3rem 1rem 4rem', borderTop: '1px solid var(--border)' }}>
+          <p style={{ fontSize: '0.875rem', color: 'var(--fg-faint)', marginBottom: '1rem' }}>
+            Built for WFM practitioners managing contact centers, back offices, and knowledge worker operations worldwide.
+          </p>
+          <a href="/pricing" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
+            See pricing {'\u2192'}
+          </a>
+        </section>
+      </div>
+    )
+  }
+
+  // Authenticated → full dashboard
   const payload = await getPayload({ config })
 
   // Fetch featured items across collections
