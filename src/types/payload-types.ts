@@ -80,6 +80,7 @@ export interface Config {
     'asset-relationships': AssetRelationship;
     'asset-contributions': AssetContribution;
     reactions: Reaction;
+    signals: Signal;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -100,6 +101,7 @@ export interface Config {
     'asset-relationships': AssetRelationshipsSelect<false> | AssetRelationshipsSelect<true>;
     'asset-contributions': AssetContributionsSelect<false> | AssetContributionsSelect<true>;
     reactions: ReactionsSelect<false> | ReactionsSelect<true>;
+    signals: SignalsSelect<false> | SignalsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -179,7 +181,19 @@ export interface Member {
   /**
    * Types of workforce you manage or advise on
    */
-  workforceTypes?: ('contact-center' | 'back-office' | 'field-service' | 'consultant-advisory' | 'other')[] | null;
+  workforceTypes?:
+    | (
+        | 'contact-center'
+        | 'back-office'
+        | 'help-desk'
+        | 'claims-processing'
+        | 'collections'
+        | 'sales'
+        | 'field-service'
+        | 'consultant-advisory'
+        | 'other'
+      )[]
+    | null;
   bio?: string | null;
   avatar?: (number | null) | Media;
   profile?: {
@@ -273,7 +287,18 @@ export interface Member {
            * In-house employees or BPO vendor staff
            */
           sourcing?: ('in-house' | 'bpo-vendor') | null;
-          workforceType?: ('contact-center' | 'back-office' | 'other') | null;
+          workforceType?:
+            | (
+                | 'contact-center'
+                | 'back-office'
+                | 'help-desk'
+                | 'claims-processing'
+                | 'collections'
+                | 'sales'
+                | 'field-service'
+                | 'other'
+              )
+            | null;
           id?: string | null;
         }[]
       | null;
@@ -1050,6 +1075,70 @@ export interface Reaction {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "signals".
+ */
+export interface Signal {
+  id: number;
+  /**
+   * Source type — AI-generated, system alert, OVIX scoring event, or member-submitted
+   */
+  signalType: 'ai' | 'alert' | 'ovix' | 'member';
+  /**
+   * Short title for the signal
+   */
+  title: string;
+  /**
+   * Full signal message
+   */
+  message: string;
+  /**
+   * Origin agent or system (e.g., ovix-weather, ovix-seismic, member)
+   */
+  source: string;
+  /**
+   * Severity score 0-10 (from OVIX scoring)
+   */
+  severity?: number | null;
+  severityLabel?: ('info' | 'moderate' | 'severe' | 'extreme') | null;
+  /**
+   * OVIX category this signal relates to
+   */
+  category?:
+    | ('weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'general')
+    | null;
+  /**
+   * OVIX region ID (e.g., us-southeast, philippines)
+   */
+  regionId?: string | null;
+  /**
+   * Human-readable region name
+   */
+  regionName?: string | null;
+  /**
+   * Member who submitted (for member-type signals)
+   */
+  author?: (number | null) | Member;
+  /**
+   * Link to source data or event detail
+   */
+  sourceUrl?: string | null;
+  /**
+   * Additional structured data (scores, coordinates, raw event data)
+   */
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -1123,6 +1212,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'reactions';
         value: number | Reaction;
+      } | null)
+    | ({
+        relationTo: 'signals';
+        value: number | Signal;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1543,6 +1636,26 @@ export interface ReactionsSelect<T extends boolean = true> {
   target?: T;
   member?: T;
   type?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "signals_select".
+ */
+export interface SignalsSelect<T extends boolean = true> {
+  signalType?: T;
+  title?: T;
+  message?: T;
+  source?: T;
+  severity?: T;
+  severityLabel?: T;
+  category?: T;
+  regionId?: T;
+  regionName?: T;
+  author?: T;
+  sourceUrl?: T;
+  metadata?: T;
   updatedAt?: T;
   createdAt?: T;
 }
