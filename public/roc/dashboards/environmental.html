@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Environmental Monitor — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-yellow: #eab308; --accent-green: #22c55e;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; line-height:1.5; overflow:hidden; height:100vh; margin:0; }
+
+  .page-grid { display:grid; grid-template-columns:280px 1fr; grid-template-rows:auto 1fr; height:100vh; }
+
+  .gauge-panel { grid-row:1/-1; background:var(--bg-panel); border-right:1px solid var(--border); padding:16px; overflow-y:auto; display:flex; flex-direction:column; align-items:center; }
+  .gauge-panel::-webkit-scrollbar { width:6px; }
+  .gauge-panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .gauge-container { display:flex; flex-direction:column; align-items:center; padding:8px 0; }
+  .gauge-label { font-size:12px; font-weight:700; letter-spacing:1.5px; margin-top:4px; }
+
+  .banner { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:var(--bg-panel); border-bottom:1px solid var(--border); gap:12px; flex-shrink:0; }
+  .banner-title { font-size:12px; font-weight:700; color:var(--accent-cyan); letter-spacing:1.5px; text-transform:uppercase; }
+  .banner-stats { display:flex; gap:12px; }
+  .stat-box { text-align:center; }
+  .stat-value { font-size:14px; font-weight:700; }
+  .stat-label { font-size:8px; color:var(--text-dim); letter-spacing:.5px; text-transform:uppercase; }
+  .level-badge { padding:3px 10px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; }
+  .transport { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .transport button { background:rgba(24,188,156,.08); border:1px solid rgba(24,188,156,.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+
+  .data-area { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; min-height:0; overflow:hidden; }
+  .column { display:flex; flex-direction:column; gap:12px; min-height:0; overflow:hidden; }
+  .panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .panel.grow { flex:1; }
+  .panel-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; color:var(--accent-cyan); }
+  .panel-count { font-size:11px; color:var(--text-dim); background:var(--bg-card); padding:2px 8px; border-radius:10px; }
+  .panel-body { flex:1; overflow-y:auto; padding:10px; }
+  .panel-body::-webkit-scrollbar { width:6px; }
+  .panel-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .source-footer { padding:10px 14px; font-size:10px; color:var(--text-dim); border-top:1px solid var(--border); flex-shrink:0; }
+
+  .card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:8px; transition:border-color .2s; cursor:pointer; }
+  .card:hover { border-color:var(--accent-cyan); }
+  .card-row { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:4px; }
+  .card-title { font-size:12px; font-weight:600; flex:1; }
+  .severity-badge { font-size:10px; font-weight:700; color:#fff; padding:1px 8px; border-radius:3px; flex-shrink:0; }
+  .card-area { font-size:10px; color:var(--text-secondary); }
+  .card-meta { font-size:9px; color:var(--text-dim); margin-top:4px; }
+  .severity-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; flex-shrink:0; }
+  .empty-state { color:var(--text-dim); font-size:11px; text-align:center; padding:20px; }
+
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
+  .card-link:hover { text-decoration:underline; }
+
+  @media (max-width:900px) {
+    .page-grid { grid-template-columns:1fr; }
+    .gauge-panel { grid-row:auto; border-right:none; border-bottom:1px solid var(--border); }
+    .data-area { grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page-grid">
+  <div class="gauge-panel">
+    <div class="gauge-container">
+      <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
+      <div class="gauge-label" id="gauge-label" style="color:var(--text-dim)">--</div>
+    </div>
+    <div id="factor-bars" style="padding:8px 0 4px;width:100%"></div>
+    <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
+      Environmental score from active wildfires (NASA FIRMS satellite detection)
+      and air quality monitoring (OpenAQ PM2.5 readings). Fire radiative power
+      and EPA AQI breakpoints drive severity.
+    </div>
+    <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
+      Sources: NASA FIRMS (VIIRS satellite) &middot; OpenAQ (PM2.5)<br>
+      Refreshes every 5 min via OVIX API.
+    </div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-title">ENVIRONMENTAL MONITOR</div>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="fire-count">--</div><div class="stat-label">Active Fires</div></div>
+      <div class="stat-box"><div class="stat-value" id="aq-count">--</div><div class="stat-label">Air Quality</div></div>
+      <div class="stat-box"><div class="stat-value" id="max-sev">--</div><div class="stat-label">Max Severity</div></div>
+    </div>
+    <div class="level-badge" id="env-badge">--</div>
+    <div class="transport">
+      <button onclick="rocNav('prev')">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')">&#9654;</button>
+      <button onclick="rocNav('next')">&#9197;</button>
+    </div>
+  </div>
+
+  <div class="data-area">
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">Active Wildfires</span>
+          <span class="panel-count" id="fire-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="fire-list"><div class="empty-state">Loading NASA FIRMS data...</div></div>
+        <div class="source-footer">NASA FIRMS &middot; VIIRS SNPP satellite &middot; FRP = Fire Radiative Power (MW)</div>
+      </div>
+    </div>
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">Air Quality Alerts</span>
+          <span class="panel-count" id="aq-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="aq-list"><div class="empty-state">Loading OpenAQ data...</div></div>
+        <div class="source-footer">OpenAQ &middot; PM2.5 (µg/m³) &middot; EPA AQI breakpoints</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var API = 'https://ovix-api.tedlango.workers.dev';
+
+  function fetchAll() {
+    Promise.all([
+      fetch(API + '/api/ovix/region-events?region=north-america&hours=48&domain=environmental&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      fetch(API + '/api/ovix/region-events?region=emea&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      fetch(API + '/api/ovix/region-events?region=apac&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};})
+    ]).then(function(results) {
+      var all = [], seen = {};
+      results.forEach(function(d) {
+        (d.events || []).forEach(function(e) {
+          var key = e.id || e.title;
+          if (!seen[key]) { seen[key] = true; all.push(e); }
+        });
+      });
+      render(all);
+    });
+  }
+
+  function render(events) {
+    var fires = events.filter(function(e) { return e.source === 'firms'; });
+    var aq = events.filter(function(e) { return e.source === 'openaq'; });
+
+    renderList('fire-list', fires, '#f97316');
+    renderList('aq-list', aq, '#8b5cf6');
+
+    document.getElementById('fire-count').textContent = fires.length;
+    document.getElementById('aq-count').textContent = aq.length;
+    document.getElementById('fire-panel-count').textContent = fires.length + ' fires';
+    document.getElementById('aq-panel-count').textContent = aq.length + ' alerts';
+
+    var maxSev = events.length ? Math.max.apply(null, events.map(function(e){return parseFloat(e.severity)||0;})) : 0;
+    document.getElementById('max-sev').textContent = maxSev.toFixed(1);
+
+    var fireMax = fires.length ? Math.min(10, Math.max.apply(null, fires.map(function(e){return parseFloat(e.severity)||0;}))) : 0;
+    var aqMax = aq.length ? Math.min(10, Math.max.apply(null, aq.map(function(e){return parseFloat(e.severity)||0;}))) : 0;
+    var score = Math.min(10, Math.round((fireMax * 0.6 + aqMax * 0.4) * 10) / 10);
+    drawGauge(score);
+    renderFactors([
+      {label: 'Wildfires', value: fireMax, weight: '60%'},
+      {label: 'Air Quality', value: aqMax, weight: '40%'}
+    ], score);
+
+    var level, bg, color;
+    if (score >= 7) { level = 'CRITICAL'; bg = 'rgba(239,68,68,.15)'; color = 'var(--accent-red)'; }
+    else if (score >= 4) { level = 'ELEVATED'; bg = 'rgba(234,179,8,.15)'; color = 'var(--accent-yellow)'; }
+    else if (score >= 2) { level = 'GUARDED'; bg = 'rgba(6,182,212,.15)'; color = 'var(--accent-cyan)'; }
+    else { level = 'NORMAL'; bg = 'rgba(34,197,94,.15)'; color = 'var(--accent-green)'; }
+    var badge = document.getElementById('env-badge');
+    badge.textContent = level; badge.style.background = bg; badge.style.color = color; badge.style.border = '1px solid ' + color;
+    document.getElementById('gauge-label').textContent = level;
+    document.getElementById('gauge-label').style.color = color;
+  }
+
+  function renderList(id, events, defaultColor) {
+    var list = document.getElementById(id);
+    if (!events.length) { list.innerHTML = '<div class="empty-state">No active events</div>'; return; }
+
+    list.innerHTML = events.sort(function(a,b){return(parseFloat(b.severity)||0)-(parseFloat(a.severity)||0);}).slice(0, 50).map(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : sev >= 3 ? '#eab308' : '#22c55e';
+      var url = e.source_url || '';
+      var desc = e.description || '';
+      var area = e.area_desc || '';
+      var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+      var source = (e.source || '').toUpperCase();
+
+      return '<div class="card" data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')">' +
+        '<div class="card-row">' +
+          '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
+          '<span class="card-title">' + esc(e.title || 'Environmental Event') + '</span>' +
+          '<span class="severity-badge" style="background:' + sevColor + '">' + sev.toFixed(1) + '</span>' +
+        '</div>' +
+        (area ? '<div class="card-area">' + esc(area) + '</div>' : '') +
+        '<div class="card-meta"><span>' + source + (time ? ' · ' + time : '') + '</span>' +
+          ' <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source ↗</span>' : '') +
+        '</div>' +
+        (desc ? '<div class="card-details">' + esc(desc) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function arcPath(cx,cy,r,s,e){var sx=cx+r*Math.cos(s),sy=cy+r*Math.sin(s),ex=cx+r*Math.cos(e),ey=cy+r*Math.sin(e);return'M '+sx+' '+sy+' A '+r+' '+r+' 0 '+(e-s>Math.PI?1:0)+' 1 '+ex+' '+ey;}
+  function drawGauge(score){var svg=document.getElementById('gauge-svg'),cx=110,cy=110,r=90,sa=Math.PI,ea=2*Math.PI;var segs=[{s:0,e:.25,c:'#22c55e'},{s:.25,e:.5,c:'#eab308'},{s:.5,e:.75,c:'#f97316'},{s:.75,e:1,c:'#ef4444'}];var font=getComputedStyle(document.body).fontFamily;var h='<path d="'+arcPath(cx,cy,r,sa,ea)+'" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';segs.forEach(function(g){h+='<path d="'+arcPath(cx,cy,r,sa+(ea-sa)*g.s,sa+(ea-sa)*g.e)+'" fill="none" stroke="'+g.c+'" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>';});var f=Math.max(0,Math.min(score/10,1));var sc=score>=7?'#ef4444':score>=4?'#eab308':'#22c55e';if(f>.005)h+='<path d="'+arcPath(cx,cy,r,sa,sa+(ea-sa)*f)+'" fill="none" stroke="'+sc+'" stroke-width="18" stroke-linecap="round"/>';var na=sa+(ea-sa)*f;h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+(r-30)*Math.cos(na))+'" y2="'+(cy+(r-30)*Math.sin(na))+'" stroke="'+sc+'" stroke-width="2.5" stroke-linecap="round"/>';h+='<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="'+sc+'"/>';h+='<text x="'+cx+'" y="'+(cy-15)+'" text-anchor="middle" fill="'+sc+'" font-family="'+font+'" font-size="28" font-weight="700">'+score.toFixed(1)+'</text>';h+='<text x="'+cx+'" y="'+(cy+2)+'" text-anchor="middle" fill="#94a3b8" font-family="'+font+'" font-size="10" letter-spacing="1">ENV SCORE</text>';h+='<text x="15" y="'+(cy+5)+'" fill="#64748b" font-family="'+font+'" font-size="10">0</text>';h+='<text x="198" y="'+(cy+5)+'" fill="#64748b" font-family="'+font+'" font-size="10">10</text>';svg.innerHTML=h;}
+  function renderFactors(factors){var el=document.getElementById('factor-bars');if(!el)return;var h='';factors.forEach(function(f){var p=Math.min(100,f.value*10);var c=f.value>=7?'var(--accent-red)':f.value>=4?'var(--accent-orange)':f.value>=2?'var(--accent-yellow)':'var(--accent-green)';h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;"><span style="font-size:9px;color:var(--text-secondary);width:70px;">'+f.label+'</span><div style="flex:1;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;"><div style="height:100%;width:'+p+'%;background:'+c+';border-radius:4px;transition:width .5s;"></div></div><span style="font-size:9px;color:var(--text-dim);width:24px;text-align:right;">'+f.value.toFixed(1)+'</span><span style="font-size:8px;color:var(--text-dim);width:24px;">'+f.weight+'</span></div>';});el.innerHTML=h;}
+
+  function esc(s){var d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+
+  var SLIDES=['/dashboards/weather.html','/dashboards/seismic.html','/dashboards/disaster.html','/dashboards/cyber.html','/dashboards/financial.html','/dashboards/infrastructure.html','/dashboards/health.html','/dashboards/environmental.html','/dashboards/scores.html','/dashboards/feed-health.html'];
+  var slideIdx=SLIDES.indexOf(location.pathname),playTimer=null;
+  var SPEED=parseInt(localStorage.getItem('roc-speed')||'30')*1000;
+  window.rocNav=function(a){if(a==='prev'){slideIdx=(slideIdx-1+SLIDES.length)%SLIDES.length;location.href=SLIDES[slideIdx];}else if(a==='next'){slideIdx=(slideIdx+1)%SLIDES.length;location.href=SLIDES[slideIdx];}else if(a==='toggle'){var b=document.getElementById('bnr-play');if(playTimer){clearInterval(playTimer);playTimer=null;if(b)b.innerHTML='&#9654;';}else{playTimer=setInterval(function(){rocNav('next');},SPEED);if(b)b.innerHTML='&#9208;';}}};
+  if(window.parent!==window){var t=document.querySelector('.transport');if(t)t.style.display='none';}
+
+  drawGauge(0);
+  fetchAll();
+  setInterval(fetchAll, 300000);
+})();
+</script>
+</body>
+</html>

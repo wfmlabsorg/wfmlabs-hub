@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OVIX Domain Scores — ROC</title>
+<style>
+:root {
+  --bg: #0a0e1a; --panel: #141b2d; --border: #334155;
+  --text: #f1f5f9; --dim: #64748b; --cyan: #06b6d4;
+  --green: #22c55e; --orange: #f97316; --red: #ef4444;
+  --mono: 'JetBrains Mono','Fira Code','SF Mono',monospace;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--mono); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+
+.header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 16px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; gap:12px;
+}
+.header-title { font-size:12px; font-weight:700; color:var(--cyan); letter-spacing:1.5px; white-space:nowrap; }
+.header-stats { display:flex; gap:12px; align-items:center; }
+.stat-box { text-align:center; }
+.stat-value { font-size:14px; font-weight:700; }
+.stat-label { font-size:8px; color:var(--dim); letter-spacing:0.5px; }
+.level-badge { padding:3px 10px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; }
+.transport { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+.transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+.transport button:hover { background:rgba(24,188,156,0.2); }
+
+.grid {
+  flex:1; display:grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: 1fr 1fr;
+  gap:1px; background:var(--border); overflow:hidden;
+}
+
+.cell {
+  background:var(--bg); position:relative; overflow:hidden;
+}
+.cell iframe {
+  width:280px; height:100%; border:none;
+  position:absolute; top:0; left:0;
+}
+.cell-overlay {
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  cursor:pointer; z-index:2;
+}
+
+.footer {
+  padding:4px 20px; background:var(--panel); border-top:1px solid var(--border);
+  font-size:8px; color:var(--dim); text-align:center; flex-shrink:0;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">OPERATIONAL VOLATILITY INDEX</div>
+  <div class="header-stats">
+    <div class="stat-box"><div class="stat-value" id="comp-score">--</div><div class="stat-label">COMPOSITE</div></div>
+    <div class="stat-box"><div class="stat-value" id="comp-events">--</div><div class="stat-label">EVENTS</div></div>
+    <div class="stat-box"><div class="stat-value" id="comp-domains">--</div><div class="stat-label">DOMAINS</div></div>
+  </div>
+  <div class="level-badge" id="comp-level">--</div>
+  <div class="transport">
+    <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
+    <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
+    <button onclick="rocNav('next')" title="Next">&#9197;</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="footer">All scores computed from open data sources. Click any domain to drill into its full dashboard.</div>
+
+<script>
+(function() {
+  var API = 'https://ovix-api.tedlango.workers.dev';
+
+  var PANELS = [
+    { key:'weather', url:'/dashboards/weather.html', nav:'/dashboards/weather.html' },
+    { key:'seismic', url:'/dashboards/seismic.html', nav:'/dashboards/seismic.html' },
+    { key:'disaster', url:'/dashboards/disaster.html', nav:'/dashboards/disaster.html' },
+    { key:'cyber', url:'/dashboards/cyber.html', nav:'/dashboards/cyber.html' },
+    { key:'health', url:'/dashboards/health.html', nav:'/dashboards/health.html' },
+    { key:'infrastructure', url:'/dashboards/infrastructure.html', nav:'/dashboards/infrastructure.html' },
+    { key:'financial', url:'/dashboards/financial.html', nav:'/dashboards/financial.html' },
+    { key:'environmental', url:'about:blank', nav:'/dashboards/scores.html' }
+  ];
+
+  var grid = document.getElementById('grid');
+  grid.innerHTML = PANELS.map(function(p) {
+    return '<div class="cell">' +
+      '<iframe src="' + p.url + '" scrolling="no" loading="lazy"></iframe>' +
+      '<div class="cell-overlay" onclick="window.location=\'' + p.nav + '\'" title="Open ' + p.key + ' dashboard"></div>' +
+    '</div>';
+  }).join('');
+
+  // Fetch composite for header
+  function scoreColor(s) { return s >= 7 ? 'var(--red)' : s >= 4 ? 'var(--orange)' : 'var(--green)'; }
+  function levelLabel(s) { return s >= 7 ? 'HIGH' : s >= 4 ? 'ELEVATED' : 'NORMAL'; }
+
+  function updateHeader() {
+    fetch(API + '/api/ovix/scores').then(function(r) { return r.json(); }).then(function(d) {
+      var comp = d.composite || 0;
+      var domains = d.domains || [];
+      document.getElementById('comp-score').textContent = comp.toFixed(1);
+      document.getElementById('comp-score').style.color = scoreColor(comp);
+      var lb = document.getElementById('comp-level');
+      if (lb) { lb.textContent = levelLabel(comp); lb.style.color = scoreColor(comp); lb.style.border = '1px solid ' + scoreColor(comp); }
+      var total = domains.reduce(function(s,dom){return s+(dom.eventCount||0);},0);
+      document.getElementById('comp-events').textContent = total;
+      var domainsEl = document.getElementById('comp-domains');
+      if (domainsEl) domainsEl.textContent = domains.length;
+    }).catch(function(){});
+  }
+  updateHeader();
+  setInterval(updateHeader, 60000);
+})();
+</script>
+
+<script>
+window.rocNav = function(a) {
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var K = 'roc-rotation';
+  function gs() { try { return JSON.parse(localStorage.getItem(K))||{}; } catch(e) { return {}; } }
+  function ss(s) { try { localStorage.setItem(K,JSON.stringify(s)); } catch(e) {} }
+  var en = gs().enabledSlides || ORDER.slice(), p = window.location.pathname, cur = 'scores';
+  for (var k in ROUTES) { if (p.indexOf(ROUTES[k])!==-1) { cur=k; break; } }
+  var i = en.indexOf(cur); if (i===-1) i=0;
+  if (a==='prev') window.location = ROUTES[en[(i-1+en.length)%en.length]];
+  else if (a==='next') window.location = ROUTES[en[(i+1)%en.length]];
+  else if (a==='toggle') { var s=gs(); s.active=!s.active; if(!s.interval)s.interval=30; ss(s); updateTransportUI(); if(s.active){var nx=en[(i+1)%en.length]; setTimeout(function(){var c=gs();if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);} }
+  else if (a==='speed') { var s2=gs(); s2.interval=parseInt(document.getElementById('bnr-speed').value)||30; ss(s2); }
+};
+function updateTransportUI(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation'))||{};}catch(e){s={};}var b=document.getElementById('bnr-play'),ind=document.getElementById('rotation-indicator');if(b){b.textContent=s.active?'⏸':'▶';b.style.background=s.active?'rgba(24,188,156,0.25)':'rgba(24,188,156,0.08)';}if(ind)ind.style.display=s.active?'block':'none';var sp=document.getElementById('bnr-speed');if(sp&&s.interval)sp.value=String(s.interval);}
+updateTransportUI();
+(function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
+</script>
+</body>
+</html>

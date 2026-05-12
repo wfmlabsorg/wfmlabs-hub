@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weather Intelligence — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-yellow: #eab308; --accent-green: #22c55e; --accent-blue: #3b82f6;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; line-height:1.5; overflow:hidden; height:100vh; margin:0; }
+
+  .page-grid { display:grid; grid-template-columns:280px 1fr; grid-template-rows:auto 1fr; height:100vh; }
+
+  /* LEFT GAUGE PANEL */
+  .gauge-panel { grid-row:1/-1; background:var(--bg-panel); border-right:1px solid var(--border); padding:16px; overflow-y:auto; display:flex; flex-direction:column; align-items:center; }
+  .gauge-panel::-webkit-scrollbar { width:6px; }
+  .gauge-panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .gauge-container { display:flex; flex-direction:column; align-items:center; padding:8px 0; }
+  .gauge-label { font-size:12px; font-weight:700; letter-spacing:1.5px; margin-top:4px; }
+
+  /* BANNER */
+  .banner { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:var(--bg-panel); border-bottom:1px solid var(--border); gap:12px; flex-shrink:0; }
+  .banner-title { font-size:12px; font-weight:700; color:var(--accent-cyan); letter-spacing:1.5px; white-space:nowrap; text-transform:uppercase; }
+  .banner-stats { display:flex; gap:12px; }
+  .stat-box { text-align:center; }
+  .stat-value { font-size:14px; font-weight:700; }
+  .stat-label { font-size:8px; color:var(--text-dim); letter-spacing:.5px; text-transform:uppercase; }
+  .level-badge { padding:3px 10px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; }
+  .transport { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .transport button { background:rgba(24,188,156,.08); border:1px solid rgba(24,188,156,.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+
+  /* DATA AREA */
+  .data-area { display:flex; flex-direction:column; gap:0; min-height:0; overflow:hidden; }
+
+  /* NWS MAP */
+  .map-strip { padding:8px 12px; border-bottom:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; gap:12px; background:var(--bg-panel); }
+  .map-strip img { height:140px; border-radius:4px; border:1px solid var(--border); cursor:pointer; }
+  .map-strip img:hover { border-color:var(--accent-cyan); }
+  .map-info { flex:1; }
+  .map-title { font-size:11px; font-weight:700; color:var(--accent-cyan); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px; }
+  .map-desc { font-size:10px; color:var(--text-secondary); line-height:1.4; }
+  .map-updated { font-size:9px; color:var(--text-dim); margin-top:4px; }
+
+  /* SEVERITY COLUMNS */
+  .sev-grid { flex:1; display:grid; grid-template-columns:repeat(3,1fr); gap:0; min-height:0; overflow:hidden; }
+  .sev-col { display:flex; flex-direction:column; min-height:0; overflow:hidden; border-right:1px solid var(--border); }
+  .sev-col:last-child { border-right:none; }
+  .sev-header { padding:8px 10px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .sev-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+  .sev-count { font-size:10px; color:var(--text-dim); background:var(--bg-card); padding:1px 6px; border-radius:8px; }
+  .sev-body { flex:1; overflow-y:auto; padding:6px; }
+  .sev-body::-webkit-scrollbar { width:4px; }
+  .sev-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  /* ALERT CARDS */
+  .card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:8px 10px; margin-bottom:6px; transition:border-color .2s; }
+  .card:hover { border-color:var(--accent-cyan); }
+  .card-row { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:3px; }
+  .card-title { font-size:11px; font-weight:600; flex:1; line-height:1.3; }
+  .sev-badge { font-size:9px; font-weight:700; padding:1px 6px; border-radius:3px; flex-shrink:0; }
+  .card-area { font-size:10px; color:var(--text-secondary); line-height:1.3; }
+  .card-meta { font-size:9px; color:var(--text-dim); margin-top:3px; display:flex; justify-content:space-between; }
+  .card-expires { color:var(--accent-orange); }
+  .severity-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; flex-shrink:0; }
+  .empty-state { color:var(--text-dim); font-size:10px; text-align:center; padding:20px; }
+
+  /* Universal card interaction */
+  .card { cursor:pointer; }
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
+  .card-link:hover { text-decoration:underline; }
+
+  @media (max-width:900px) {
+    .page-grid { grid-template-columns:1fr; grid-template-rows:auto auto 1fr; height:auto; overflow-y:auto; }
+    .gauge-panel { grid-row:auto; border-right:none; border-bottom:1px solid var(--border); }
+    .sev-grid { grid-template-columns:1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page-grid">
+
+  <!-- LEFT GAUGE PANEL -->
+  <div class="gauge-panel">
+    <div class="gauge-container" id="gauge-container">
+      <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
+      <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
+    </div>
+    <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
+    <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
+      Weather severity weighted by NWS urgency and certainty. Extreme/Immediate/Observed
+      alerts score highest. Possible/Future alerts discounted.
+    </div>
+    <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
+      Sources: NWS Alerts &middot; MeteoAlarm (EU) &middot; SPC Watches &middot; SPC Confirmed Reports<br>
+      Refreshes every 5 min via OVIX API.
+    </div>
+  </div>
+
+  <!-- BANNER -->
+  <div class="banner">
+    <div class="banner-title">WEATHER INTELLIGENCE</div>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="nws-count">--</div><div class="stat-label">NWS ALERTS</div></div>
+      <div class="stat-box"><div class="stat-value" id="eu-count">--</div><div class="stat-label">EU ALERTS</div></div>
+      <div class="stat-box"><div class="stat-value" id="max-severity">--</div><div class="stat-label">MAX SEVERITY</div></div>
+    </div>
+    <div class="level-badge" id="wx-level-badge">--</div>
+    <div class="transport">
+      <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
+      <button onclick="rocNav('next')" title="Next">&#9197;</button>
+    </div>
+  </div>
+
+  <!-- DATA AREA -->
+  <div class="data-area">
+    <!-- NWS ALERT MAP -->
+    <div class="map-strip">
+      <a href="https://www.weather.gov/" target="_blank" rel="noopener">
+        <img id="nws-map" src="https://forecast.weather.gov/wwamap/png/US.png" alt="NWS Active Warnings Map" title="Click for weather.gov">
+      </a>
+      <div class="map-info">
+        <div class="map-title">NWS Active Warnings &amp; Watches</div>
+        <div class="map-desc" id="map-summary">Loading alert summary...</div>
+        <div class="map-updated" id="map-updated"></div>
+      </div>
+    </div>
+
+    <!-- 4 SEVERITY COLUMNS -->
+    <div class="sev-grid">
+      <div class="sev-col">
+        <div class="sev-header"><span class="sev-title" style="color:var(--accent-red)">Extreme</span><span class="sev-count" id="cnt-extreme">0</span></div>
+        <div class="sev-body" id="col-extreme"><div class="empty-state">No extreme alerts</div></div>
+      </div>
+      <div class="sev-col">
+        <div class="sev-header"><span class="sev-title" style="color:var(--accent-orange)">Severe</span><span class="sev-count" id="cnt-severe">0</span></div>
+        <div class="sev-body" id="col-severe"><div class="empty-state">No severe alerts</div></div>
+      </div>
+      <div class="sev-col">
+        <div class="sev-header"><span class="sev-title" style="color:var(--accent-yellow)">Moderate</span><span class="sev-count" id="cnt-moderate">0</span></div>
+        <div class="sev-body" id="col-moderate"><div class="empty-state">No moderate alerts</div></div>
+      </div>
+      <!-- Minor column removed — Small Craft Advisory, Frost Advisory are noise for WFM ops -->
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var API = 'https://ovix-api.tedlango.workers.dev';
+
+  // Fetch weather events from multiple regions
+  function fetchAll() {
+    Promise.all([
+      fetch(API + '/api/ovix/region-events?region=north-america&hours=24&domain=weather&limit=200', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      fetch(API + '/api/ovix/region-events?region=emea&hours=24&domain=weather&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};})
+    ]).then(function(results) {
+      // Merge and deduplicate
+      var all = [], seen = {};
+      results.forEach(function(d) {
+        (d.events || []).forEach(function(e) {
+          var key = e.id || e.title;
+          if (!seen[key]) { seen[key] = true; all.push(e); }
+        });
+      });
+      // Exclude aviation — weather dashboard is NWS + MeteoAlarm + SPC only
+      all = all.filter(function(e) { return e.source !== 'aviation'; });
+      all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
+      render(all);
+    });
+  }
+
+  function render(events) {
+    // Classify by severity level using raw_severity if available, else by score
+    var extreme = [], severe = [], moderate = [];
+
+    events.forEach(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      var raw = {};
+      try { raw = typeof e.raw_severity === 'string' ? JSON.parse(e.raw_severity) : (e.raw_severity || {}); } catch(x){}
+      var nwsSev = raw.severity || raw.baseSeverity || '';
+
+      // Classify: Extreme/Severe/Moderate only (Minor = noise for WFM ops)
+      if (nwsSev === 'Extreme' || sev >= 9) extreme.push(e);
+      else if (nwsSev === 'Severe' || sev >= 7) severe.push(e);
+      else if (sev >= 3) moderate.push(e); // includes NWS Moderate + anything sev 3+
+    });
+
+    renderColumn('extreme', extreme, '#ef4444');
+    renderColumn('severe', severe, '#f97316');
+    renderColumn('moderate', moderate, '#eab308');
+
+    // Banner stats
+    var nws = events.filter(function(e) { return e.source === 'nws' || e.source === 'spc'; });
+    var eu = events.filter(function(e) { return e.source === 'meteoalarm'; });
+    document.getElementById('nws-count').textContent = nws.length;
+    document.getElementById('eu-count').textContent = eu.length;
+    var maxSev = events.length ? Math.max.apply(null, events.map(function(e){return parseFloat(e.severity)||0;})) : 0;
+    document.getElementById('max-severity').textContent = maxSev.toFixed(1);
+
+    // Map summary
+    var types = {};
+    nws.forEach(function(e) { var t = e.title || e.event_type || '?'; types[t] = (types[t]||0)+1; });
+    var topTypes = Object.entries(types).sort(function(a,b){return b[1]-a[1];}).slice(0,4);
+    document.getElementById('map-summary').textContent = topTypes.map(function(t){return t[0]+' ('+t[1]+')';}).join(' · ') || 'No active US alerts';
+    document.getElementById('map-updated').textContent = 'Map: forecast.weather.gov · Updated ' + new Date().toLocaleTimeString();
+
+    // Refresh NWS map image (cache bust)
+    document.getElementById('nws-map').src = 'https://forecast.weather.gov/wwamap/png/US.png?t=' + Date.now();
+
+    // Level badge
+    var level, bg, color;
+    if (extreme.length > 0) { level = 'CRITICAL'; bg = 'rgba(239,68,68,.15)'; color = 'var(--accent-red)'; }
+    else if (severe.length > 0) { level = 'ELEVATED'; bg = 'rgba(249,115,22,.15)'; color = 'var(--accent-orange)'; }
+    else if (moderate.length > 5) { level = 'GUARDED'; bg = 'rgba(234,179,8,.15)'; color = 'var(--accent-yellow)'; }
+    else { level = 'LOW'; bg = 'rgba(34,197,94,.15)'; color = 'var(--accent-green)'; }
+    var badge = document.getElementById('wx-level-badge');
+    badge.textContent = level; badge.style.background = bg; badge.style.color = color;
+    badge.style.border = '1px solid ' + color;
+    document.getElementById('gauge-label').textContent = level;
+    document.getElementById('gauge-label').style.color = color;
+
+    // Gauge + factors
+    var score = Math.min(10, maxSev);
+    drawGauge(score);
+    renderFactors([
+      {label: 'NWS', value: nws.length > 0 ? Math.min(10, Math.max.apply(null, nws.map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '40%'},
+      {label: 'MeteoAlarm', value: eu.length > 0 ? Math.min(10, Math.max.apply(null, eu.map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '30%'},
+      {label: 'SPC', value: events.filter(function(e){return e.source==='spc'||e.source==='spc_reports';}).length > 0 ? Math.min(10, Math.max.apply(null, events.filter(function(e){return e.source==='spc'||e.source==='spc_reports';}).map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '20%'},
+      {label: 'SPC Rpts', value: events.filter(function(e){return e.source==='spc_reports';}).length > 0 ? Math.min(10, Math.max.apply(null, events.filter(function(e){return e.source==='spc_reports';}).map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '10%'}
+    ], score);
+  }
+
+  function renderColumn(id, events, color) {
+    var col = document.getElementById('col-' + id);
+    var cnt = document.getElementById('cnt-' + id);
+    cnt.textContent = events.length;
+
+    if (!events.length) {
+      col.innerHTML = '<div class="empty-state">No ' + id + ' alerts</div>';
+      return;
+    }
+
+    col.innerHTML = events.slice(0, 50).map(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      var source = (e.source || '').toUpperCase();
+      var area = e.area_desc || e.description || '';
+      if (area.length > 80) area = area.slice(0, 80) + '...';
+      var expires = '';
+      if (e.expires_at) {
+        var exp = new Date(e.expires_at);
+        var now = new Date();
+        var hoursLeft = Math.round((exp - now) / 3600000);
+        if (hoursLeft > 0 && hoursLeft < 48) {
+          expires = '<span class="card-expires">expires ' + (hoursLeft < 1 ? '<1h' : hoursLeft + 'h') + '</span>';
+        }
+      }
+      var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+
+      var url = e.source_url || '';
+      var desc = e.description || '';
+      var rawSev = {};
+      try { rawSev = typeof e.raw_severity === 'string' ? JSON.parse(e.raw_severity) : (e.raw_severity || {}); } catch(x){}
+      var detailParts = [];
+      if (desc) detailParts.push(desc);
+      if (rawSev.urgency) detailParts.push('Urgency: ' + rawSev.urgency);
+      if (rawSev.certainty) detailParts.push('Certainty: ' + rawSev.certainty);
+      if (area) detailParts.push('Area: ' + (e.area_desc || area));
+      var detailText = detailParts.join(' · ');
+
+      return '<div class="card" data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')">' +
+        '<div class="card-row">' +
+          '<span class="severity-dot" style="background:' + color + '"></span>' +
+          '<span class="card-title">' + esc(e.title || 'Weather Alert') + '</span>' +
+          '<span class="sev-badge" style="background:' + color + ';color:#fff">' + sev.toFixed(1) + '</span>' +
+        '</div>' +
+        (area ? '<div class="card-area">' + esc(area) + '</div>' : '') +
+        '<div class="card-meta"><span>' + source + (time ? ' · ' + time : '') + '</span>' + expires +
+          ' <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source ↗</span>' : '') +
+        '</div>' +
+        (detailText ? '<div class="card-details">' + esc(detailText) + '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  // ── Gauge (standard ROC pattern) ──
+  function arcPath(cx, cy, r, startAngle, endAngle) {
+    var sx = cx + r * Math.cos(startAngle), sy = cy + r * Math.sin(startAngle);
+    var ex = cx + r * Math.cos(endAngle), ey = cy + r * Math.sin(endAngle);
+    var large = endAngle - startAngle > Math.PI ? 1 : 0;
+    return 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + ex + ' ' + ey;
+  }
+
+  function drawGauge(score) {
+    var svg = document.getElementById('gauge-svg');
+    var cx = 110, cy = 110, r = 90, startAngle = Math.PI, endAngle = 2 * Math.PI;
+    var segments = [{start:0,end:.25,color:'#22c55e'},{start:.25,end:.50,color:'#eab308'},{start:.50,end:.75,color:'#f97316'},{start:.75,end:1,color:'#ef4444'}];
+    var font = getComputedStyle(document.body).fontFamily;
+    var html = '<path d="' + arcPath(cx,cy,r,startAngle,endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
+    segments.forEach(function(seg) { html += '<path d="' + arcPath(cx,cy,r,startAngle+(endAngle-startAngle)*seg.start,startAngle+(endAngle-startAngle)*seg.end) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>'; });
+    var frac = Math.max(0, Math.min(score / 10, 1));
+    var scoreColor = score >= 7 ? '#ef4444' : score >= 4 ? '#eab308' : '#22c55e';
+    if (frac > 0.005) html += '<path d="' + arcPath(cx,cy,r,startAngle,startAngle+(endAngle-startAngle)*frac) + '" fill="none" stroke="' + scoreColor + '" stroke-width="18" stroke-linecap="round"/>';
+    var na = startAngle + (endAngle - startAngle) * frac;
+    html += '<line x1="'+cx+'" y1="'+cy+'" x2="'+(cx+(r-30)*Math.cos(na))+'" y2="'+(cy+(r-30)*Math.sin(na))+'" stroke="'+scoreColor+'" stroke-width="2.5" stroke-linecap="round"/>';
+    html += '<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="'+scoreColor+'"/>';
+    html += '<text x="'+cx+'" y="'+(cy-15)+'" text-anchor="middle" fill="'+scoreColor+'" font-family="'+font+'" font-size="28" font-weight="700">'+score.toFixed(1)+'</text>';
+    html += '<text x="'+cx+'" y="'+(cy+2)+'" text-anchor="middle" fill="#94a3b8" font-family="'+font+'" font-size="10" letter-spacing="1">WX SCORE</text>';
+    html += '<text x="15" y="'+(cy+5)+'" fill="#64748b" font-family="'+font+'" font-size="10">0</text>';
+    html += '<text x="198" y="'+(cy+5)+'" fill="#64748b" font-family="'+font+'" font-size="10">10</text>';
+    svg.innerHTML = html;
+  }
+
+  function renderFactors(factors, totalScore) {
+    var el = document.getElementById('factor-bars');
+    if (!el) return;
+    var html = '';
+    factors.forEach(function(f) {
+      var pct = Math.min(100, f.value * 10);
+      var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-orange)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+        '<span style="font-size:9px;color:var(--text-secondary);width:70px;">' + f.label + '</span>' +
+        '<div style="flex:1;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .5s;"></div>' +
+        '</div>' +
+        '<span style="font-size:9px;color:var(--text-dim);width:24px;text-align:right;">' + f.value.toFixed(1) + '</span>' +
+        '<span style="font-size:8px;color:var(--text-dim);width:24px;">' + f.weight + '</span></div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+  // ── Transport / Rotation ──
+  var SLIDES = ['/dashboards/weather.html','/dashboards/seismic.html','/dashboards/disaster.html','/dashboards/cyber.html','/dashboards/financial.html','/dashboards/infrastructure.html','/dashboards/health.html','/dashboards/environmental.html','/dashboards/scores.html','/dashboards/feed-health.html'];
+  var slideIdx = SLIDES.indexOf(location.pathname);
+  var playTimer = null;
+  var SPEED = parseInt(localStorage.getItem('roc-speed') || '30') * 1000;
+
+  window.rocNav = function(action) {
+    if (action === 'prev') { slideIdx = (slideIdx - 1 + SLIDES.length) % SLIDES.length; location.href = SLIDES[slideIdx]; }
+    else if (action === 'next') { slideIdx = (slideIdx + 1) % SLIDES.length; location.href = SLIDES[slideIdx]; }
+    else if (action === 'toggle') {
+      var btn = document.getElementById('bnr-play');
+      if (playTimer) { clearInterval(playTimer); playTimer = null; if (btn) btn.innerHTML = '&#9654;'; }
+      else { playTimer = setInterval(function() { rocNav('next'); }, SPEED); if (btn) btn.innerHTML = '&#9208;'; }
+    }
+  };
+
+  if (window.parent !== window) { var t = document.querySelector('.transport'); if (t) t.style.display = 'none'; }
+
+  // Init
+  drawGauge(0);
+  fetchAll();
+  setInterval(fetchAll, 300000);
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Seismic Activity — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-panel: #141b2d;
+    --bg-card: #1e293b;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --accent-cyan: #06b6d4;
+    --accent-red: #ef4444;
+    --accent-orange: #f97316;
+    --accent-yellow: #eab308;
+    --accent-green: #22c55e;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+    margin: 0;
+  }
+
+  /* PAGE GRID */
+  .page-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  /* LEFT GAUGE PANEL */
+  .gauge-panel {
+    grid-row: 1 / -1;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* BANNER */
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .banner-title { font-size: 12px; font-weight: 700; color: var(--accent-cyan); letter-spacing: 1.5px; white-space: nowrap; text-transform: uppercase; }
+  .banner-stats { display: flex; gap: 12px; }
+  .stat-box { text-align: center; }
+  .stat-value { font-size: 14px; font-weight: 700; }
+  .stat-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
+  .level-badge { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .transport { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+  .transport button:hover { background:rgba(24,188,156,0.2); }
+
+
+  /* DATA AREA */
+  .data-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel.grow { flex: 1; }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent-cyan);
+  }
+  .panel-count {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg-card);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  /* SCROLLBAR */
+  .panel-body::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .panel-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* CARDS */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent-cyan); }
+  .card:last-child { margin-bottom: 0; }
+
+  .card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .mag-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    font-size: 16px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .severity-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .card-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-date {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .source-tag {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    background: rgba(6,182,212,0.08);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* MAG DISTRIBUTION BAR */
+  .mag-bar-row {
+    display: grid;
+    grid-template-columns: 50px 1fr 30px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    padding: 4px 0;
+  }
+  .mag-bar-label {
+    text-align: right;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .mag-bar-track {
+    height: 14px;
+    background: rgba(51,65,85,0.3);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .mag-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s;
+  }
+  .mag-bar-count {
+    text-align: right;
+    color: var(--text-dim);
+    font-size: 10px;
+  }
+
+  /* GAUGE */
+  .gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0;
+  }
+  .gauge-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+  }
+
+  /* GAUGE PANEL SCROLLBAR */
+  .gauge-panel::-webkit-scrollbar { width: 6px; }
+  .gauge-panel::-webkit-scrollbar-track { background: transparent; }
+  .gauge-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .gauge-panel::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* LOADING / ERROR */
+  .status-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+  }
+  .error-msg { color: var(--accent-red); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .page-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr;
+      height: auto;
+      overflow-y: auto;
+    }
+    .gauge-panel {
+      grid-row: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-area {
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+    }
+    .column { overflow: visible; }
+    .panel.grow { flex: none; max-height: 400px; }
+  }
+
+/* Universal card interaction */
+  .card { cursor:pointer; }
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
+  .card-link:hover { text-decoration:underline; }
+
+/* Hide transport controls when embedded in iframe */
+@media all {
+  body.in-iframe .transport,
+  body.in-iframe #rotation-indicator { display:none !important; }
+}
+</style>
+</head>
+<body>
+<script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
+
+
+<div class="page-grid">
+
+  <!-- LEFT: GAUGE PANEL -->
+  <div class="gauge-panel">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-cyan);margin-bottom:8px;">Seismic Summary</div>
+    <div class="gauge-container" id="gauge-container">
+      <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
+      <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
+    </div>
+    <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
+    <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
+      OVIX Seismic Index computed from weighted factors: M5+ earthquake count (35%),
+      M6+ earthquake count (25%), maximum magnitude (25%),
+      and geographic spread of events (15%).
+      Severity maps from magnitude: M7+=10, M6=8, M5=6, M4=4.
+      Score maps to OVIX 0-10 scale for cross-domain comparison.
+    </div>
+    <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
+      Sources: USGS Earthquake Hazards &middot; EMSC<br>
+      Refreshes every 5 min via OVIX API.
+    </div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-title">SEISMIC ACTIVITY</div>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="total-count">--</div><div class="stat-label">TOTAL QUAKES</div></div>
+      <div class="stat-box"><div class="stat-value" id="m5-count">--</div><div class="stat-label">M5+ COUNT</div></div>
+      <div class="stat-box"><div class="stat-value" id="max-mag">--</div><div class="stat-label">MAX MAGNITUDE</div></div>
+    </div>
+    <div class="level-badge" id="seis-level-badge">--</div>
+    <div class="transport">
+      <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
+      <button onclick="rocNav('next')" title="Next">&#9197;</button>
+    </div>
+  </div>
+
+
+  <!-- DATA AREA (bottom-right) -->
+  <div class="data-area">
+
+    <!-- COL 1: Recent Earthquakes -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">Recent Earthquakes</span>
+          <span class="panel-count" id="quake-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="quake-list">
+          <div class="status-msg">Loading seismic data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 2: Magnitude Distribution + Significant -->
+    <div class="column">
+      <div class="panel" style="flex-shrink:0;">
+        <div class="panel-header">
+          <span class="panel-title">Magnitude Distribution</span>
+          <span class="panel-count" style="color:var(--text-dim);font-size:9px;">24h</span>
+        </div>
+        <div class="panel-body" id="mag-dist" style="max-height:220px;">
+          <div class="status-msg">Loading...</div>
+        </div>
+      </div>
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">Significant Quakes</span>
+          <span class="panel-count" id="sig-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="sig-list">
+          <div class="status-msg">Loading significant events...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?domain=seismic&hours=24&limit=200';
+  var REFRESH_MS = 5 * 60 * 1000;
+
+  // --- Utility ---
+  function esc(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+
+  function timeSince(iso) {
+    if (!iso) return '';
+    var ms = Date.now() - new Date(iso).getTime();
+    var m = Math.floor(ms / 60000);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  function magColor(sev) {
+    var s = parseFloat(sev) || 0;
+    if (s >= 8) return 'var(--accent-red)';
+    if (s >= 6) return 'var(--accent-orange)';
+    if (s >= 4) return 'var(--accent-yellow)';
+    return 'var(--accent-green)';
+  }
+
+  // Severity to approximate magnitude: sev 10=M7+, 8=M6, 6=M5, 4=M4
+  function sevToMag(sev) {
+    var s = parseFloat(sev) || 0;
+    if (s >= 10) return 7.5;
+    if (s >= 8) return 6.5;
+    if (s >= 6) return 5.5;
+    if (s >= 4) return 4.5;
+    if (s >= 2) return 3.5;
+    return 2.5;
+  }
+
+  // --- Seismic Index ---
+  function computeSeismicIndex(events) {
+    var m5Count = 0, m6Count = 0, maxSev = 0;
+    var regions = {};
+
+    events.forEach(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      if (sev > maxSev) maxSev = sev;
+      if (sev >= 6) m5Count++;  // sev 6 = M5
+      if (sev >= 8) m6Count++;  // sev 8 = M6
+      // Geographic spread: extract rough region from title
+      var region = (e.title || '').split(',').pop();
+      if (region) regions[region.trim()] = true;
+    });
+    var uniqueRegions = Object.keys(regions).length;
+
+    var m5Score = Math.min(100, m5Count * 8);
+    var m6Score = Math.min(100, m6Count * 20);
+    var magScore = maxSev * 10;
+    var spreadScore = Math.min(100, uniqueRegions * 5);
+
+    var factors = [
+      { name: 'M5+ Count', value: Math.round(m5Score), weight: 35 },
+      { name: 'M6+ Count', value: Math.round(m6Score), weight: 25 },
+      { name: 'Max Magnitude', value: Math.round(magScore), weight: 25 },
+      { name: 'Geo Spread', value: Math.round(spreadScore), weight: 15 }
+    ];
+
+    var score = Math.round(
+      m5Score * 0.35 + m6Score * 0.25 + magScore * 0.25 + spreadScore * 0.15
+    );
+    score = Math.min(score, 100);
+
+    renderFactors(factors, score);
+    return { score: score, m5Count: m5Count, m6Count: m6Count, maxSev: maxSev };
+  }
+
+  function renderFactors(factors, totalScore) {
+    var el = document.getElementById('factor-bars');
+    if (!el) return;
+    var ovix = (totalScore / 10).toFixed(1);
+    var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-orange)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+
+    var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">OVIX Score: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
+    factors.forEach(function(f) {
+      var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-orange)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      html += '<div style="display:grid;grid-template-columns:90px 1fr 30px 25px;align-items:center;gap:6px;font-size:9px;margin-bottom:3px;">' +
+        '<span style="text-align:right;color:var(--text-secondary);">' + f.name + '</span>' +
+        '<div style="height:8px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + f.value + '%;background:' + barColor + ';border-radius:2px;transition:width 0.5s;"></div>' +
+        '</div>' +
+        '<span style="text-align:right;color:var(--text-dim);">' + f.value + '</span>' +
+        '<span style="text-align:right;color:var(--text-dim);">' + f.weight + '%</span>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function indexLevel(score) {
+    if (score >= 75) return { label: 'CRITICAL', color: 'var(--accent-red)' };
+    if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-orange)' };
+    if (score >= 25) return { label: 'GUARDED', color: 'var(--accent-yellow)' };
+    return { label: 'LOW', color: 'var(--accent-green)' };
+  }
+
+  // --- Gauge SVG ---
+  function drawGauge(score) {
+    var svg = document.getElementById('gauge-svg');
+    var cx = 110, cy = 110, r = 90;
+    var startAngle = Math.PI;
+    var endAngle = 2 * Math.PI;
+
+    var segments = [
+      { start: 0, end: 0.25, color: '#22c55e' },
+      { start: 0.25, end: 0.50, color: '#eab308' },
+      { start: 0.50, end: 0.75, color: '#f97316' },
+      { start: 0.75, end: 1.0, color: '#ef4444' }
+    ];
+
+    var html = '';
+    html += '<path d="' + arcPath(cx, cy, r, startAngle, endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
+
+    segments.forEach(function(seg) {
+      var a1 = startAngle + (endAngle - startAngle) * seg.start;
+      var a2 = startAngle + (endAngle - startAngle) * seg.end;
+      html += '<path d="' + arcPath(cx, cy, r, a1, a2) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>';
+    });
+
+    var scoreFrac = Math.max(0, Math.min(score / 100, 1));
+    if (scoreFrac > 0.005) {
+      var scoreAngle = startAngle + (endAngle - startAngle) * scoreFrac;
+      var level = indexLevel(score);
+      html += '<path d="' + arcPath(cx, cy, r, startAngle, scoreAngle) + '" fill="none" stroke="' + level.color + '" stroke-width="18" stroke-linecap="round"/>';
+    }
+
+    var needleAngle = startAngle + (endAngle - startAngle) * scoreFrac;
+    var nx = cx + (r - 30) * Math.cos(needleAngle);
+    var ny = cy + (r - 30) * Math.sin(needleAngle);
+    html += '<line x1="' + cx + '" y1="' + cy + '" x2="' + nx + '" y2="' + ny + '" stroke="' + indexLevel(score).color + '" stroke-width="2.5" stroke-linecap="round"/>';
+    html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + indexLevel(score).color + '"/>';
+
+    html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + indexLevel(score).color + '" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="28" font-weight="700">' + score + '</text>';
+    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">SEISMIC INDEX</text>';
+
+    html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">0</text>';
+    html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">100</text>';
+
+    svg.innerHTML = html;
+
+    var label = document.getElementById('gauge-label');
+    var lvl = indexLevel(score);
+    label.textContent = lvl.label;
+    label.style.color = lvl.color;
+  }
+
+  function arcPath(cx, cy, r, startAngle, endAngle) {
+    var x1 = cx + r * Math.cos(startAngle);
+    var y1 = cy + r * Math.sin(startAngle);
+    var x2 = cx + r * Math.cos(endAngle);
+    var y2 = cy + r * Math.sin(endAngle);
+    var largeArc = (endAngle - startAngle > Math.PI) ? 1 : 0;
+    return 'M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x2 + ' ' + y2;
+  }
+
+  // --- Render ---
+  function renderQuakeList(events) {
+    var el = document.getElementById('quake-list');
+    document.getElementById('quake-panel-count').textContent = events.length;
+    if (!events.length) { el.innerHTML = '<div class="empty-state">No earthquakes in last 24h</div>'; return; }
+
+    // Sort by severity desc
+    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
+
+    el.innerHTML = events.map(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      var mag = sevToMag(sev).toFixed(1);
+      var color = magColor(sev);
+      var location = esc(e.title || 'Unknown');
+      var depth = '';
+      // Try to extract depth from description
+      if (e.description) {
+        var depthMatch = e.description.match(/depth[:\s]*(\d+\.?\d*)\s*km/i);
+        if (depthMatch) depth = depthMatch[1] + ' km depth';
+      }
+      var src = (e.source || '').toUpperCase();
+      var url = e.source_url || '';
+
+      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div class="mag-badge" style="background:' + color + ';">' + mag + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="card-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + location + '</div>' +
+            (depth ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' + esc(depth) + '</div>' : '') +
+            '<div class="card-date">' +
+              timeSince(e.occurred_at) +
+              (src ? ' &middot; <span class="source-tag">' + esc(src) + '</span>' : '') +
+              ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+              (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source &#8599;</span>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card-details">Magnitude ' + mag + ' &middot; Severity ' + esc(String(e.severity)) + (depth ? ' &middot; ' + esc(depth) : '') + (e.description ? '<br>' + esc(e.description) : '') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderMagDist(events) {
+    var el = document.getElementById('mag-dist');
+    if (!events.length) { el.innerHTML = '<div class="empty-state">No data</div>'; return; }
+
+    // Count by magnitude range using severity
+    var ranges = [
+      { label: 'M4-5', min: 4, max: 6, color: 'var(--accent-yellow)', count: 0 },
+      { label: 'M5-6', min: 6, max: 8, color: 'var(--accent-orange)', count: 0 },
+      { label: 'M6-7', min: 8, max: 10, color: '#f97316', count: 0 },
+      { label: 'M7+', min: 10, max: 99, color: 'var(--accent-red)', count: 0 }
+    ];
+
+    events.forEach(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      for (var i = 0; i < ranges.length; i++) {
+        if (sev >= ranges[i].min && sev < ranges[i].max) {
+          ranges[i].count++;
+          break;
+        }
+      }
+    });
+
+    // Also count below M4 (sev < 4)
+    var belowM4 = events.filter(function(e) { return (parseFloat(e.severity) || 0) < 4; }).length;
+    ranges.unshift({ label: '<M4', min: 0, max: 4, color: 'var(--accent-green)', count: belowM4 });
+
+    var maxCount = Math.max.apply(null, ranges.map(function(r) { return r.count; }));
+    if (maxCount === 0) maxCount = 1;
+
+    el.innerHTML = ranges.map(function(r) {
+      var pct = Math.round((r.count / maxCount) * 100);
+      return '<div class="mag-bar-row">' +
+        '<span class="mag-bar-label">' + r.label + '</span>' +
+        '<div class="mag-bar-track">' +
+          '<div class="mag-bar-fill" style="width:' + pct + '%;background:' + r.color + ';"></div>' +
+        '</div>' +
+        '<span class="mag-bar-count">' + r.count + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderSignificant(events) {
+    var el = document.getElementById('sig-list');
+    // Significant = severity >= 6 (M5+)
+    var significant = events.filter(function(e) { return (parseFloat(e.severity) || 0) >= 6; });
+    significant.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
+
+    document.getElementById('sig-panel-count').textContent = significant.length;
+    if (!significant.length) { el.innerHTML = '<div class="empty-state">No significant earthquakes (M5+) in last 24h</div>'; return; }
+
+    el.innerHTML = significant.map(function(e) {
+      var sev = parseFloat(e.severity) || 0;
+      var mag = sevToMag(sev).toFixed(1);
+      var color = magColor(sev);
+      var src = (e.source || '').toUpperCase();
+      var url = e.source_url || '';
+
+      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
+        '<div style="display:flex;align-items:center;gap:10px;">' +
+          '<div class="mag-badge" style="background:' + color + ';width:36px;height:36px;font-size:14px;">' + mag + '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<div class="card-title">' + esc(e.title) + '</div>' +
+            (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
+            '<div class="card-date">' +
+              timeSince(e.occurred_at) +
+              (src ? ' &middot; <span class="source-tag">' + esc(src) + '</span>' : '') +
+              ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+              (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source &#8599;</span>' : '') +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="card-details">Magnitude ' + mag + ' &middot; Severity ' + esc(String(e.severity)) + (e.description ? '<br>' + esc(e.description) : '') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function updateBanner(events, result) {
+    document.getElementById('total-count').textContent = events.length;
+    document.getElementById('m5-count').textContent = result.m5Count;
+    var m6El = document.getElementById('m6-count');
+    if (m6El) m6El.textContent = result.m6Count;
+    var maxMag = result.maxSev > 0 ? sevToMag(result.maxSev).toFixed(1) : '--';
+    var maxMagEl = document.getElementById('max-mag');
+    maxMagEl.textContent = maxMag;
+    maxMagEl.style.color = magColor(result.maxSev);
+    // Level badge
+    var lvl = indexLevel(result.score);
+    var lb = document.getElementById('seis-level-badge');
+    if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
+  }
+
+  // --- Fetch & Process ---
+  function fetchData() {
+    fetch(API_URL)
+      .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        var events = data.events || data || [];
+        if (!Array.isArray(events)) events = [];
+
+        var result = computeSeismicIndex(events);
+
+        renderQuakeList(events);
+        renderMagDist(events);
+        renderSignificant(events);
+        drawGauge(result.score);
+        updateBanner(events, result);
+      })
+      .catch(function(err) {
+        console.error('Seismic fetch error:', err);
+        ['quake-list', 'sig-list'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el.querySelector('.status-msg')) {
+            el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
+          }
+        });
+      });
+  }
+
+  // Initial draw (empty gauge)
+  drawGauge(0);
+
+  // Fetch immediately, then every 5 min
+  fetchData();
+  setInterval(fetchData, REFRESH_MS);
+})();
+</script>
+
+<script>
+window.rocNav = function(action) {
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ROT_KEY = 'roc-rotation';
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  function getState() { try { return JSON.parse(localStorage.getItem(ROT_KEY)) || {}; } catch(e) { return {}; } }
+  function setState(s) { try { localStorage.setItem(ROT_KEY, JSON.stringify(s)); } catch(e) {} }
+  function getEnabled() { var s = getState(); return s.enabledSlides || ORDER.slice(); }
+  function getCurrentPage() {
+    var path = window.location.pathname;
+    for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) return k; }
+    return 'globe';
+  }
+  var enabled = getEnabled();
+  var current = getCurrentPage();
+  var idx = enabled.indexOf(current);
+  if (idx === -1) idx = 0;
+  if (action === 'prev') {
+    var prev = enabled[(idx - 1 + enabled.length) % enabled.length];
+    window.location = ROUTES[prev];
+  } else if (action === 'next') {
+    var next = enabled[(idx + 1) % enabled.length];
+    window.location = ROUTES[next];
+  } else if (action === 'toggle') {
+    var s = getState();
+    s.active = !s.active;
+    if (!s.interval) s.interval = 30;
+    setState(s);
+    updateTransportUI();
+    if (s.active) {
+      var next2 = enabled[(idx + 1) % enabled.length];
+      setTimeout(function() {
+        var c = getState();
+        if (!c.active) return;
+        try { window.location = ROUTES[next2]; } catch(e2) { window.location = ROUTES[next2]; }
+      }, s.interval * 1000);
+    }
+  } else if (action === 'speed') {
+    var s2 = getState();
+    s2.interval = parseInt(document.getElementById('bnr-speed').value) || 30;
+    setState(s2);
+  }
+};
+function updateTransportUI() {
+  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation')) || {}; } catch(e) { s = {}; }
+  var btn = document.getElementById('bnr-play');
+  var ind = document.getElementById('rotation-indicator');
+  if (btn) { btn.innerHTML = s.active ? '&#9208;' : '&#9654;'; btn.style.background = s.active ? 'rgba(24,188,156,0.25)' : 'rgba(24,188,156,0.08)'; }
+  if (ind) ind.style.display = s.active ? 'block' : 'none';
+  var speedEl = document.getElementById('bnr-speed');
+  if (speedEl && s.interval) speedEl.value = String(s.interval);
+}
+updateTransportUI();
+// Auto-advance if rotation is active
+(function(){
+  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
+  if (!s.active) return;
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var enabled = s.enabledSlides || ORDER.slice();
+  var path = window.location.pathname;
+  var cur = 'seismic';
+  for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) { cur = k; break; } }
+  var idx = enabled.indexOf(cur); if (idx === -1) idx = 0;
+  var next = enabled[(idx + 1) % enabled.length];
+  setTimeout(function() {
+    var c; try { c = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
+    if (!c.active) return;
+    window.location = ROUTES[next];
+  }, (s.interval || 30) * 1000);
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,14 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['sharp'],
+  rewrites: async () => ({
+    beforeFiles: [
+      // Serve ROC OpenMCT at /roc (static HTML from public/roc/index.html)
+      { source: '/roc', destination: '/roc/index.html' },
+    ],
+    afterFiles: [],
+    fallback: [],
+  }),
   images: {
     remotePatterns: [
       {
@@ -20,7 +28,7 @@ const nextConfig: NextConfig = {
         headers: [
           { key: 'Access-Control-Allow-Origin', value: rocOrigin },
           { key: 'Access-Control-Allow-Methods', value: 'POST, OPTIONS' },
-          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization' },
+          { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-ROC-API-Key' },
         ],
       },
       {

@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Infrastructure Status — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-panel: #141b2d;
+    --bg-card: #1e293b;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --accent-cyan: #06b6d4;
+    --accent-red: #ef4444;
+    --accent-orange: #f97316;
+    --accent-yellow: #eab308;
+    --accent-green: #22c55e;
+    --accent-purple: #8b5cf6;
+    --accent-blue: #3b82f6;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+    margin: 0;
+  }
+
+  /* PAGE GRID — matches cyber/weather/seismic pattern */
+  .page-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  /* LEFT GAUGE PANEL */
+  .gauge-panel {
+    grid-row: 1 / -1;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .gauge-panel::-webkit-scrollbar { width: 6px; }
+  .gauge-panel::-webkit-scrollbar-track { background: transparent; }
+  .gauge-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .gauge-container { display: flex; flex-direction: column; align-items: center; padding: 8px 0; }
+  .gauge-label { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; margin-top: 4px; }
+
+  /* BANNER */
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .banner-title { font-size: 12px; font-weight: 700; color: var(--accent-cyan); letter-spacing: 1.5px; white-space: nowrap; text-transform: uppercase; }
+  .banner-stats { display: flex; gap: 12px; }
+  .stat-box { text-align: center; }
+  .stat-value { font-size: 14px; font-weight: 700; }
+  .stat-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
+  .level-badge { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .transport { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+  .transport button:hover { background:rgba(24,188,156,0.2); }
+
+  /* DATA AREA */
+  .data-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .column { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
+  .panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panel.grow { flex: 1; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .panel-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent-cyan); }
+  .panel-count { font-size: 11px; color: var(--text-dim); background: var(--bg-card); padding: 2px 8px; border-radius: 10px; }
+  .panel-body { flex: 1; overflow-y: auto; padding: 10px; }
+  .panel-body::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* CARDS */
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; transition: border-color 0.2s; }
+  .card:hover { border-color: var(--accent-cyan); }
+  .card:last-child { margin-bottom: 0; }
+  .card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+  .card-title { font-size: 12px; font-weight: 600; color: var(--text-primary); flex: 1; }
+  .severity-badge { font-size: 10px; font-weight: 700; color: #fff; padding: 1px 8px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+  .card-desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .card-date { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+  .severity-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; flex-shrink: 0; }
+  .source-tag { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Universal card interaction */
+  .card { cursor:pointer; }
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
+  .card-link:hover { text-decoration:underline; }
+
+  /* ISP GRID */
+  .isp-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 10px; }
+  .isp-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 5px; padding: 6px; text-align: center; }
+  .isp-card.ok { border-color: rgba(34,197,94,0.35); }
+  .isp-card.warning { border-color: rgba(234,179,8,0.5); background: rgba(234,179,8,0.04); }
+  .isp-card.critical { border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.04); }
+  .isp-name { font-size: 9px; font-weight: 700; margin-bottom: 1px; }
+  .isp-icon { font-size: 14px; }
+  .isp-detail { font-size: 8px; color: var(--text-dim); }
+
+  .source-footer { padding: 10px 14px; font-size: 10px; color: var(--text-dim); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .empty-state { color: var(--text-dim); font-size: 11px; text-align: center; padding: 20px; }
+
+  @media (max-width: 900px) {
+    .page-grid { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; height: auto; overflow-y: auto; }
+    .gauge-panel { grid-row: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .data-area { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page-grid">
+
+  <!-- LEFT GAUGE PANEL -->
+  <div class="gauge-panel">
+    <div class="gauge-container" id="gauge-container">
+      <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
+      <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
+    </div>
+    <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
+    <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
+      Infrastructure score from weighted factors: ISP health via IODA per-ASN (25%),
+      country-level internet outages (25%), US power grid status (20%),
+      and Cloudflare Radar disruptions (20%).
+    </div>
+    <div id="signal-health" style="width:100%;padding-top:8px;border-top:1px solid var(--border);"></div>
+    <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
+      Sources: IODA (Georgia Tech) &middot; DOE/PowerOutage.us &middot; NOAA SWPC &middot; Cloudflare Radar<br>
+      Refreshes every 5 min via OVIX API.
+    </div>
+  </div>
+
+  <!-- BANNER -->
+  <div class="banner">
+    <div class="banner-title">INFRASTRUCTURE STATUS</div>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="total-events">--</div><div class="stat-label">TOTAL EVENTS</div></div>
+      <div class="stat-box"><div class="stat-value" id="isp-hit">--</div><div class="stat-label">ISPs AFFECTED</div></div>
+      <div class="stat-box"><div class="stat-value" id="pwr-affected">--</div><div class="stat-label">POWER (CUST)</div></div>
+    </div>
+    <div class="level-badge" id="infra-level-badge">--</div>
+    <div class="transport">
+      <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
+      <button onclick="rocNav('next')" title="Next">&#9197;</button>
+    </div>
+  </div>
+
+  <!-- DATA AREA -->
+  <div class="data-area">
+    <!-- COLUMN 1: ISP Grid + IODA Alerts -->
+    <div class="column">
+      <div class="panel" style="flex-shrink:0;">
+        <div class="panel-header">
+          <span class="panel-title">ISP Health</span>
+          <span class="panel-count" id="isp-panel-count">10 ISPs</span>
+        </div>
+        <div class="panel-body" style="overflow:visible;">
+          <div class="isp-grid" id="isp-grid"></div>
+        </div>
+      </div>
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">Internet Outages</span>
+          <span class="panel-count" id="ioda-count">--</span>
+        </div>
+        <div class="panel-body" id="ioda-list">
+          <div class="empty-state">Loading IODA data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUMN 2: Power Outages -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">US Power Outages</span>
+          <span class="panel-count" id="pwr-count">--</span>
+        </div>
+        <div class="panel-body" id="pwr-list">
+          <div class="empty-state">Loading power data...</div>
+        </div>
+        <div class="source-footer">DOE / PowerOutage.us &middot; State-level tracking</div>
+      </div>
+    </div>
+
+    <!-- COLUMN 3: CF Radar + Space Weather -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">CF Radar Disruptions</span>
+          <span class="panel-count" id="cf-count">--</span>
+        </div>
+        <div class="panel-body" id="cf-list">
+          <div class="empty-state">Loading Cloudflare Radar...</div>
+        </div>
+      </div>
+      <div class="panel" style="flex-shrink:0;max-height:200px;">
+        <div class="panel-header">
+          <span class="panel-title">IODA Outages</span>
+          <span class="panel-count" id="ioda-count2">--</span>
+        </div>
+        <div class="panel-body" id="ioda-list2">
+          <div class="empty-state">Loading global outage data...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API = 'https://ovix-api.tedlango.workers.dev';
+var IODA_BASE = 'https://api.ioda.inetintel.cc.gatech.edu/v2';
+// Power data now comes from ROC API (events table, source=power_outage)
+// Scraped by GitHub Actions every 15 min → written directly to Neon
+var ISPS = [
+  {asn:7922,name:'Comcast'},{asn:7018,name:'AT&T'},{asn:701,name:'Verizon'},
+  {asn:20115,name:'Spectrum'},{asn:7843,name:'Cox'},{asn:3356,name:'Lumen'},
+  {asn:16509,name:'AWS'},{asn:15169,name:'Google'},{asn:8075,name:'Azure'},
+  {asn:13335,name:'Cloudflare'}
+];
+var BASELINES = {bgp:4800000, probe:850000, dark:4000, gtr:0.5};
+
+document.addEventListener('DOMContentLoaded', function() { fetchAll(); setInterval(fetchAll, 300000); });
+
+function fetchAll() {
+  Promise.all([fetchISPs(), fetchEvents(), fetchSignals()])
+    .then(function(results) {
+      var isps = results[0], events = results[1], signals = results[2];
+      var iodaEvts = events.filter(function(e) { return e.source === 'ioda' || e.source === 'ioda_isp'; });
+      var cfEvts = events.filter(function(e) { return e.source === 'cloudflare' || e.source === 'cloudflare_radar'; });
+      var spaceEvts = events.filter(function(e) { return e.source === 'swpc'; });
+      var powerEvts = events.filter(function(e) { return e.source === 'power_outage'; });
+
+      renderISPGrid(isps);
+      renderIODA(iodaEvts);
+      renderPowerFromEvents(powerEvts);
+      renderCF(cfEvts);
+      renderIODA2(iodaEvts);
+      renderSignalHealth(signals);
+      computeScore(isps, iodaEvts, powerEvts, cfEvts, [], signals);
+    });
+}
+
+// ── ISPs ──
+function fetchISPs() {
+  var now = Math.floor(Date.now()/1000), from = now - 86400;
+  return Promise.allSettled(ISPS.map(function(isp) {
+    return fetch(IODA_BASE + '/outages/alerts?from=' + from + '&until=' + now + '&entityType=asn&entityCode=' + isp.asn + '&limit=10', {signal: AbortSignal.timeout(12000)})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var alerts = (d.data || []).filter(function(a) { return a.level && a.level !== 'normal'; });
+        var worst = 'ok';
+        var maxDrop = 0;
+        alerts.forEach(function(a) {
+          if (a.level === 'critical') worst = 'critical';
+          else if (a.level === 'warning' && worst !== 'critical') worst = 'warning';
+          if (a.historyValue > 0) maxDrop = Math.max(maxDrop, 1 - a.value / a.historyValue);
+        });
+        return {asn: isp.asn, name: isp.name, status: worst, alertCount: alerts.length, drop: Math.round(maxDrop * 100), alerts: alerts};
+      })
+      .catch(function() { return {asn: isp.asn, name: isp.name, status: 'ok', alertCount: 0, drop: 0, alerts: []}; });
+  })).then(function(results) {
+    return results.map(function(r) { return r.status === 'fulfilled' ? r.value : {name: '?', status: 'ok', alertCount: 0, drop: 0}; });
+  });
+}
+
+function renderISPGrid(isps) {
+  var grid = document.getElementById('isp-grid');
+  var hit = isps.filter(function(i) { return i.status !== 'ok'; }).length;
+  document.getElementById('isp-hit').textContent = hit + '/' + isps.length;
+  document.getElementById('isp-panel-count').textContent = hit > 0 ? hit + ' affected' : 'All normal';
+
+  grid.innerHTML = isps.map(function(i) {
+    var icon = i.status === 'critical' ? '&#x26A0;' : i.status === 'warning' ? '&#x25B2;' : '&#x2714;';
+    var cls = i.status === 'critical' ? 'critical' : i.status === 'warning' ? 'warning' : 'ok';
+    var detail = i.status === 'ok' ? 'Normal' : i.drop > 0 ? ('&darr;' + i.drop + '%') : (i.alertCount + ' alert' + (i.alertCount > 1 ? 's' : ''));
+    return '<div class="isp-card ' + cls + '"><div class="isp-name">' + i.name + '</div><div class="isp-icon">' + icon + '</div><div class="isp-detail">' + detail + '</div></div>';
+  }).join('');
+}
+
+// ── Events from ROC API ──
+function fetchEvents() {
+  // Fetch infra events from multiple macro regions to get global coverage
+  var regions = ['north-america','emea','apac','south-america'];
+  return Promise.all(regions.map(function(r) {
+    return fetch(API + '/api/ovix/region-events?region=' + r + '&hours=48&domain=infrastructure&limit=50', {signal: AbortSignal.timeout(10000)})
+      .then(function(resp) { return resp.ok ? resp.json() : {events:[]}; })
+      .catch(function() { return {events:[]}; });
+  })).then(function(results) {
+    var all = [], seen = {};
+    results.forEach(function(d) {
+      (d.events || []).forEach(function(e) {
+        var key = e.id || e.title;
+        if (!seen[key]) { seen[key] = true; all.push(e); }
+      });
+    });
+    return all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
+  });
+}
+
+// ── Power (from events table, source=power_outage) ──
+function renderPowerFromEvents(events) {
+  var list = document.getElementById('pwr-list');
+  document.getElementById('pwr-count').textContent = events.length + ' states';
+
+  // Extract customer counts from raw_data or description
+  var totalCustomers = 0;
+  events.forEach(function(e) {
+    var match = (e.description || e.title || '').match(/([\d,]+)\s*customers/);
+    if (match) totalCustomers += parseInt(match[1].replace(/,/g, ''));
+  });
+  document.getElementById('pwr-affected').textContent = totalCustomers > 1000 ? Math.round(totalCustomers / 1000) + 'K' : totalCustomers.toLocaleString();
+
+  if (!events.length) { list.innerHTML = '<div class="empty-state">No significant power outages</div>'; return; }
+
+  list.innerHTML = events.map(function(e) {
+    var sev = parseFloat(e.severity) || 0;
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    var label = sev >= 7 ? 'CRITICAL' : sev >= 5 ? 'MAJOR' : 'MODERATE';
+    // Extract state name for PowerOutage.us link
+    var rawData = {};
+    try { rawData = typeof e.raw_data === 'string' ? JSON.parse(e.raw_data) : (e.raw_data || {}); } catch(x){}
+    var stateName = rawData.state || '';
+    var stateSlug = stateName.toLowerCase().replace(/\s+/g, '-');
+    var link = stateSlug ? 'https://poweroutage.us/area/state/' + stateSlug : '';
+    return '<div class="card"><div class="card-row">' +
+      '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
+      '<span class="card-title">' + esc(e.title || 'Power outage') + '</span>' +
+      '<span class="severity-badge" style="background:' + sevColor + '">' + label + '</span>' +
+      '</div>' +
+      '<div class="card-desc">' + esc(e.description || '') + '</div>' +
+      '<div class="card-date">POWEROUTAGE.US &middot; ' + (e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : 'Recent') +
+      (link ? ' &middot; <a href="' + link + '" target="_blank" rel="noopener" style="color:var(--accent-cyan);text-decoration:none;">View State &rarr;</a>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+// ── IODA alerts ──
+function renderIODA(events) {
+  var list = document.getElementById('ioda-list');
+  document.getElementById('ioda-count').textContent = events.length;
+  if (!events.length) { list.innerHTML = '<div class="empty-state">No active internet outages</div>'; return; }
+
+  list.innerHTML = events.map(function(e) {
+    var sev = parseFloat(e.severity) || 0;
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : sev >= 3 ? '#eab308' : '#22c55e';
+    var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    var url = e.source_url || '';
+    var desc = e.description || '';
+    return '<div class="card" data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')">' +
+      '<div class="card-row">' +
+      '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
+      '<span class="card-title">' + esc(e.title || 'Internet outage') + '</span>' +
+      '<span class="severity-badge" style="background:' + sevColor + '">' + sev.toFixed(1) + '</span>' +
+      '</div>' +
+      '<div class="card-date">' + (e.source || '').toUpperCase() + ' &middot; ' + time +
+        ' <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+        (url ? ' <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source ↗</span>' : '') +
+      '</div>' +
+      (desc ? '<div class="card-details">' + esc(desc) + '</div>' : '') +
+    '</div>';
+  }).join('');
+}
+
+// ── Cloudflare Radar ──
+function renderCF(events) {
+  var list = document.getElementById('cf-list');
+  document.getElementById('cf-count').textContent = events.length;
+  if (!events.length) { list.innerHTML = '<div class="empty-state">No active CF disruptions</div>'; return; }
+
+  list.innerHTML = events.map(function(e) {
+    var sev = parseFloat(e.severity) || 0;
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+    return '<div class="card"><div class="card-row">' +
+      '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
+      '<span class="card-title">' + esc(e.title || 'Internet disruption') + '</span>' +
+      '<span class="severity-badge" style="background:' + sevColor + '">' + sev.toFixed(1) + '</span>' +
+      '</div>' +
+      '<div class="card-desc">' + esc(e.description || '') + '</div>' +
+      '<div class="card-date">CLOUDFLARE RADAR &middot; ' + time + '</div></div>';
+  }).join('');
+}
+
+// ── IODA panel (right column — global internet outages) ──
+function renderIODA2(events) {
+  var list = document.getElementById('ioda-list2');
+  var count = document.getElementById('ioda-count2');
+  var iodaOnly = events.filter(function(e) { return e.source === 'ioda'; });
+  if (count) count.textContent = iodaOnly.length;
+  if (!iodaOnly.length) { list.innerHTML = '<div class="empty-state">No active global outages</div>'; return; }
+
+  list.innerHTML = iodaOnly.slice(0, 8).map(function(e) {
+    var sev = parseFloat(e.severity) || 0;
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    return '<div class="card"><div class="card-row">' +
+      '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
+      '<span class="card-title">' + esc(e.title || 'Internet outage') + '</span>' +
+      '<span class="severity-badge" style="background:' + sevColor + '">' + sev.toFixed(1) + '</span>' +
+      '</div></div>';
+  }).join('');
+}
+
+// ── IODA Signals (client-side) ──
+function fetchSignals() {
+  var now = Math.floor(Date.now()/1000), from = now - 86400;
+  return fetch(IODA_BASE + '/signals/raw/country/US?from=' + from + '&until=' + now, {signal: AbortSignal.timeout(15000)})
+    .then(function(r) { return r.ok ? r.json() : {}; })
+    .then(function(d) {
+      var out = {};
+      var series = ((d.data || [[]])[0]) || [];
+      series.forEach(function(s) {
+        var ds = s.datasource;
+        var vals = (s.values || []).filter(function(v) { return v !== null && typeof v === 'number'; });
+        if (!vals.length) return;
+        var latest = vals[vals.length - 1];
+        if (ds === 'bgp') out.bgp = latest;
+        else if (ds === 'ping-slash24') out.probe = latest;
+        else if (ds === 'merit-nt') out.dark = latest;
+        else if (ds === 'gtr-norm') out.gtr = latest;
+      });
+      return out;
+    })
+    .catch(function() { return {}; });
+}
+
+function renderSignalHealth(sig) {
+  var el = document.getElementById('signal-health');
+  if (!el) return;
+  var signals = [
+    {key: 'bgp', label: 'BGP Routing', base: BASELINES.bgp, color: 'var(--accent-blue)', fmt: function(v) { return (v/1e6).toFixed(1) + 'M prefixes'; }},
+    {key: 'probe', label: 'Active Probing', base: BASELINES.probe, color: 'var(--accent-green)', fmt: function(v) { return (v/1e3).toFixed(0) + 'K /24s'; }},
+    {key: 'dark', label: 'Darknet Telescope', base: BASELINES.dark, color: 'var(--accent-orange)', fmt: function(v) { return v.toFixed(0) + ' pkt/s'; }},
+    {key: 'gtr', label: 'Google Traffic', base: BASELINES.gtr, color: 'var(--accent-purple)', fmt: function(v) { return (v * 100).toFixed(0) + '% norm'; }}
+  ];
+  var html = '<div style="font-size:9px;font-weight:700;color:var(--accent-cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">US Signal Health</div>';
+  signals.forEach(function(s) {
+    var val = sig[s.key];
+    if (val === undefined) return;
+    var pct = Math.min(100, Math.max(0, (val / s.base) * 100));
+    var ratio = val / s.base;
+    var dotColor = ratio > 0.8 ? 'var(--accent-green)' : ratio > 0.5 ? 'var(--accent-yellow)' : 'var(--accent-red)';
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">' +
+      '<span style="font-size:9px;color:var(--text-secondary);width:50px;">' + s.label.split(' ')[0] + '</span>' +
+      '<div style="flex:1;height:6px;background:var(--bg-card);border-radius:3px;overflow:hidden;">' +
+        '<div style="height:100%;width:' + pct + '%;background:' + s.color + ';border-radius:3px;transition:width .5s;"></div>' +
+      '</div>' +
+      '<span style="font-size:8px;color:var(--text-dim);width:60px;text-align:right;">' + s.fmt(val) + '</span>' +
+      '<div style="width:6px;height:6px;border-radius:50%;background:' + dotColor + ';"></div></div>';
+  });
+  el.innerHTML = html;
+}
+
+// ── Gauge (matches cyber/weather/seismic pattern) ──
+function arcPath(cx, cy, r, startAngle, endAngle) {
+  var sx = cx + r * Math.cos(startAngle), sy = cy + r * Math.sin(startAngle);
+  var ex = cx + r * Math.cos(endAngle), ey = cy + r * Math.sin(endAngle);
+  var large = endAngle - startAngle > Math.PI ? 1 : 0;
+  return 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 ' + large + ' 1 ' + ex + ' ' + ey;
+}
+
+function drawGauge(score) {
+  var svg = document.getElementById('gauge-svg');
+  var cx = 110, cy = 110, r = 90;
+  var startAngle = Math.PI, endAngle = 2 * Math.PI;
+  var segments = [
+    {start: 0, end: 0.25, color: '#22c55e'},
+    {start: 0.25, end: 0.50, color: '#eab308'},
+    {start: 0.50, end: 0.75, color: '#f97316'},
+    {start: 0.75, end: 1.0, color: '#ef4444'}
+  ];
+  var font = getComputedStyle(document.body).fontFamily;
+  var html = '<path d="' + arcPath(cx, cy, r, startAngle, endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
+  segments.forEach(function(seg) {
+    html += '<path d="' + arcPath(cx, cy, r, startAngle + (endAngle - startAngle) * seg.start, startAngle + (endAngle - startAngle) * seg.end) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>';
+  });
+  var frac = Math.max(0, Math.min(score / 10, 1));
+  var scoreColor = score >= 7 ? '#ef4444' : score >= 4 ? '#eab308' : '#22c55e';
+  if (frac > 0.005) {
+    html += '<path d="' + arcPath(cx, cy, r, startAngle, startAngle + (endAngle - startAngle) * frac) + '" fill="none" stroke="' + scoreColor + '" stroke-width="18" stroke-linecap="round"/>';
+  }
+  var needleAngle = startAngle + (endAngle - startAngle) * frac;
+  var nx = cx + (r - 30) * Math.cos(needleAngle), ny = cy + (r - 30) * Math.sin(needleAngle);
+  html += '<line x1="' + cx + '" y1="' + cy + '" x2="' + nx + '" y2="' + ny + '" stroke="' + scoreColor + '" stroke-width="2.5" stroke-linecap="round"/>';
+  html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + scoreColor + '"/>';
+  html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + scoreColor + '" font-family="' + font + '" font-size="28" font-weight="700">' + score.toFixed(1) + '</text>';
+  html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + font + '" font-size="10" letter-spacing="1">INFRA SCORE</text>';
+  html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + font + '" font-size="10">0</text>';
+  html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + font + '" font-size="10">10</text>';
+  svg.innerHTML = html;
+}
+
+function renderFactors(factors) {
+  var el = document.getElementById('factor-bars');
+  if (!el) return;
+  var html = '';
+  factors.forEach(function(f) {
+    var pct = Math.min(100, f.value * 10);
+    var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-orange)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '<span style="font-size:9px;color:var(--text-secondary);width:60px;">' + f.label + '</span>' +
+      '<div style="flex:1;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;">' +
+        '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:4px;transition:width .5s;"></div>' +
+      '</div>' +
+      '<span style="font-size:9px;color:var(--text-dim);width:24px;text-align:right;">' + f.value.toFixed(1) + '</span>' +
+      '<span style="font-size:8px;color:var(--text-dim);width:24px;">' + f.weight + '</span></div>';
+  });
+  el.innerHTML = html;
+}
+
+// ── Composite Score ──
+function computeScore(isps, iodaEvts, power, cfEvts, spaceEvts, signals) {
+  var ispAffected = isps.filter(function(i) { return i.status !== 'ok'; }).length;
+  var ispCritical = isps.filter(function(i) { return i.status === 'critical'; }).length;
+  var ispScore = Math.min(10, ispCritical * 3 + (ispAffected - ispCritical) * 1.5);
+
+  var iodaScore = iodaEvts.length ? Math.min(10, Math.max.apply(null, iodaEvts.map(function(e) { return parseFloat(e.severity) || 0; }))) : 0;
+
+  var pwrScore = power.length ? Math.min(10, Math.max.apply(null, power.map(function(e) { return parseFloat(e.severity) || 0; }))) : 0;
+
+  var cfScore = cfEvts.length ? Math.min(10, Math.max.apply(null, cfEvts.map(function(e) { return parseFloat(e.severity) || 0; }))) : 0;
+
+  var spaceScore = spaceEvts.length ? Math.min(10, Math.max.apply(null, spaceEvts.map(function(e) { return parseFloat(e.severity) || 0; }))) : 0;
+
+  // Signal deviation penalty
+  if (signals.bgp && signals.bgp / BASELINES.bgp < 0.5) iodaScore = Math.max(iodaScore, 6);
+  if (signals.probe && signals.probe / BASELINES.probe < 0.5) iodaScore = Math.max(iodaScore, 5);
+
+  var composite = Math.min(10, Math.round((ispScore * 0.30 + iodaScore * 0.25 + pwrScore * 0.25 + cfScore * 0.20) * 10) / 10);
+
+  drawGauge(composite);
+  renderFactors([
+    {label: 'ISP', value: ispScore, weight: '30%'},
+    {label: 'IODA', value: iodaScore, weight: '25%'},
+    {label: 'Power', value: pwrScore, weight: '25%'},
+    {label: 'CF Radar', value: cfScore, weight: '20%'}
+  ]);
+
+  var level, levelBg, levelColor;
+  if (composite >= 7) { level = 'CRITICAL'; levelBg = 'rgba(239,68,68,0.15)'; levelColor = 'var(--accent-red)'; }
+  else if (composite >= 4) { level = 'ELEVATED'; levelBg = 'rgba(234,179,8,0.15)'; levelColor = 'var(--accent-yellow)'; }
+  else if (composite >= 2) { level = 'GUARDED'; levelBg = 'rgba(6,182,212,0.15)'; levelColor = 'var(--accent-cyan)'; }
+  else { level = 'LOW'; levelBg = 'rgba(34,197,94,0.15)'; levelColor = 'var(--accent-green)'; }
+
+  var badge = document.getElementById('infra-level-badge');
+  badge.textContent = level;
+  badge.style.background = levelBg;
+  badge.style.color = levelColor;
+  badge.style.border = '1px solid ' + levelColor;
+
+  document.getElementById('gauge-label').textContent = level;
+  document.getElementById('gauge-label').style.color = levelColor;
+  document.getElementById('total-events').textContent = iodaEvts.length + cfEvts.length + power.length;
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ── Transport / Rotation (standard ROC pattern) ──
+var SLIDES = ['/dashboards/weather.html','/dashboards/seismic.html','/dashboards/disaster.html','/dashboards/cyber.html','/dashboards/financial.html','/dashboards/infrastructure.html','/dashboards/health.html','/dashboards/environmental.html','/dashboards/scores.html','/dashboards/feed-health.html'];
+var slideIdx = SLIDES.indexOf(location.pathname);
+var playTimer = null;
+var SPEED = parseInt(localStorage.getItem('roc-speed') || '30') * 1000;
+
+function rocNav(action) {
+  if (action === 'prev') { slideIdx = (slideIdx - 1 + SLIDES.length) % SLIDES.length; location.href = SLIDES[slideIdx]; }
+  else if (action === 'next') { slideIdx = (slideIdx + 1) % SLIDES.length; location.href = SLIDES[slideIdx]; }
+  else if (action === 'toggle') {
+    var btn = document.getElementById('bnr-play');
+    if (playTimer) { clearInterval(playTimer); playTimer = null; if (btn) btn.innerHTML = '&#9654;'; }
+    else { playTimer = setInterval(function() { rocNav('next'); }, SPEED); if (btn) btn.innerHTML = '&#9208;'; }
+  }
+}
+
+// Hide transport if embedded in iframe
+if (window.parent !== window) {
+  var t = document.querySelector('.transport');
+  if (t) t.style.display = 'none';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Feed Health — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-yellow: #eab308; --accent-green: #22c55e;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-mono); font-size:12px; height:100vh; overflow:hidden; }
+
+  .page { display:flex; flex-direction:column; height:100vh; }
+
+  .banner {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:8px 16px; background:var(--bg-panel); border-bottom:1px solid var(--border); gap:12px;
+  }
+  .banner-title { font-size:12px; font-weight:700; color:var(--accent-cyan); letter-spacing:1.5px; text-transform:uppercase; }
+  .banner-stats { display:flex; gap:16px; }
+  .stat-box { text-align:center; }
+  .stat-value { font-size:14px; font-weight:700; }
+  .stat-label { font-size:8px; color:var(--text-dim); letter-spacing:.5px; text-transform:uppercase; }
+  .level-badge { padding:3px 10px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; }
+  .updated { font-size:9px; color:var(--text-dim); }
+
+  .grid-area { flex:1; overflow-y:auto; padding:12px; }
+  .grid-area::-webkit-scrollbar { width:6px; }
+  .grid-area::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  .feed-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px; }
+
+  .feed-card {
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:8px;
+    padding:12px 14px; transition:border-color .2s;
+  }
+  .feed-card:hover { border-color:var(--accent-cyan); }
+  .feed-card.live { border-left:3px solid var(--accent-green); }
+  .feed-card.ok { border-left:3px solid var(--accent-cyan); }
+  .feed-card.delayed { border-left:3px solid var(--accent-yellow); }
+  .feed-card.stale { border-left:3px solid var(--accent-orange); }
+  .feed-card.dead { border-left:3px solid var(--accent-red); }
+
+  .feed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .feed-name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
+  .feed-status { font-size:9px; font-weight:700; padding:2px 8px; border-radius:3px; letter-spacing:.5px; }
+  .feed-status.live { background:rgba(34,197,94,.15); color:var(--accent-green); }
+  .feed-status.ok { background:rgba(6,182,212,.12); color:var(--accent-cyan); }
+  .feed-status.delayed { background:rgba(234,179,8,.12); color:var(--accent-yellow); }
+  .feed-status.stale { background:rgba(249,115,22,.12); color:var(--accent-orange); }
+  .feed-status.dead { background:rgba(239,68,68,.12); color:var(--accent-red); }
+
+  .feed-domain { font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
+
+  .feed-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .feed-stat { text-align:center; }
+  .feed-stat b { display:block; font-size:13px; }
+  .feed-stat small { font-size:8px; color:var(--text-dim); text-transform:uppercase; }
+
+  .feed-bar { margin-top:8px; height:4px; background:var(--bg-card); border-radius:2px; overflow:hidden; }
+  .feed-bar-fill { height:100%; border-radius:2px; transition:width .5s; }
+
+  .feed-meta { margin-top:6px; font-size:9px; color:var(--text-dim); display:flex; justify-content:space-between; }
+
+  .section-title { font-size:10px; font-weight:700; color:var(--text-dim); letter-spacing:1.5px; text-transform:uppercase; margin:16px 0 8px; }
+  .section-title:first-child { margin-top:0; }
+
+  .empty { color:var(--text-dim); text-align:center; padding:30px; font-size:11px; }
+
+  .feed-details { display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:10px; color:var(--text-secondary); line-height:1.6; }
+  .feed-card.expanded .feed-details { display:block; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="banner">
+    <span class="banner-title">Feed Health Monitor</span>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="s-total">--</div><div class="stat-label">Feeds</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-healthy" style="color:var(--accent-green)">--</div><div class="stat-label">Healthy</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-stale" style="color:var(--accent-orange)">--</div><div class="stat-label">Stale/Dead</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-events">--</div><div class="stat-label">Events/24h</div></div>
+    </div>
+    <span class="level-badge" id="health-badge" style="background:rgba(34,197,94,.15);color:var(--accent-green);border:1px solid rgba(34,197,94,.3)">ALL HEALTHY</span>
+    <span class="updated" id="updated">--</span>
+  </div>
+
+  <div class="grid-area">
+    <div id="feed-container"><div class="empty">Loading feed health data...</div></div>
+  </div>
+</div>
+
+<script>
+var API = 'https://ovix-api.tedlango.workers.dev';
+
+document.addEventListener('DOMContentLoaded', function() { fetchHealth(); setInterval(fetchHealth, 60000); });
+
+var feedRegistry = {};
+
+function fetchHealth() {
+  Promise.all([
+    fetch(API + '/api/ovix/feed-health', {signal: AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
+    fetch(API + '/api/ovix/feeds', {signal: AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
+  ]).then(function(results) {
+    var health = results[0], registry = results[1];
+    if (registry && registry.feeds) {
+      registry.feeds.forEach(function(f) { feedRegistry[f.id] = f; });
+    }
+    if (health) render(health);
+  });
+}
+
+function render(data) {
+  var feeds = data.feeds || [];
+  document.getElementById('s-total').textContent = data.totalFeeds || 0;
+  document.getElementById('s-healthy').textContent = data.healthy || 0;
+  document.getElementById('s-stale').textContent = data.stale || 0;
+  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+  var total24h = feeds.reduce(function(s, f) { return s + parseInt(f.events_24h || 0); }, 0);
+  document.getElementById('s-events').textContent = total24h.toLocaleString();
+
+  // Badge
+  var badge = document.getElementById('health-badge');
+  if (data.stale > 0) {
+    badge.textContent = data.stale + ' ISSUE' + (data.stale > 1 ? 'S' : '');
+    badge.style.background = 'rgba(249,115,22,.15)'; badge.style.color = 'var(--accent-orange)'; badge.style.borderColor = 'rgba(249,115,22,.3)';
+  } else {
+    badge.textContent = 'ALL HEALTHY';
+    badge.style.background = 'rgba(34,197,94,.15)'; badge.style.color = 'var(--accent-green)'; badge.style.borderColor = 'rgba(34,197,94,.3)';
+  }
+
+  // Group by status
+  var groups = {LIVE:[], OK:[], DELAYED:[], STALE:[], DEAD:[]};
+  feeds.forEach(function(f) { var s = (f.status || 'DEAD').toUpperCase(); if (groups[s]) groups[s].push(f); else groups.DEAD.push(f); });
+
+  var html = '';
+
+  // Show problematic feeds first
+  if (groups.STALE.length + groups.DEAD.length > 0) {
+    html += '<div class="section-title">Needs Attention</div><div class="feed-grid">';
+    groups.DEAD.concat(groups.STALE).forEach(function(f) { html += feedCard(f); });
+    html += '</div>';
+  }
+  if (groups.DELAYED.length > 0) {
+    html += '<div class="section-title">Delayed (30min-2h)</div><div class="feed-grid">';
+    groups.DELAYED.forEach(function(f) { html += feedCard(f); });
+    html += '</div>';
+  }
+
+  // Healthy feeds
+  var healthy = groups.LIVE.concat(groups.OK);
+  if (healthy.length > 0) {
+    html += '<div class="section-title">Healthy (' + healthy.length + ' feeds)</div><div class="feed-grid">';
+    healthy.forEach(function(f) { html += feedCard(f); });
+    html += '</div>';
+  }
+
+  document.getElementById('feed-container').innerHTML = html || '<div class="empty">No feed data available</div>';
+}
+
+function feedCard(f) {
+  var status = (f.status || 'DEAD').toLowerCase();
+  var mins = Math.round(parseFloat(f.minutes_since_last) || 0);
+  var ago = mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins/60) + 'h ago' : Math.round(mins/1440) + 'd ago';
+  var e1h = parseInt(f.events_1h) || 0;
+  var e6h = parseInt(f.events_6h) || 0;
+  var e24h = parseInt(f.events_24h) || 0;
+  var total = parseInt(f.total_events) || 0;
+
+  var activityPct = e24h > 0 ? Math.min(100, Math.round((e1h / e24h) * 100)) : 0;
+  var barColor = status === 'live' ? 'var(--accent-green)' : status === 'ok' ? 'var(--accent-cyan)' : status === 'delayed' ? 'var(--accent-yellow)' : 'var(--accent-orange)';
+
+  // Enrich with registry metadata
+  var reg = feedRegistry[f.source] || {};
+  var srcUrl = reg.source_url || '';
+  var docsUrl = reg.docs || '';
+  var detailParts = [];
+  if (reg.name) detailParts.push('<b>' + esc(reg.name) + '</b>');
+  if (reg.provider) detailParts.push('Provider: ' + esc(reg.provider));
+  if (reg.api_type) detailParts.push('API: ' + esc(reg.api_type));
+  if (reg.coverage) detailParts.push('Coverage: ' + esc(reg.coverage));
+  if (reg.refresh) detailParts.push('Refresh: ' + esc(reg.refresh));
+  if (reg.scoring) detailParts.push('Scoring: ' + esc(reg.scoring));
+  if (srcUrl) detailParts.push('Endpoint: <span style="color:var(--accent-cyan);word-break:break-all">' + esc(srcUrl) + '</span>');
+  var detailHtml = detailParts.join('<br>');
+
+  return '<div class="feed-card ' + status + '">' +
+    '<div class="feed-header">' +
+      '<span class="feed-name">' + esc(reg.name || f.source) + '</span>' +
+      '<span class="feed-status ' + status + '">' + f.status + '</span>' +
+    '</div>' +
+    '<span class="feed-domain">' + esc(f.domain || '?') + ' &middot; avg sev ' + (f.avg_severity || '?') + ' &middot; max ' + (f.max_severity || '?') + '</span>' +
+    '<div class="feed-stats">' +
+      '<div class="feed-stat"><b>' + e1h + '</b><small>1h</small></div>' +
+      '<div class="feed-stat"><b>' + e6h + '</b><small>6h</small></div>' +
+      '<div class="feed-stat"><b>' + e24h + '</b><small>24h</small></div>' +
+      '<div class="feed-stat"><b>' + total.toLocaleString() + '</b><small>Total</small></div>' +
+    '</div>' +
+    '<div class="feed-bar"><div class="feed-bar-fill" style="width:' + activityPct + '%;background:' + barColor + '"></div></div>' +
+    '<div class="feed-meta"><span>Last: ' + ago + '</span>' +
+      '<span>' +
+        '<span style="cursor:pointer;color:var(--text-dim);font-size:9px" onclick="this.closest(\'.feed-card\').classList.toggle(\'expanded\')">Details</span>' +
+        (docsUrl ? ' &middot; <a href="' + docsUrl + '" target="_blank" rel="noopener" style="color:var(--accent-cyan);font-size:9px;text-decoration:none">Docs ↗</a>' : '') +
+      '</span>' +
+    '</div>' +
+    '<div class="feed-details">' + detailHtml + '</div>' +
+  '</div>';
+}
+
+function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>

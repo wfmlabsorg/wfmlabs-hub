@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import { UserMenu } from './UserMenu'
 
 const navLinks = [
+  { href: '/roc', label: 'ROC', accent: true },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/wiki', label: 'Wiki' },
@@ -83,13 +84,14 @@ export function GlobalNav() {
               style={{
                 padding: '0.375rem 0.75rem',
                 fontSize: '0.875rem',
-                color: 'var(--fg-muted)',
+                color: link.accent ? 'var(--accent)' : 'var(--fg-muted)',
+                fontWeight: link.accent ? 700 : undefined,
                 borderRadius: 'var(--radius)',
                 textDecoration: 'none',
                 transition: 'color 0.15s, background 0.15s',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--fg)'
+                e.currentTarget.style.color = link.accent ? 'var(--accent)' : 'var(--fg)'
                 e.currentTarget.style.background = 'var(--bg-secondary)'
               }}
               onMouseLeave={(e) => {

@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
+  <title>ROC — Resource Optimization Center</title>
+  <meta name="roc-version" content="1.3.0">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◆</text></svg>">
+  <script src="/roc/openmct/openmct.js"></script>
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #060610; }
+
+    /* Auth Gate */
+    #roc-gate {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: #060610; z-index: 99999;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+    #roc-gate.hidden { display: none; }
+    #roc-gate input, #roc-gate select {
+      width: 100%; padding: 8px 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px; color: #ccc; font-family: inherit; font-size: 11px; outline: none;
+    }
+    #roc-gate input:focus, #roc-gate select:focus { border-color: rgba(24,188,156,0.4); }
+    .gate-box {
+      width: 340px; max-width: 90vw;
+      border: 1px solid rgba(24,188,156,0.2); background: rgba(10,10,26,0.95);
+      border-radius: 6px; padding: 28px;
+    }
+    .gate-btn {
+      width: 100%; padding: 8px; background: #18BC9C; border: none;
+      color: #060610; font-family: inherit; font-size: 11px; font-weight: bold;
+      border-radius: 4px; cursor: pointer;
+    }
+    .gate-btn:hover { background: #1dd1a1; }
+    .gate-oauth-btn {
+      width: 100%; padding: 8px; margin-bottom: 6px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: #ccc; font-family: inherit; font-size: 10px; border-radius: 4px; cursor: pointer;
+    }
+    .gate-oauth-btn:hover { background: rgba(255,255,255,0.1); }
+
+    /* User Menu — top right of Open MCT */
+    #user-menu-btn {
+      position: fixed; top: 6px; right: 10px; z-index: 9500;
+      display: none !important; /* Hidden — profile managed via ROC Community plugin */
+      align-items: center; gap: 6px;
+      background: rgba(6,6,16,0.8); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px; padding: 3px 10px 3px 4px; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #888;
+    }
+    #user-menu-btn:hover { border-color: rgba(24,188,156,0.3); color: #ccc; }
+    #user-menu-btn .um-avatar {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #18BC9C; display: flex; align-items: center; justify-content: center;
+      color: #060610; font-size: 11px; font-weight: bold;
+    }
+    #user-menu-btn .um-handle { letter-spacing: 0.03em; }
+
+    #user-dropdown {
+      position: fixed; top: 38px; right: 10px; z-index: 9500;
+      background: rgba(6,6,16,0.98); border: 1px solid rgba(24,188,156,0.2);
+      border-radius: 4px; width: 240px; display: none !important; /* Hidden — managed via plugin */
+      font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ccc;
+    }
+    #user-dropdown.open { display: block; }
+    .ud-header { padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .ud-header .ud-handle { color: #18BC9C; font-weight: bold; font-size: 12px; }
+    .ud-header .ud-meta { color: #555; font-size: 9px; margin-top: 2px; }
+    .ud-item {
+      padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .ud-item:hover { background: rgba(24,188,156,0.08); }
+    .ud-item.danger:hover { background: rgba(231,76,60,0.1); }
+    .ud-item .ud-icon { color: #555; font-size: 12px; width: 16px; text-align: center; }
+
+    /* Profile Completion + Edit Modal */
+    #profile-modal {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(6,6,16,0.9); z-index: 99998;
+      display: none; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    #profile-modal.open { display: flex; }
+    #profile-modal input, #profile-modal select {
+      width: 100%; padding: 8px 12px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px; color: #ccc; font-family: inherit; font-size: 11px; outline: none;
+    }
+    #profile-modal input:focus, #profile-modal select:focus { border-color: rgba(24,188,156,0.4); }
+
+    /* ROC Presence Bar */
+    #roc-presence {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      height: 32px;
+      background: rgba(6, 6, 16, 0.95);
+      border-top: 1px solid rgba(24, 188, 156, 0.15);
+      z-index: 9000;
+      display: none !important; /* Hidden — managed via Operators Online plugin */
+      padding: 0 16px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px; color: #666;
+      gap: 16px;
+    }
+    #roc-presence .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #18BC9C; display: inline-block;
+      animation: pulse-dot 2s ease infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    #roc-presence .operator-count { color: #18BC9C; font-weight: bold; }
+    #roc-presence .operator-dots {
+      display: flex; gap: 4px; align-items: center;
+    }
+    #roc-presence .op-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #18BC9C; opacity: 0.5;
+      transition: opacity 0.5s ease;
+    }
+    #roc-presence .signal-preview {
+      flex: 1; text-align: right; color: #444;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      font-size: 10px;
+    }
+
+    /* ROC Signal Feed Panel */
+    #roc-signal-feed {
+      position: fixed; bottom: 32px; right: 0;
+      width: 340px; max-height: 400px;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(24, 188, 156, 0.2);
+      border-bottom: none; border-radius: 4px 4px 0 0;
+      z-index: 9000;
+      display: none !important; /* Hidden — managed via Signal Feed plugin */
+      transform: translateY(100%);
+      transition: transform 0.3s ease;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+    }
+    #roc-signal-feed.open { transform: translateY(0); }
+    #roc-signal-feed .feed-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 12px; border-bottom: 1px solid rgba(24,188,156,0.1);
+      cursor: pointer; flex-shrink: 0;
+    }
+    #roc-signal-feed .feed-header span { color: #18BC9C; font-size: 11px; font-weight: bold; letter-spacing: 0.1em; }
+    #roc-signal-feed .feed-header .toggle { color: #666; font-size: 10px; }
+    #roc-signal-feed .feed-body {
+      flex: 1; overflow-y: auto; padding: 8px; max-height: 350px;
+    }
+    #roc-signal-feed .signal-item {
+      padding: 6px 8px; margin-bottom: 4px;
+      border-left: 2px solid rgba(24,188,156,0.3);
+      font-size: 10px; color: #888;
+    }
+    #roc-signal-feed .signal-item.alert { border-left-color: #e74c3c; }
+    #roc-signal-feed .signal-item.member { border-left-color: #3498db; }
+    #roc-signal-feed .signal-item.ai { border-left-color: #18BC9C; }
+    #roc-signal-feed .signal-time { color: #444; font-size: 9px; }
+    #roc-signal-feed .signal-input {
+      display: flex; padding: 6px 8px; border-top: 1px solid rgba(24,188,156,0.1);
+      flex-shrink: 0;
+    }
+    #roc-signal-feed .signal-input input {
+      flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: #ccc; padding: 4px 8px; border-radius: 3px; font-family: inherit; font-size: 10px;
+      outline: none;
+    }
+    #roc-signal-feed .signal-input input:focus { border-color: rgba(24,188,156,0.4); }
+    #roc-signal-feed .signal-input button {
+      background: #18BC9C; border: none; color: #000; padding: 4px 10px;
+      margin-left: 4px; border-radius: 3px; font-family: inherit; font-size: 10px;
+      cursor: pointer; font-weight: bold;
+    }
+
+    /* ROC Detail Panel — slides in from right on region/category click */
+    #roc-detail-panel {
+      position: fixed; top: 0; right: 0; bottom: 0;
+      width: 420px; max-width: 90vw;
+      background: rgba(6, 6, 16, 0.97);
+      border-left: 1px solid rgba(24, 188, 156, 0.25);
+      z-index: 10000;
+      display: none !important; /* Hidden — globe handles its own drill-down */
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      color: #ccc;
+      overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    #roc-detail-panel.open { transform: translateX(0); }
+    #roc-detail-panel .panel-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 20px; border-bottom: 1px solid rgba(24, 188, 156, 0.15);
+      flex-shrink: 0;
+    }
+    #roc-detail-panel .panel-header h2 {
+      margin: 0; font-size: 15px; color: #18BC9C; letter-spacing: 0.1em; font-weight: bold;
+    }
+    #roc-detail-panel .panel-close {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
+      font-size: 14px; cursor: pointer; padding: 4px 10px; border-radius: 3px;
+      font-family: inherit;
+    }
+    #roc-detail-panel .panel-close:hover { border-color: #18BC9C; color: #18BC9C; }
+    #roc-detail-panel .panel-body { padding: 20px; flex: 1; }
+    #roc-detail-panel .score-big {
+      font-size: 48px; font-weight: bold; text-align: center; margin: 20px 0;
+    }
+    #roc-detail-panel .score-label {
+      text-align: center; font-size: 11px; color: #666; letter-spacing: 0.1em; margin-bottom: 24px;
+    }
+    #roc-detail-panel .cat-row {
+      display: flex; justify-content: space-between; padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    #roc-detail-panel .cat-row .cat-name { color: #888; }
+    #roc-detail-panel .cat-row .cat-val { font-weight: bold; }
+    #roc-detail-panel .alert-section { margin-top: 24px; }
+    #roc-detail-panel .alert-section h3 {
+      font-size: 11px; color: #666; letter-spacing: 0.1em; margin-bottom: 12px;
+    }
+    #roc-detail-panel .alert-item {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 3px; padding: 10px 12px; margin-bottom: 8px; font-size: 11px;
+    }
+    #roc-detail-panel .alert-item .alert-event { color: #f39c12; font-weight: bold; }
+    #roc-detail-panel .alert-item .alert-sev { color: #666; font-size: 10px; }
+
+    /* Fix: Disable iframes during edit mode to prevent Chrome WebGL drag-drop crashes */
+    .is-editing .l-layout iframe { pointer-events: none !important; visibility: hidden !important; }
+    .is-editing iframe { pointer-events: none !important; }
+    .l-shell.is-editing iframe { pointer-events: none !important; visibility: hidden !important; }
+
+    /* ROC Theme Overrides */
+    .l-shell { background-color: #060610 !important; }
+    .l-shell__main-container { background-color: #0a0a1a !important; }
+    .l-shell__pane-tree { background-color: #08081a !important; border-right: 1px solid rgba(24,188,156,0.15) !important; }
+    .c-frame { border: 1px solid rgba(24,188,156,0.1) !important; }
+    .c-frame:hover { border-color: rgba(24,188,156,0.3) !important; }
+    .l-shell__head { background-color: #0a0a1a !important; border-bottom: 1px solid rgba(24,188,156,0.2) !important; }
+    .c-button--major { background-color: #18BC9C !important; }
+    .c-clock { font-family: 'JetBrains Mono', 'SF Mono', monospace !important; color: #18BC9C !important; }
+  </style>
+  <script>
+    // =============================================
+    // Hub Session Bridge
+    // When running under community.wfmlabs.com, fetch Hub session
+    // and use it for ROC API authentication.
+    // =============================================
+    (function hubAuthBridge() {
+      // If we already have a token, skip
+      if (localStorage.getItem('roc-token')) return;
+
+      // Check if we're on the Hub domain (same-origin session cookie available)
+      fetch('/api/auth/session', { credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (session) {
+          if (session && session.user && session.user.payloadMemberId) {
+            // Fetch Payload JWT for cross-platform use
+            fetch('/api/members/' + session.user.payloadMemberId + '?depth=0', { credentials: 'same-origin' })
+              .then(function () {
+                // The NextAuth session cookie is enough — store a marker
+                // so ROC knows we're authenticated via Hub
+                localStorage.setItem('roc-hub-session', JSON.stringify({
+                  memberId: session.user.payloadMemberId,
+                  role: session.user.role || 'member',
+                  name: session.user.name || '',
+                  email: session.user.email || '',
+                }));
+              })
+              .catch(function () {});
+          }
+        })
+        .catch(function () {});
+    })();
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var THIRTY_SECONDS = 30 * 1000;
+      var FIVE_MINUTES = 5 * 60 * 1000;
+      var FIFTEEN_MINUTES = 15 * 60 * 1000;
+      var THIRTY_MINUTES = 30 * 60 * 1000;
+      var ONE_HOUR = 60 * 60 * 1000;
+
+      openmct.setAssetPath('/roc/openmct');
+
+      // =============================================
+      // Persistence: D1 (authenticated) or LocalStorage (fallback)
+      // =============================================
+      var ROC_API = 'https://ovix-api.tedlango.workers.dev';
+      var rocToken = localStorage.getItem('roc-token');
+
+      if (rocToken) {
+        // D1-backed persistence — dashboards persist server-side per user
+        openmct.install(function () {
+          return function (openmct) {
+            var token = rocToken;
+            var cache = {}; // in-memory cache to reduce API calls
+
+            function headers() {
+              var h = { 'Content-Type': 'application/json' };
+              var t = localStorage.getItem('roc-token') || token;
+              if (t) h['Authorization'] = 'Bearer ' + t;
+              return h;
+            }
+
+            var provider = {
+              get: function (identifier) {
+                var key = identifier.key;
+                if (cache[key] !== undefined) {
+                  return Promise.resolve(cache[key] ? { identifier: identifier, ...cache[key] } : undefined);
+                }
+                return fetch(ROC_API + '/api/objects/' + encodeURIComponent(key), { headers: headers() })
+                  .then(function (r) { return r.ok ? r.json() : { object: null }; })
+                  .then(function (d) {
+                    if (d.object) {
+                      cache[key] = d.object;
+                      return { identifier: identifier, ...d.object };
+                    }
+                    cache[key] = null;
+                    return undefined;
+                  })
+                  .catch(function () { return undefined; });
+              },
+              create: function (domainObject) {
+                var key = domainObject.identifier.key;
+                var model = Object.assign({}, domainObject);
+                delete model.identifier;
+                cache[key] = model;
+                return fetch(ROC_API + '/api/objects/' + encodeURIComponent(key), {
+                  method: 'PUT', headers: headers(), body: JSON.stringify(model)
+                }).then(function (r) { return r.ok; }).catch(function () { return false; });
+              },
+              update: function (domainObject) {
+                return this.create(domainObject);
+              },
+              isReadOnly: function () { return false; }
+            };
+
+            openmct.objects.addProvider('', provider);
+
+            // Migrate existing localStorage objects to D1 on first authenticated load
+            try {
+              var lsData = localStorage.getItem('mct');
+              if (lsData) {
+                var objects = JSON.parse(lsData);
+                var keys = Object.keys(objects);
+                if (keys.length > 0) {
+                  console.log('◆ Migrating', keys.length, 'objects from localStorage to D1');
+                  keys.forEach(function (k) {
+                    fetch(ROC_API + '/api/objects/' + encodeURIComponent(k), {
+                      method: 'PUT', headers: headers(), body: JSON.stringify(objects[k])
+                    }).catch(function () {});
+                  });
+                  // Clear localStorage after migration
+                  localStorage.removeItem('mct');
+                }
+              }
+            } catch (e) { console.error('Migration error:', e); }
+          };
+        }());
+      } else {
+        // Fallback: localStorage for unauthenticated users
+        openmct.install(openmct.plugins.LocalStorage());
+      }
+      openmct.install(openmct.plugins.UTCTimeSystem());
+      openmct.install(openmct.plugins.Conductor({
+        menuOptions: [
+          {
+            name: 'Realtime',
+            timeSystem: 'utc',
+            clock: 'local',
+            clockOffsets: { start: -THIRTY_MINUTES, end: THIRTY_SECONDS },
+            presets: [
+              { label: '1 Hour', bounds: { start: -ONE_HOUR, end: THIRTY_SECONDS } },
+              { label: '30 Min', bounds: { start: -THIRTY_MINUTES, end: THIRTY_SECONDS } },
+              { label: '15 Min', bounds: { start: -FIFTEEN_MINUTES, end: THIRTY_SECONDS } },
+              { label: '5 Min', bounds: { start: -FIVE_MINUTES, end: THIRTY_SECONDS } }
+            ]
+          },
+          {
+            name: 'Fixed',
+            timeSystem: 'utc',
+            bounds: { start: Date.now() - ONE_HOUR, end: Date.now() }
+          }
+        ]
+      }));
+
+      // Core Open MCT plugins
+      openmct.install(openmct.plugins.Espresso());
+      openmct.install(openmct.plugins.MyItems());
+      openmct.install(openmct.plugins.DisplayLayout({ showAsView: [] }));
+      openmct.install(openmct.plugins.Clock({ enableClockIndicator: true }));
+      openmct.install(openmct.plugins.Timer());
+      openmct.install(openmct.plugins.Hyperlink());
+      openmct.install(openmct.plugins.LADTable());
+      openmct.install(openmct.plugins.Notebook());
+      openmct.install(openmct.plugins.Gauge());
+      openmct.install(openmct.plugins.FlexibleLayout());
+      openmct.install(openmct.plugins.Tabs());
+      openmct.install(openmct.plugins.Condition());
+      openmct.install(openmct.plugins.ConditionWidget());
+      openmct.install(openmct.plugins.Plot());
+      openmct.install(openmct.plugins.TelemetryTable());
+      openmct.install(openmct.plugins.FolderView());
+      openmct.install(openmct.plugins.InspectorViews());
+
+      // =============================================
+      // ROC: OVIX Telemetry — Real data from Worker
+      // =============================================
+      //
+      // Tree structure:
+      //   ◆ OVIX — Operational Volatility Index  (root folder)
+      //     ├── Weather  (category folder)
+      //     │   ├── Global Composite  (telemetry)
+      //     │   ├── US Northeast      (telemetry)
+      //     │   └── ... all 38 sub-regions
+      //     └── [Future: Cyber, Financial, etc.]
+      //
+      // Object key scheme (namespace = 'ovi'):
+      //   root               → root folder
+      //   cat:weather        → Weather category folder
+      //   weather:global     → Global Composite telemetry
+      //   weather:<regionId> → Per-region telemetry (38 sub-regions)
+
+      var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
+
+      // 38 sub-regions mirroring regions.ts SUB_REGIONS, ordered by macro-region
+      var OVIX_REGIONS = [
+        // North America
+        { id: 'us-northeast',    name: 'US Northeast' },
+        { id: 'us-southeast',    name: 'US Southeast' },
+        { id: 'us-midwest',      name: 'US Midwest' },
+        { id: 'us-south-central',name: 'US South Central' },
+        { id: 'us-mountain',     name: 'US Mountain West' },
+        { id: 'us-west-coast',   name: 'US West Coast' },
+        { id: 'canada-east',     name: 'Canada East' },
+        { id: 'canada-west',     name: 'Canada West' },
+        { id: 'mexico',          name: 'Mexico' },
+        { id: 'central-america', name: 'Central America' },
+        { id: 'caribbean',       name: 'Caribbean' },
+        // South America
+        { id: 'colombia',        name: 'Colombia' },
+        { id: 'brazil',          name: 'Brazil' },
+        { id: 'argentina',       name: 'Argentina' },
+        { id: 'peru',            name: 'Peru' },
+        { id: 'chile',           name: 'Chile' },
+        { id: 'uruguay',         name: 'Uruguay' },
+        // EMEA
+        { id: 'uk-ireland',          name: 'UK / Ireland' },
+        { id: 'france',              name: 'France' },
+        { id: 'germany',             name: 'Germany' },
+        { id: 'netherlands-belgium', name: 'Netherlands / Belgium' },
+        { id: 'iberia',              name: 'Spain / Portugal' },
+        { id: 'italy',               name: 'Italy' },
+        { id: 'poland',              name: 'Poland' },
+        { id: 'romania-bulgaria',    name: 'Romania / Bulgaria' },
+        { id: 'turkey',              name: 'Turkey' },
+        { id: 'south-africa',        name: 'South Africa' },
+        { id: 'egypt',               name: 'Egypt' },
+        { id: 'morocco',             name: 'Morocco' },
+        // APAC
+        { id: 'philippines',         name: 'Philippines' },
+        { id: 'india',               name: 'India' },
+        { id: 'japan',               name: 'Japan' },
+        { id: 'south-korea',         name: 'South Korea' },
+        { id: 'malaysia-singapore',  name: 'Malaysia / Singapore' },
+        { id: 'thailand',            name: 'Thailand' },
+        { id: 'china',               name: 'China' },
+        // Australia / NZ
+        { id: 'australia',           name: 'Australia' },
+        { id: 'new-zealand',         name: 'New Zealand' }
+      ];
+
+      // Category definitions — only Weather is live now; others reserved for future feeds
+      var OVIX_CATEGORIES = [
+        { key: 'weather', name: 'Weather', icon: 'icon-telemetry' },
+        { key: 'seismic', name: 'Seismic', icon: 'icon-telemetry' },
+        { key: 'disaster', name: 'Disasters', icon: 'icon-telemetry' }
+      ];
+
+      // Fetch historical scores for a region+category from the Worker.
+      // Returns [{timestamp: ms, value: 0-5}] sorted ascending.
+      function ovixFetchHistory(regionId, category, hours) {
+        var url = OVIX_API + '/api/ovix/scores'
+          + '?region=' + encodeURIComponent(regionId)
+          + '&category=' + encodeURIComponent(category)
+          + '&hours=' + encodeURIComponent(hours || 6);
+        return fetch(url)
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+          .then(function (data) {
+            var rows = data.history || [];
+            return rows.map(function (row) {
+              // Neon timestamps: "YYYY-MM-DD HH:MM:SS.mmm+00"
+              // D1 timestamps: "YYYY-MM-DD HH:MM:SS" (no TZ)
+              var ts = row.created_at || '';
+              // Remove Neon timezone offset before adding Z
+              ts = ts.replace(/\+\d{2}$/, '').replace(/\+\d{2}:\d{2}$/, '');
+              if (ts.indexOf('T') === -1) ts = ts.replace(' ', 'T') + 'Z';
+              var score = row.score;
+              if (typeof score === 'string') score = parseFloat(score);
+              return {
+                timestamp: new Date(ts).getTime(),
+                value: typeof score === 'number' && !isNaN(score) ? score : 0
+              };
+            });
+          })
+          .catch(function (err) {
+            console.warn('[OVIX] history fetch failed for ' + regionId + ':', err);
+            return [];
+          });
+      }
+
+      // Fetch the latest single score for a region+category.
+      // Returns {timestamp, value} or null.
+      function ovixFetchLatest(regionId, category) {
+        return ovixFetchHistory(regionId, category, 1)
+          .then(function (pts) { return pts.length ? pts[pts.length - 1] : null; });
+      }
+
+      openmct.install(function () {
+        return function (openmct) {
+          var NS = 'ovi';
+
+          // Types
+          openmct.types.addType('ovi.score', { name: 'OVIX Score', cssClass: 'icon-gauge' });
+          openmct.types.addType('ovi.category', { name: 'OVIX Category', cssClass: 'icon-folder' });
+
+          // Root entry
+          openmct.objects.addRoot({ namespace: NS, key: 'root' });
+
+          // Object provider: resolves every key in the 'ovi' namespace
+          openmct.objects.addProvider(NS, {
+            get: function (id) {
+              var key = id.key;
+
+              // Root folder
+              if (key === 'root') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'folder',
+                  name: '◆ OVIX — Operational Volatility Index',
+                  location: 'ROOT',
+                  composition: OVIX_CATEGORIES.map(function (c) {
+                    return { namespace: NS, key: 'cat:' + c.key };
+                  })
+                });
+              }
+
+              // Category folder (e.g. key = 'cat:weather')
+              if (key.indexOf('cat:') === 0) {
+                var catKey = key.slice(4);
+                var catDef = OVIX_CATEGORIES.find(function (c) { return c.key === catKey; });
+                if (catDef) {
+                  // Children: global composite first, then all 38 sub-regions
+                  var children = [{ namespace: NS, key: catKey + ':global' }].concat(
+                    OVIX_REGIONS.map(function (r) {
+                      return { namespace: NS, key: catKey + ':' + r.id };
+                    })
+                  );
+                  return Promise.resolve({
+                    identifier: id,
+                    type: 'ovi.category',
+                    name: catDef.name,
+                    location: NS + ':root',
+                    composition: children
+                  });
+                }
+              }
+
+              // Telemetry leaf: 'weather:global' or 'weather:us-northeast' etc.
+              var colonIdx = key.indexOf(':');
+              if (colonIdx > 0) {
+                var cat = key.slice(0, colonIdx);
+                var regionId = key.slice(colonIdx + 1);
+                var catDef2 = OVIX_CATEGORIES.find(function (c) { return c.key === cat; });
+                if (!catDef2) return Promise.resolve(undefined);
+
+                var displayName;
+                if (regionId === 'global') {
+                  displayName = catDef2.name + ' — Global Composite';
+                } else {
+                  var r = OVIX_REGIONS.find(function (x) { return x.id === regionId; });
+                  displayName = r ? (catDef2.name + ': ' + r.name) : null;
+                  if (!displayName) return Promise.resolve(undefined);
+                }
+
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'ovi.score',
+                  name: displayName,
+                  location: NS + ':cat:' + cat,
+                  telemetry: {
+                    values: [
+                      { key: 'utc', source: 'timestamp', name: 'Time', format: 'utc', hints: { domain: 1 } },
+                      { key: 'value', name: 'OVIX Score', format: 'float', min: 0, max: 10, hints: { range: 1 } }
+                    ]
+                  },
+                  // Store metadata for telemetry provider
+                  ovix: { category: cat, regionId: regionId }
+                });
+              }
+
+              return Promise.resolve(undefined);
+            }
+          });
+
+          // Composition providers — Open MCT calls these to expand folder children
+          openmct.composition.addProvider({
+            appliesTo: function (o) {
+              return o.identifier && o.identifier.namespace === NS && o.identifier.key === 'root';
+            },
+            load: function () {
+              return Promise.resolve(OVIX_CATEGORIES.map(function (c) {
+                return { namespace: NS, key: 'cat:' + c.key };
+              }));
+            }
+          });
+
+          openmct.composition.addProvider({
+            appliesTo: function (o) {
+              return o.identifier && o.identifier.namespace === NS
+                && o.identifier.key.indexOf('cat:') === 0;
+            },
+            load: function (o) {
+              var catKey = o.identifier.key.slice(4);
+              var children = [{ namespace: NS, key: catKey + ':global' }].concat(
+                OVIX_REGIONS.map(function (r) {
+                  return { namespace: NS, key: catKey + ':' + r.id };
+                })
+              );
+              return Promise.resolve(children);
+            }
+          });
+
+          // Telemetry provider
+          openmct.telemetry.addProvider({
+            supportsRequest: function (o) {
+              return o.identifier && o.identifier.namespace === NS
+                && o.identifier.key.indexOf(':') > 0  // only leaf objects
+                && o.identifier.key.indexOf('cat:') !== 0; // not category folders
+            },
+
+            // Historical request — fetches time-series from Worker
+            request: function (o, options) {
+              var key = o.identifier.key;
+              var colonIdx = key.indexOf(':');
+              var cat = key.slice(0, colonIdx);
+              var regionId = key.slice(colonIdx + 1);
+
+              // Derive hours from Open MCT time bounds if provided
+              var hours = 6;
+              if (options && options.start) {
+                hours = Math.ceil((Date.now() - options.start) / 3600000);
+                hours = Math.max(1, Math.min(hours, 168)); // clamp 1h–7d
+              }
+
+              // Global composite: fetch all-regions latest and synthesize a composite series
+              // For now, fall back to a single score point for 'global'
+              if (regionId === 'global') {
+                // Fetch all sub-region history in parallel and average by timestamp bucket
+                var allFetches = OVIX_REGIONS.map(function (r) {
+                  return ovixFetchHistory(r.id, cat, hours);
+                });
+                return Promise.all(allFetches).then(function (allSeries) {
+                  // Collect all timestamps, bucket by 5-min intervals
+                  var buckets = {};
+                  allSeries.forEach(function (series) {
+                    series.forEach(function (pt) {
+                      var bucket = Math.floor(pt.timestamp / 300000) * 300000;
+                      if (!buckets[bucket]) buckets[bucket] = { sum: 0, count: 0 };
+                      buckets[bucket].sum += pt.value;
+                      buckets[bucket].count += 1;
+                    });
+                  });
+                  return Object.keys(buckets).sort().map(function (t) {
+                    var b = buckets[t];
+                    return { timestamp: parseInt(t), value: Math.round((b.sum / b.count) * 10) / 10 };
+                  });
+                });
+              }
+
+              return ovixFetchHistory(regionId, cat, hours);
+            },
+
+            supportsSubscribe: function (o) {
+              return o.identifier && o.identifier.namespace === NS
+                && o.identifier.key.indexOf(':') > 0
+                && o.identifier.key.indexOf('cat:') !== 0;
+            },
+
+            // Live subscription — polls every 5 minutes
+            subscribe: function (o, cb) {
+              var key = o.identifier.key;
+              var colonIdx = key.indexOf(':');
+              var cat = key.slice(0, colonIdx);
+              var regionId = key.slice(colonIdx + 1);
+
+              var cancelled = false;
+
+              function poll() {
+                if (cancelled) return;
+                var fetchFn;
+                if (regionId === 'global') {
+                  fetchFn = Promise.all(OVIX_REGIONS.map(function (r) {
+                    return ovixFetchLatest(r.id, cat);
+                  })).then(function (results) {
+                    var valid = results.filter(function (x) { return x !== null; });
+                    if (!valid.length) return null;
+                    var avg = valid.reduce(function (s, x) { return s + x.value; }, 0) / valid.length;
+                    return { timestamp: Date.now(), value: Math.round(avg * 10) / 10 };
+                  });
+                } else {
+                  fetchFn = ovixFetchLatest(regionId, cat);
+                }
+                fetchFn
+                  .then(function (pt) {
+                    if (!cancelled && pt) cb(pt);
+                  })
+                  .catch(function () { /* silent — next poll will retry */ });
+              }
+
+              // Fire immediately, then every 5 minutes
+              poll();
+              var iv = setInterval(poll, 5 * 60 * 1000);
+
+              // Return unsubscribe function
+              return function () {
+                cancelled = true;
+                clearInterval(iv);
+              };
+            }
+          });
+          // OVIX Gauge View — displays any OVIX telemetry as a visual gauge
+          openmct.objectViews.addProvider({
+            key: 'ovix.gauge.view',
+            name: 'OVIX Gauge',
+            cssClass: 'icon-gauge',
+            canView: function (o) {
+              return o.type === 'ovi.score';
+            },
+            priority: function () { return 1; }, // lower than default plot
+            view: function (domainObject) {
+              var el, interval, lastValue = null;
+              return {
+                show: function (container) {
+                  el = document.createElement('div');
+                  el.style.cssText = 'width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#08081a;font-family:"JetBrains Mono",monospace;position:relative;';
+
+                  function render(value) {
+                    if (value === null || value === undefined) {
+                      el.innerHTML = '<div style="color:#333;font-size:12px;">Waiting for data...</div>';
+                      return;
+                    }
+                    var v = parseFloat(value);
+                    var pct = Math.min(100, Math.max(0, v / 10 * 100));
+                    var color = v <= 2 ? '#18BC9C' : v <= 4 ? '#27ae60' : v <= 6 ? '#f39c12' : v <= 8 ? '#e67e22' : '#e74c3c';
+                    var label = v <= 2 ? 'LOW' : v <= 4 ? 'MODERATE' : v <= 6 ? 'ELEVATED' : v <= 8 ? 'HIGH' : 'SEVERE';
+
+                    el.innerHTML =
+                      '<div style="font-size:10px;color:#555;letter-spacing:0.1em;margin-bottom:8px;">' + (domainObject.name || 'OVIX') + '</div>'
+                      // Circular gauge background
+                      + '<div style="position:relative;width:140px;height:140px;">'
+                      + '  <svg viewBox="0 0 140 140" style="transform:rotate(-90deg);">'
+                      + '    <circle cx="70" cy="70" r="60" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="14"/>'
+                      + '    <circle cx="70" cy="70" r="60" fill="none" stroke="' + color + '" stroke-width="14"'
+                      + '      stroke-dasharray="' + (pct * 3.77) + ' 377" stroke-linecap="round"'
+                      + '      style="transition:stroke-dasharray 1s ease,stroke 1s ease;"/>'
+                      + '  </svg>'
+                      + '  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">'
+                      + '    <div style="font-size:32px;font-weight:bold;color:' + color + ';">' + v.toFixed(1) + '</div>'
+                      + '    <div style="font-size:9px;color:#555;">/ 10</div>'
+                      + '  </div>'
+                      + '</div>'
+                      + '<div style="font-size:11px;font-weight:bold;color:' + color + ';margin-top:8px;letter-spacing:0.1em;">' + label + '</div>';
+                  }
+
+                  render(null);
+                  container.appendChild(el);
+
+                  // Parse category + region from the object key (format: "weather:us-southeast")
+                  var key = domainObject.identifier.key;
+                  var colonIdx = key.indexOf(':');
+                  var cat = colonIdx > 0 ? key.slice(0, colonIdx) : 'weather';
+                  var regionId = colonIdx > 0 ? key.slice(colonIdx + 1) : key;
+
+                  console.log('[OVIX Gauge] key=' + key + ' cat=' + cat + ' region=' + regionId);
+
+                  function fetchLatest() {
+                    // For global composite, fetch the overall scores endpoint
+                    var url;
+                    if (regionId === 'global') {
+                      url = OVIX_API + '/api/ovix/scores?category=' + encodeURIComponent(cat);
+                    } else {
+                      url = OVIX_API + '/api/ovix/scores?region=' + encodeURIComponent(regionId)
+                        + '&category=' + encodeURIComponent(cat) + '&hours=1';
+                    }
+                    fetch(url).then(function(r) {
+                      if (!r.ok) throw new Error('HTTP ' + r.status);
+                      return r.json();
+                    }).then(function(d) {
+                        if (regionId === 'global' && d.regions) {
+                          // Average all region scores
+                          var scores = d.regions.map(function(r) { return r.score; });
+                          var avg = scores.length > 0 ? scores.reduce(function(a,b){return a+b;}, 0) / scores.length : 0;
+                          render(Math.round(avg * 10) / 10);
+                        } else if (d && d.current !== null && d.current !== undefined) {
+                          render(d.current);
+                        } else {
+                          console.warn('[OVIX Gauge] No current value in response:', d);
+                        }
+                      }).catch(function(e) { console.error('[OVIX Gauge] fetch error:', e); });
+                  }
+
+                  fetchLatest();
+                  interval = setInterval(fetchLatest, 60000); // update every minute
+                },
+                destroy: function () {
+                  if (interval) clearInterval(interval);
+                  if (el && el.parentNode) el.parentNode.removeChild(el);
+                }
+              };
+            }
+          });
+
+        };
+      }());
+
+      // =============================================
+      // ROC: Web View Plugin (embedded dashboards)
+      // =============================================
+      // Globe URL with API keys
+      // In production, keys are injected by Cloudflare Worker proxy
+      // For local dev, they're read from the globe page's own config
+      var GLOBE_URL = '/globe/globe.html';
+
+      var VIEWS = [
+        { name: 'OVIX Globe', url: GLOBE_URL },
+      ];
+
+      openmct.install(function () {
+        return function (openmct) {
+          var NS = 'roc';
+          openmct.types.addType('roc.webview', { name: 'Web View', cssClass: 'icon-page' });
+          openmct.objects.addRoot({ namespace: NS, key: 'dashboards' });
+          openmct.objects.addProvider(NS, {
+            get: function (id) {
+              if (id.key === 'dashboards') {
+                return Promise.resolve({
+                  identifier: id, type: 'folder', name: '◆ ROC.Cloud',
+                  location: 'ROOT',
+                  composition: VIEWS.map(function (_, i) { return { namespace: NS, key: 'v' + i }; })
+                });
+              }
+              var idx = parseInt(id.key.replace('v', ''));
+              var v = VIEWS[idx];
+              if (v) {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.webview', name: v.name,
+                  url: v.url, location: NS + ':dashboards'
+                });
+              }
+              return Promise.reject();
+            }
+          });
+          openmct.composition.addProvider({
+            appliesTo: function (o) { return o.identifier && o.identifier.namespace === NS && o.identifier.key === 'dashboards'; },
+            load: function () { return Promise.resolve(VIEWS.map(function (_, i) { return { namespace: NS, key: 'v' + i }; })); }
+          });
+          openmct.objectViews.addProvider({
+            key: 'roc.webview.view', name: 'Web View', cssClass: 'icon-page',
+            canView: function (o) { return o.type === 'roc.webview'; },
+            view: function (o) {
+              var wrapper, f, placeholder, srcUrl;
+              return {
+                show: function (el) {
+                  wrapper = el;
+                  srcUrl = o.url || '';
+                  f = document.createElement('iframe');
+                  f.src = srcUrl;
+                  f.style.cssText = 'width:100%;height:100%;border:none;background:#0a0a1a;';
+                  f.setAttribute('allowfullscreen', 'true');
+                  el.appendChild(f);
+                },
+                onEditModeChange: function (isEditing) {
+                  if (!wrapper) return;
+                  if (isEditing) {
+                    // Detach iframe entirely — removes WebGL context from compositor
+                    if (f) { f.src = 'about:blank'; f.remove(); f = null; }
+                    if (!placeholder) {
+                      placeholder = document.createElement('div');
+                      placeholder.style.cssText = 'width:100%;height:100%;background:#0a0a1a;display:flex;align-items:center;justify-content:center;font-family:monospace;font-size:12px;color:#333;border:1px dashed rgba(24,188,156,0.2);';
+                      placeholder.textContent = o.name + ' — editing mode';
+                    }
+                    wrapper.appendChild(placeholder);
+                  } else {
+                    // Re-attach iframe
+                    if (placeholder && placeholder.parentNode) placeholder.remove();
+                    f = document.createElement('iframe');
+                    f.src = srcUrl;
+                    f.style.cssText = 'width:100%;height:100%;border:none;background:#0a0a1a;';
+                    f.setAttribute('allowfullscreen', 'true');
+                    wrapper.appendChild(f);
+                  }
+                },
+                destroy: function () {
+                  if (f) { f.src = 'about:blank'; f = null; }
+                  if (placeholder && placeholder.parentNode) placeholder.remove();
+                }
+              };
+            }
+          });
+        };
+      }());
+
+      // =============================================
+      // ROC: Community Plugin (Signal Feed, Presence, Profile)
+      // Adds domain objects users can drag into their own layouts.
+      // Existing overlays remain functional — this only ADDS to the tree.
+      // =============================================
+      openmct.install(function () {
+        return function (openmct) {
+          var NS = 'roc-community';
+
+          openmct.types.addType('roc.signalFeed', {
+            name: 'Signal Feed', description: 'Real-time signal feed', cssClass: 'icon-telemetry'
+          });
+          openmct.types.addType('roc.presence', {
+            name: 'Operators Online', description: 'Live operator presence', cssClass: 'icon-telemetry'
+          });
+          openmct.types.addType('roc.userProfile', {
+            name: 'User Profile', description: 'Your ROC profile', cssClass: 'icon-telemetry'
+          });
+
+          var ITEMS = [
+            { key: 'signal-feed', type: 'roc.signalFeed', name: 'Signal Feed' },
+            { key: 'presence', type: 'roc.presence', name: 'Operators Online' },
+            { key: 'user-profile', type: 'roc.userProfile', name: 'User Profile' },
+          ];
+
+          openmct.objects.addRoot({ namespace: NS, key: 'root' });
+          openmct.objects.addProvider(NS, {
+            get: function (id) {
+              if (id.key === 'root') {
+                return Promise.resolve({
+                  identifier: id, type: 'folder',
+                  name: '◆ ROC Signal',
+                  location: 'ROOT',
+                  composition: ITEMS.map(function (i) { return { namespace: NS, key: i.key }; })
+                });
+              }
+              var item = ITEMS.find(function (i) { return i.key === id.key; });
+              if (item) {
+                return Promise.resolve({
+                  identifier: id, type: item.type, name: item.name,
+                  location: NS + ':root'
+                });
+              }
+              return Promise.resolve(undefined);
+            }
+          });
+
+          openmct.composition.addProvider({
+            appliesTo: function (o) { return o.identifier && o.identifier.namespace === NS && o.identifier.key === 'root'; },
+            load: function () { return Promise.resolve(ITEMS.map(function (i) { return { namespace: NS, key: i.key }; })); }
+          });
+
+          // Signal Feed view — persistent, identity-aware
+          openmct.objectViews.addProvider({
+            key: 'roc.signalFeed.view', name: 'Signal Feed', cssClass: 'icon-telemetry',
+            canView: function (o) { return o.type === 'roc.signalFeed'; },
+            view: function () {
+              var el, ablyChannel;
+              var SF_API = 'https://ovix-api.tedlango.workers.dev';
+              return {
+                show: function (container) {
+                  el = document.createElement('div');
+                  el.style.cssText = 'height:100%;display:flex;flex-direction:column;background:#08081a;font-family:"JetBrains Mono",monospace;font-size:11px;color:#ccc;';
+                  el.innerHTML = '<div style="padding:8px 12px;border-bottom:1px solid rgba(24,188,156,0.15);color:#18BC9C;font-size:10px;font-weight:bold;letter-spacing:0.1em;">◆ SIGNAL FEED</div>'
+                    + '<div class="sf-body" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;"></div>'
+                    + '<div style="display:flex;padding:8px;border-top:1px solid rgba(24,188,156,0.1);align-items:center;">'
+                    + '<input class="sf-in" type="text" placeholder="Post a signal..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:6px 8px;border-radius:3px;font-family:inherit;font-size:10px;outline:none;">'
+                    + '<button class="sf-btn" style="background:#18BC9C;border:none;color:#000;padding:6px 10px;margin-left:4px;border-radius:3px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:bold;">SEND</button>'
+                    + '</div>';
+                  container.appendChild(el);
+
+                  var body = el.querySelector('.sf-body');
+                  var inp = el.querySelector('.sf-in');
+                  var btn = el.querySelector('.sf-btn');
+                  var token = localStorage.getItem('roc-token');
+                  var myHandle = '';
+                  try { var u = JSON.parse(localStorage.getItem('roc-user') || '{}'); myHandle = u.handle || ''; } catch(e) {}
+
+                  // Color by signal type
+                  function typeColor(type) {
+                    if (type === 'member') return '#3498db';
+                    if (type === 'alert') return '#e74c3c';
+                    if (type === 'system') return '#f39c12';
+                    return 'rgba(24,188,156,0.5)'; // ai, ovix-agent
+                  }
+
+                  // Render a signal item
+                  function renderSignal(type, message, handle, timestamp, prepend) {
+                    var d = document.createElement('div');
+                    d.style.cssText = 'padding:5px 8px;margin-bottom:3px;border-left:2px solid '+typeColor(type)+';font-size:10px;color:#888;';
+
+                    var time = '';
+                    if (timestamp) {
+                      var dt = new Date(timestamp);
+                      time = dt.getHours().toString().padStart(2,'0')+':'+dt.getMinutes().toString().padStart(2,'0');
+                    } else {
+                      var now = new Date();
+                      time = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+                    }
+
+                    var handleHtml = '';
+                    if (handle) {
+                      var isMe = handle === myHandle;
+                      var handleColor = type === 'member' ? '#3498db' : (type === 'ai' ? '#18BC9C' : '#f39c12');
+                      if (isMe) handleColor = '#18BC9C';
+                      handleHtml = '<span style="color:'+handleColor+';font-weight:bold;">@'+handle.replace(/</g,'&lt;')+'</span> ';
+                    }
+
+                    d.innerHTML = '<span style="color:#444;font-size:9px;">'+time+'</span> '
+                      + handleHtml
+                      + '<span>'+message.replace(/</g,'&lt;')+'</span>';
+
+                    if (prepend) {
+                      body.appendChild(d); // history loads oldest first
+                    } else {
+                      body.appendChild(d);
+                      body.scrollTop = body.scrollHeight; // auto-scroll to latest
+                    }
+                    while (body.children.length > 200) body.removeChild(body.firstChild);
+                  }
+
+                  // Load history from D1
+                  if (token) {
+                    fetch(SF_API + '/api/signals?limit=50', {
+                      headers: { 'Authorization': 'Bearer ' + token }
+                    }).then(function(r) { return r.ok ? r.json() : { signals: [] }; })
+                      .then(function(d) {
+                        (d.signals || []).forEach(function(s) {
+                          renderSignal(s.signal_type, s.message, s.sender_handle, s.created_at, true);
+                        });
+                        body.scrollTop = body.scrollHeight;
+                      }).catch(function() {});
+                  }
+
+                  // Live signals via Ably
+                  try {
+                    if (window.ably) {
+                      ablyChannel = window.ably.channels.get('roc:signals');
+                      ablyChannel.subscribe('signal', function(m) {
+                        renderSignal(m.data.type||'ai', m.data.text||'', m.data.handle||'', null, false);
+                      });
+                    }
+                  } catch(e) {}
+
+                  // Send signal — persists to D1 + broadcasts via Ably
+                  function send() {
+                    if (!inp.value.trim()) return;
+                    var text = inp.value.trim();
+                    inp.value = '';
+
+                    // Show immediately
+                    renderSignal('member', text, myHandle, null, false);
+
+                    // Persist to D1 (which also broadcasts via Ably)
+                    if (token) {
+                      fetch(SF_API + '/api/signals', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                        body: JSON.stringify({ message: text, type: 'member' })
+                      }).catch(function() {});
+                    } else if (window.ably) {
+                      // Fallback: Ably direct (no persistence)
+                      window.ably.channels.get('roc:signals').publish('signal', { type: 'member', text: text, handle: myHandle });
+                    }
+                  }
+
+                  btn.addEventListener('click', send);
+                  inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') send(); });
+                },
+                destroy: function () {
+                  if (ablyChannel) { try { ablyChannel.unsubscribe(); } catch(e) {} }
+                  if (el && el.parentNode) el.parentNode.removeChild(el);
+                }
+              };
+            }
+          });
+
+          // Operators Online view
+          openmct.objectViews.addProvider({
+            key: 'roc.presence.view', name: 'Operators Online', cssClass: 'icon-telemetry',
+            canView: function (o) { return o.type === 'roc.presence'; },
+            view: function () {
+              var el, iv;
+              return {
+                show: function (container) {
+                  el = document.createElement('div');
+                  el.style.cssText = 'height:100%;background:#08081a;font-family:monospace;padding:20px;color:#ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+                  el.innerHTML = '<div style="font-size:10px;color:#555;letter-spacing:0.1em;margin-bottom:8px;">OPERATORS ONLINE</div><div class="cnt" style="font-size:48px;font-weight:bold;color:#18BC9C;">0</div><div class="dots" style="display:flex;gap:4px;margin-top:12px;flex-wrap:wrap;justify-content:center;"></div>';
+                  container.appendChild(el);
+                  var cnt = el.querySelector('.cnt'), dots = el.querySelector('.dots');
+                  function upd() {
+                    try { if (window.ably) { window.ably.channels.get('roc:presence').presence.get().then(function(m) { cnt.textContent=m.length; dots.innerHTML=''; for(var i=0;i<Math.min(m.length,30);i++){var d=document.createElement('span');d.style.cssText='width:8px;height:8px;border-radius:50%;background:#18BC9C;opacity:'+(0.3+Math.random()*0.5);dots.appendChild(d);} }); } } catch(e){}
+                  }
+                  upd(); iv = setInterval(upd, 15000);
+                },
+                destroy: function () { if(iv)clearInterval(iv); if(el&&el.parentNode)el.parentNode.removeChild(el); }
+              };
+            }
+          });
+
+          // User Profile view
+          openmct.objectViews.addProvider({
+            key: 'roc.userProfile.view', name: 'User Profile', cssClass: 'icon-telemetry',
+            canView: function (o) { return o.type === 'roc.userProfile'; },
+            view: function () {
+              var el;
+              return {
+                show: function (container) {
+                  el = document.createElement('div');
+                  el.style.cssText = 'height:100%;background:#08081a;font-family:monospace;padding:20px;color:#ccc;';
+                  function render() {
+                    var u = null; try { u = JSON.parse(localStorage.getItem('roc-user')||'null'); } catch(e){}
+                    if (!u) { el.innerHTML='<div style="color:#555;text-align:center;padding-top:40px;">Not signed in</div>'; return; }
+                    var ini = (u.handle||u.firstName||'?').charAt(0).toUpperCase();
+                    el.innerHTML = '<div style="text-align:center;margin-bottom:20px;"><div style="width:48px;height:48px;border-radius:50%;background:#18BC9C;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;color:#060610;font-size:22px;font-weight:bold;">'+ini+'</div><div style="color:#18BC9C;font-size:14px;font-weight:bold;">@'+(u.handle||'unknown')+'</div><div style="color:#555;font-size:10px;margin-top:4px;">'+(u.industry||'')+(u.jobRole?' · '+u.jobRole:'')+'</div></div><div style="border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;font-size:11px;"><div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="color:#555;">Email</span><span>'+(u.email||'')+'</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span style="color:#555;">Role</span><span>'+(u.role||'free')+'</span></div></div><div style="margin-top:20px;display:flex;gap:8px;"><button class="pe" style="flex:1;padding:8px;background:rgba(24,188,156,0.1);border:1px solid rgba(24,188,156,0.3);color:#18BC9C;border-radius:4px;cursor:pointer;font-family:inherit;font-size:10px;">Edit Profile</button><button class="so" style="flex:1;padding:8px;background:rgba(231,76,60,0.1);border:1px solid rgba(231,76,60,0.3);color:#e74c3c;border-radius:4px;cursor:pointer;font-family:inherit;font-size:10px;">Sign Out</button></div>';
+                    el.querySelector('.pe').onclick = function() { if(window.openProfileEdit) window.openProfileEdit(); };
+                    el.querySelector('.so').onclick = function() { if(window.signOut) window.signOut(); };
+                  }
+                  render();
+                  window.addEventListener('storage', function(e) { if(e.key==='roc-user') render(); });
+                  container.appendChild(el);
+                },
+                destroy: function () { if(el&&el.parentNode)el.parentNode.removeChild(el); }
+              };
+            }
+          });
+        };
+      }());
+
+      // =============================================
+      // ROC: Ambient Audio System
+      // Subtle background drone shifts with OVIX composite.
+      // Alert notifications for significant events.
+      // Requires user gesture to start (browser policy).
+      // =============================================
+      (function () {
+        var audioStarted = false;
+        var audioMuted = false;
+        var drone = null;
+        var droneFilter = null;
+        var droneGain = null;
+        var notifyGain = null;
+        var currentOVIX = 2.0;
+
+        // Map OVIX composite (0-5) to drone frequency and filter
+        function ovixToFreq(score) {
+          // Low score = low calm drone, high score = higher tense drone
+          return 40 + (score / 5) * 60; // 40Hz (calm) to 100Hz (tense)
+        }
+        function ovixToFilter(score) {
+          return 200 + (score / 5) * 600; // 200Hz (muffled) to 800Hz (brighter)
+        }
+        function ovixToVolume(score) {
+          return -40 + (score / 5) * 8; // -40dB (quiet) to -32dB (slightly louder when tense)
+        }
+
+        function startAudio() {
+          if (audioStarted || typeof Tone === 'undefined') return;
+          audioStarted = true;
+
+          try {
+            Tone.start();
+
+            // Master gain for mute control
+            droneGain = new Tone.Gain(1).toDestination();
+            notifyGain = new Tone.Gain(1).toDestination();
+
+            // Low-pass filter for warmth
+            droneFilter = new Tone.Filter({
+              type: 'lowpass',
+              frequency: ovixToFilter(currentOVIX),
+              rolloff: -24,
+            }).connect(droneGain);
+
+            // Ambient drone — two detuned oscillators for depth
+            drone = new Tone.PolySynth(Tone.Synth, {
+              oscillator: { type: 'sine' },
+              envelope: { attack: 4, decay: 0, sustain: 1, release: 4 },
+              volume: ovixToVolume(currentOVIX),
+            }).connect(droneFilter);
+
+            // Start the drone — two notes slightly detuned for warmth
+            var baseFreq = ovixToFreq(currentOVIX);
+            drone.triggerAttack([baseFreq, baseFreq * 1.005]); // slight detune
+
+            console.log('◆ Ambient audio started');
+          } catch (e) {
+            console.error('Audio error:', e);
+          }
+        }
+
+        // Update drone based on OVIX score (called periodically)
+        window.rocUpdateOVIX = function (score) {
+          currentOVIX = score;
+          if (!audioStarted || audioMuted || !drone) return;
+          try {
+            var freq = ovixToFreq(score);
+            drone.set({ volume: ovixToVolume(score) });
+            droneFilter.frequency.rampTo(ovixToFilter(score), 5);
+            // Shift drone pitch smoothly
+            drone.releaseAll();
+            drone.triggerAttack([freq, freq * 1.005]);
+          } catch (e) {}
+        };
+
+        // Alert notification — gentle ping
+        window.rocNotifyAlert = function (severity) {
+          if (!audioStarted || audioMuted || typeof Tone === 'undefined') return;
+          try {
+            var ping = new Tone.Synth({
+              oscillator: { type: 'triangle' },
+              envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 },
+              volume: severity === 'critical' ? -20 : -28,
+            }).connect(notifyGain);
+            var freq = severity === 'critical' ? 880 : 660;
+            ping.triggerAttackRelease(freq, '8n');
+            // Clean up after playing
+            setTimeout(function () { ping.dispose(); }, 2000);
+          } catch (e) {}
+        };
+
+        // Mute/unmute
+        window.rocToggleMute = function () {
+          audioMuted = !audioMuted;
+          if (droneGain) droneGain.gain.rampTo(audioMuted ? 0 : 1, 0.5);
+          if (notifyGain) notifyGain.gain.rampTo(audioMuted ? 0 : 1, 0.1);
+          return audioMuted;
+        };
+
+        window.rocIsAudioMuted = function () { return audioMuted; };
+
+        // Auto-start on first user interaction (browser requires gesture)
+        var gestureHandler = function () {
+          startAudio();
+          document.removeEventListener('click', gestureHandler);
+          document.removeEventListener('keydown', gestureHandler);
+        };
+        document.addEventListener('click', gestureHandler);
+        document.addEventListener('keydown', gestureHandler);
+
+        // Start muted by default — user opts in via the audio control plugin
+        audioMuted = true;
+      })();
+
+      // =============================================
+      // ROC: Audio Control Plugin (mute/unmute in tree)
+      // =============================================
+      openmct.install(function () {
+        return function (openmct) {
+          var NS = 'roc-audio';
+          openmct.types.addType('roc.audioControl', {
+            name: 'Audio Control', description: 'ROC ambient audio — mute/unmute', cssClass: 'icon-telemetry'
+          });
+          openmct.objects.addRoot({ namespace: NS, key: 'root' });
+          openmct.objects.addProvider(NS, {
+            get: function (id) {
+              if (id.key === 'root') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.audioControl', name: '◆ ROC Settings',
+                  location: 'ROOT'
+                });
+              }
+              return Promise.resolve(undefined);
+            }
+          });
+          openmct.objectViews.addProvider({
+            key: 'roc.audioControl.view', name: 'Audio Control', cssClass: 'icon-telemetry',
+            canView: function (o) { return o.type === 'roc.audioControl'; },
+            view: function () {
+              var el;
+              return {
+                show: function (container) {
+                  el = document.createElement('div');
+                  el.style.cssText = 'height:100%;background:#08081a;font-family:"JetBrains Mono",monospace;padding:24px;color:#ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+                  function render() {
+                    var muted = window.rocIsAudioMuted ? window.rocIsAudioMuted() : true;
+                    el.innerHTML =
+                      '<div style="font-size:10px;color:#555;letter-spacing:0.1em;margin-bottom:12px;">ROC AMBIENT AUDIO</div>'
+                      + '<div style="font-size:36px;margin-bottom:16px;">' + (muted ? '🔇' : '🔊') + '</div>'
+                      + '<button id="ac-toggle" style="padding:10px 24px;background:'+(muted?'rgba(24,188,156,0.15)':'rgba(231,76,60,0.15)')+';border:1px solid '+(muted?'rgba(24,188,156,0.3)':'rgba(231,76,60,0.3)')+';color:'+(muted?'#18BC9C':'#e74c3c')+';border-radius:4px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:bold;">'
+                      + (muted ? 'ENABLE AUDIO' : 'MUTE AUDIO') + '</button>'
+                      + '<div style="font-size:9px;color:#333;margin-top:16px;text-align:center;max-width:200px;">'
+                      + (muted ? 'Ambient audio is off. Click to enable a subtle background drone that responds to OVIX levels.' : 'Ambient drone active. Shifts with OVIX composite score. Alert pings on significant events.')
+                      + '</div>';
+                    el.querySelector('#ac-toggle').addEventListener('click', function () {
+                      if (window.rocToggleMute) window.rocToggleMute();
+                      render();
+                    });
+                  }
+                  render();
+                  container.appendChild(el);
+                },
+                destroy: function () { if (el && el.parentNode) el.parentNode.removeChild(el); }
+              };
+            }
+          });
+        };
+      }());
+
+      // =============================================
+      // ROC: Chat Plugin (threaded channels)
+      // =============================================
+      openmct.install(function () {
+        return function (openmct) {
+          var CHAT_NS = 'roc-chat';
+          var CHAT_API = 'https://ovix-api.tedlango.workers.dev';
+          var channelCache = null;
+
+          openmct.types.addType('roc.chat.channel', {
+            name: 'Chat Channel', description: 'Community chat channel', cssClass: 'icon-telemetry'
+          });
+
+          openmct.objects.addRoot({ namespace: CHAT_NS, key: 'root' });
+
+          function chatHeaders() {
+            var h = { 'Content-Type': 'application/json' };
+            var t = localStorage.getItem('roc-token');
+            if (t) h['Authorization'] = 'Bearer ' + t;
+            return h;
+          }
+
+          function fetchChannels() {
+            if (channelCache) return Promise.resolve(channelCache);
+            return fetch(CHAT_API + '/api/chat/channels', { headers: chatHeaders() })
+              .then(function(r) { return r.ok ? r.json() : { channels: [] }; })
+              .then(function(d) { channelCache = d.channels || []; return channelCache; })
+              .catch(function() { return []; });
+          }
+
+          openmct.objects.addProvider(CHAT_NS, {
+            get: function (id) {
+              if (id.key === 'root') {
+                return fetchChannels().then(function(channels) {
+                  return {
+                    identifier: id, type: 'folder',
+                    name: '◆ ROC Chat',
+                    location: 'ROOT',
+                    composition: channels.map(function (c) { return { namespace: CHAT_NS, key: c.slug }; })
+                  };
+                });
+              }
+              return fetchChannels().then(function(channels) {
+                var ch = channels.find(function(c) { return c.slug === id.key; });
+                if (ch) return { identifier: id, type: 'roc.chat.channel', name: ch.name, channelSlug: ch.slug, channelDesc: ch.description };
+                return undefined;
+              });
+            }
+          });
+
+          openmct.composition.addProvider({
+            appliesTo: function (o) { return o.identifier && o.identifier.namespace === CHAT_NS && o.identifier.key === 'root'; },
+            load: function () {
+              return fetchChannels().then(function(channels) {
+                return channels.map(function(c) { return { namespace: CHAT_NS, key: c.slug }; });
+              });
+            }
+          });
+
+          // Chat channel view
+          openmct.objectViews.addProvider({
+            key: 'roc.chat.view', name: 'Chat Channel', cssClass: 'icon-telemetry',
+            canView: function (o) { return o.type === 'roc.chat.channel'; },
+            view: function (domainObject) {
+              var el, ablyChannel, refreshInterval;
+              var slug = domainObject.channelSlug || domainObject.identifier.key;
+              return {
+                show: function (container) {
+                  var myHandle = '';
+                  try { var u = JSON.parse(localStorage.getItem('roc-user') || '{}'); myHandle = u.handle || ''; } catch(e) {}
+
+                  el = document.createElement('div');
+                  el.style.cssText = 'height:100%;display:flex;flex-direction:column;background:#08081a;font-family:"JetBrains Mono",monospace;font-size:11px;color:#ccc;';
+                  el.innerHTML =
+                    '<div style="padding:8px 12px;border-bottom:1px solid rgba(24,188,156,0.15);display:flex;justify-content:space-between;align-items:center;">'
+                    + '<span style="color:#18BC9C;font-size:11px;font-weight:bold;">' + (domainObject.name || slug) + '</span>'
+                    + '<span style="color:#333;font-size:9px;">' + (domainObject.channelDesc || '') + '</span>'
+                    + '</div>'
+                    + '<div class="ch-body" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;"></div>'
+                    + '<div class="ch-thread" style="display:none;border-top:1px solid rgba(24,188,156,0.15);max-height:40%;overflow-y:auto;padding:8px;background:#0a0a1a;"></div>'
+                    + '<div style="display:flex;padding:8px;border-top:1px solid rgba(24,188,156,0.1);align-items:center;">'
+                    + '<input class="ch-in" type="text" placeholder="Message ' + (domainObject.name || '#' + slug) + '..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:6px 8px;border-radius:3px;font-family:inherit;font-size:10px;outline:none;">'
+                    + '<button class="ch-send" style="background:#18BC9C;border:none;color:#000;padding:6px 12px;margin-left:4px;border-radius:3px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:bold;">SEND</button>'
+                    + '</div>';
+                  container.appendChild(el);
+
+                  var body = el.querySelector('.ch-body');
+                  var threadPanel = el.querySelector('.ch-thread');
+                  var inp = el.querySelector('.ch-in');
+                  var sendBtn = el.querySelector('.ch-send');
+                  var replyingTo = null;
+
+                  function renderMsg(msg, target, isThread) {
+                    var d = document.createElement('div');
+                    var isMe = msg.sender_handle === myHandle;
+                    d.style.cssText = 'padding:5px 8px;margin-bottom:4px;border-radius:3px;background:' + (isMe ? 'rgba(24,188,156,0.06)' : 'rgba(255,255,255,0.02)') + ';';
+
+                    var time = '';
+                    if (msg.created_at) {
+                      var dt = new Date(msg.created_at + (msg.created_at.includes('Z') ? '' : 'Z'));
+                      time = dt.getHours().toString().padStart(2,'0') + ':' + dt.getMinutes().toString().padStart(2,'0');
+                    }
+
+                    var handleColor = isMe ? '#18BC9C' : '#3498db';
+                    d.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:2px;">'
+                      + '<span style="color:' + handleColor + ';font-weight:bold;font-size:10px;">@' + (msg.sender_handle || 'unknown').replace(/</g,'&lt;') + '</span>'
+                      + '<span style="color:#333;font-size:9px;">' + time + '</span>'
+                      + '</div>'
+                      + '<div style="color:#aaa;font-size:11px;word-wrap:break-word;">' + (msg.message || '').replace(/</g,'&lt;') + '</div>';
+
+                    // Reply button (only on root messages, not in thread view)
+                    if (!isThread && !msg.parent_id) {
+                      var replyCount = msg._replyCount || 0;
+                      var replyBtn = document.createElement('div');
+                      replyBtn.style.cssText = 'margin-top:3px;font-size:9px;color:#555;cursor:pointer;';
+                      replyBtn.textContent = replyCount > 0 ? replyCount + ' replies — click to view' : 'reply';
+                      replyBtn.addEventListener('click', function() { openThread(msg.id); });
+                      d.appendChild(replyBtn);
+                    }
+
+                    target.appendChild(d);
+                  }
+
+                  // Load history
+                  fetch(CHAT_API + '/api/chat/messages?channel=' + slug + '&limit=50', { headers: chatHeaders() })
+                    .then(function(r) { return r.ok ? r.json() : { messages: [], replyCounts: {} }; })
+                    .then(function(data) {
+                      (data.messages || []).forEach(function(m) {
+                        if (!m.parent_id) {
+                          m._replyCount = (data.replyCounts || {})[m.id] || 0;
+                          renderMsg(m, body, false);
+                        }
+                      });
+                      body.scrollTop = body.scrollHeight;
+                    }).catch(function() {});
+
+                  // Open thread
+                  function openThread(parentId) {
+                    replyingTo = parentId;
+                    threadPanel.style.display = 'block';
+                    threadPanel.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#18BC9C;font-size:10px;font-weight:bold;">THREAD</span><span style="color:#555;font-size:10px;cursor:pointer;" onclick="this.parentNode.parentNode.style.display=\'none\'">✕</span></div>';
+                    inp.placeholder = 'Reply in thread...';
+                    fetch(CHAT_API + '/api/chat/thread?parentId=' + parentId, { headers: chatHeaders() })
+                      .then(function(r) { return r.ok ? r.json() : { replies: [] }; })
+                      .then(function(data) {
+                        (data.replies || []).forEach(function(m) { renderMsg(m, threadPanel, true); });
+                        threadPanel.scrollTop = threadPanel.scrollHeight;
+                      }).catch(function() {});
+                  }
+
+                  // Send message
+                  function send() {
+                    if (!inp.value.trim()) return;
+                    var text = inp.value.trim();
+                    inp.value = '';
+
+                    var msgData = { channel: slug, message: text };
+                    if (replyingTo) msgData.parentId = replyingTo;
+
+                    // Show immediately
+                    var target = replyingTo ? threadPanel : body;
+                    renderMsg({ sender_handle: myHandle, message: text, created_at: new Date().toISOString() }, target, !!replyingTo);
+                    target.scrollTop = target.scrollHeight;
+
+                    // Persist
+                    fetch(CHAT_API + '/api/chat/messages', {
+                      method: 'POST', headers: chatHeaders(),
+                      body: JSON.stringify(msgData)
+                    }).catch(function() {});
+
+                    if (!replyingTo) {
+                      // Reset thread state
+                    }
+                  }
+
+                  sendBtn.addEventListener('click', send);
+                  inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') send(); });
+
+                  // Close thread on Escape
+                  inp.addEventListener('keydown', function(e) {
+                    if (e.key === 'Escape' && replyingTo) {
+                      replyingTo = null;
+                      threadPanel.style.display = 'none';
+                      inp.placeholder = 'Message ' + (domainObject.name || '#' + slug) + '...';
+                    }
+                  });
+
+                  // Live messages via Ably
+                  try {
+                    if (window.ably) {
+                      ablyChannel = window.ably.channels.get('roc:chat:' + slug);
+                      ablyChannel.subscribe('message', function(msg) {
+                        var d = msg.data;
+                        if (d.handle === myHandle) return; // already rendered locally
+                        if (d.parentId && replyingTo === d.parentId) {
+                          renderMsg({ sender_handle: d.handle, message: d.message, created_at: d.createdAt }, threadPanel, true);
+                          threadPanel.scrollTop = threadPanel.scrollHeight;
+                        } else if (!d.parentId) {
+                          renderMsg({ sender_handle: d.handle, message: d.message, created_at: d.createdAt }, body, false);
+                          body.scrollTop = body.scrollHeight;
+                        }
+                      });
+                    }
+                  } catch(e) {}
+                },
+                destroy: function () {
+                  if (ablyChannel) { try { ablyChannel.unsubscribe(); } catch(e) {} }
+                  if (el && el.parentNode) el.parentNode.removeChild(el);
+                }
+              };
+            }
+          });
+        };
+      }());
+
+      // =============================================
+      // ◆ ROC Maps — 2D Map Panels (Leaflet + Windy)
+      // =============================================
+      openmct.install(function () {
+        return function (openmct) {
+          var MAPS_NS = 'roc-maps';
+
+          openmct.types.addType('roc.map.panel', {
+            name: 'Map Panel',
+            description: '2D weather intelligence map',
+            cssClass: 'icon-object'
+          });
+
+          openmct.objects.addRoot({ namespace: MAPS_NS, key: 'root' });
+
+          openmct.objects.addProvider(MAPS_NS, {
+            get: function (id) {
+              if (id.key === 'root') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'folder',
+                  name: '◆ ROC Maps',
+                  location: 'ROOT',
+                  composition: [{ namespace: MAPS_NS, key: 'weather' }]
+                });
+              }
+              if (id.key === 'weather') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'roc.map.panel',
+                  name: 'Weather Intelligence',
+                  mapType: 'windy'
+                });
+              }
+              return Promise.resolve(undefined);
+            }
+          });
+
+          openmct.composition.addProvider({
+            appliesTo: function (o) {
+              return o.identifier && o.identifier.namespace === MAPS_NS && o.identifier.key === 'root';
+            },
+            load: function () {
+              return Promise.resolve([{ namespace: MAPS_NS, key: 'weather' }]);
+            }
+          });
+
+          openmct.objectViews.addProvider({
+            key: 'roc.map.view',
+            name: 'Weather Map',
+            cssClass: 'icon-object',
+            canView: function (o) { return o.type === 'roc.map.panel'; },
+            view: function (domainObject) {
+              // Embed the Windy weather map via iframe — same pattern as the Globe view.
+              // Windy + Leaflet bootstrap badly inside Open MCT's deferred-layout containers;
+              // running them in their own document avoids the sizing/lifecycle issues entirely.
+              var iframe = null;
+              return {
+                show: function (el) {
+                  iframe = document.createElement('iframe');
+                  iframe.src = '/maps/windy.html';
+                  iframe.style.cssText = 'width:100%;height:100%;border:none;background:#08081a;';
+                  iframe.setAttribute('allowfullscreen', 'true');
+                  el.appendChild(iframe);
+                },
+                destroy: function () {
+                  if (iframe) {
+                    iframe.src = 'about:blank';
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                    iframe = null;
+                  }
+                }
+              };
+            }
+          });
+        };
+      }());
+
+      // =============================================
+      // ◆ ROC Dashboards — Embedded Dashboard Panels
+      // =============================================
+      openmct.install(function () {
+        return function (openmct) {
+          var DASH_NS = 'roc-dashboards';
+
+          openmct.types.addType('roc.dashboard.panel', {
+            name: 'Dashboard Panel',
+            description: 'Embedded analytical dashboard',
+            cssClass: 'icon-object'
+          });
+
+          openmct.objects.addRoot({ namespace: DASH_NS, key: 'root' });
+
+          openmct.objects.addProvider(DASH_NS, {
+            get: function (id) {
+              if (id.key === 'root') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'folder',
+                  name: '◆ ROC Dashboards',
+                  location: 'ROOT',
+                  composition: [
+                    { namespace: DASH_NS, key: 'weather-intel' },
+                    { namespace: DASH_NS, key: 'seismic-activity' },
+                    { namespace: DASH_NS, key: 'disaster-monitor' },
+                    { namespace: DASH_NS, key: 'cyber-threat-intel' },
+                    { namespace: DASH_NS, key: 'health-surveillance' },
+                    { namespace: DASH_NS, key: 'infrastructure-status' },
+                    { namespace: DASH_NS, key: 'financial-markets' },
+                    { namespace: DASH_NS, key: 'environmental-monitor' },
+                    { namespace: DASH_NS, key: 'geopolitical-risk' },
+                    { namespace: DASH_NS, key: 'travel-aviation' },
+                    { namespace: DASH_NS, key: 'feed-health' }
+                  ]
+                });
+              }
+              if (id.key === 'ovix-scores') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'roc.dashboard.panel',
+                  name: 'OVIX Domain Scores',
+                  dashboardUrl: '/dashboards/scores.html'
+                });
+              }
+              if (id.key === 'weather-intel') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Weather Intelligence', dashboardUrl: '/dashboards/weather.html'
+                });
+              }
+              if (id.key === 'seismic-activity') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Seismic Activity', dashboardUrl: '/dashboards/seismic.html'
+                });
+              }
+              if (id.key === 'disaster-monitor') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Disaster Monitor', dashboardUrl: '/dashboards/disaster.html'
+                });
+              }
+              if (id.key === 'cyber-threat-intel') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'roc.dashboard.panel',
+                  name: 'Cyber Threat Intel',
+                  dashboardUrl: '/dashboards/cyber.html'
+                });
+              }
+              if (id.key === 'health-surveillance') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'roc.dashboard.panel',
+                  name: 'Health Surveillance',
+                  dashboardUrl: '/dashboards/health.html'
+                });
+              }
+              if (id.key === 'environmental-monitor') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Environmental Monitor', dashboardUrl: '/dashboards/environmental.html'
+                });
+              }
+              if (id.key === 'geopolitical-risk') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Geopolitical Risk', dashboardUrl: '/dashboards/geopolitical.html'
+                });
+              }
+              if (id.key === 'travel-aviation') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Travel & Aviation', dashboardUrl: '/dashboards/travel.html'
+                });
+              }
+              if (id.key === 'feed-health') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Feed Health Monitor', dashboardUrl: '/dashboards/feed-health.html'
+                });
+              }
+              if (id.key === 'infrastructure-status') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Infrastructure Status', dashboardUrl: '/dashboards/infrastructure.html'
+                });
+              }
+              if (id.key === 'financial-markets') {
+                return Promise.resolve({
+                  identifier: id,
+                  type: 'roc.dashboard.panel',
+                  name: 'Financial Markets',
+                  dashboardUrl: '/dashboards/financial.html'
+                });
+              }
+              return Promise.resolve(undefined);
+            }
+          });
+
+          openmct.composition.addProvider({
+            appliesTo: function (o) {
+              return o.identifier && o.identifier.namespace === DASH_NS && o.identifier.key === 'root';
+            },
+            load: function () {
+              return Promise.resolve([
+                
+                { namespace: DASH_NS, key: 'weather-intel' },
+                { namespace: DASH_NS, key: 'seismic-activity' },
+                { namespace: DASH_NS, key: 'disaster-monitor' },
+                { namespace: DASH_NS, key: 'cyber-threat-intel' },
+                { namespace: DASH_NS, key: 'health-surveillance' },
+                { namespace: DASH_NS, key: 'infrastructure-status' },
+                { namespace: DASH_NS, key: 'financial-markets' },
+                { namespace: DASH_NS, key: 'environmental-monitor' },
+                { namespace: DASH_NS, key: 'geopolitical-risk' },
+                { namespace: DASH_NS, key: 'travel-aviation' },
+                { namespace: DASH_NS, key: 'feed-health' }
+              ]);
+            }
+          });
+
+          openmct.objectViews.addProvider({
+            key: 'roc.dashboard.view',
+            name: 'Dashboard View',
+            cssClass: 'icon-object',
+            canView: function (o) { return o.type === 'roc.dashboard.panel'; },
+            view: function (domainObject) {
+              var iframe = null;
+              return {
+                show: function (el) {
+                  iframe = document.createElement('iframe');
+                  iframe.src = domainObject.dashboardUrl || '/dashboards/cyber.html';
+                  iframe.style.cssText = 'width:100%;height:100%;border:none;background:#08081a;';
+                  iframe.setAttribute('allowfullscreen', 'true');
+                  el.appendChild(iframe);
+                },
+                destroy: function () {
+                  if (iframe) {
+                    iframe.src = 'about:blank';
+                    if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                    iframe = null;
+                  }
+                }
+              };
+            }
+          });
+        };
+      }());
+
+      // (Floating OVIX bar removed — domain scores are available as
+      //  ROC Dashboards > OVIX Scores dashboard instead. No floating overlays.)
+
+      // Launch
+      openmct.start();
+    });
+  </script>
+</head>
+<body>
+  <!-- ROC Detail Panel (slides in on region/category click) -->
+  <div id="roc-detail-panel">
+    <div class="panel-header">
+      <h2 id="detail-title">—</h2>
+      <button class="panel-close" onclick="closeDetail()">✕ ESC</button>
+    </div>
+    <div class="panel-body" id="detail-body"></div>
+  </div>
+
+  <script>
+    // =============================================
+    // ROC Detail Panel — receives clicks from globe
+    // =============================================
+    var detailPanel = document.getElementById('roc-detail-panel');
+    var detailTitle = document.getElementById('detail-title');
+    var detailBody = document.getElementById('detail-body');
+    // Production: Cloudflare Worker. Local dev: override OVIX_API_OVERRIDE in console
+    var OVIX_API = window.OVIX_API_OVERRIDE || 'https://ovix-api.tedlango.workers.dev';
+
+    function ovixCSSColor(s) {
+      if (s <= 1.5) return '#18BC9C';
+      if (s <= 2.5) return '#27ae60';
+      if (s <= 3.0) return '#f39c12';
+      if (s <= 4.0) return '#e67e22';
+      return '#e74c3c';
+    }
+
+    function openDetail() { detailPanel.classList.add('open'); }
+    function closeDetail() { detailPanel.classList.remove('open'); }
+
+    // ESC key closes panel
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeDetail();
+    });
+
+    // Handle region click from globe iframe
+    function showRegionDetail(data) {
+      detailTitle.textContent = '◆ ' + data.regionName;
+      var score = data.score || 0;
+      var alerts = data.alerts || { count: 0, top: null };
+
+      var html = '';
+      html += '<div class="score-big" style="color:' + ovixCSSColor(score) + '">' + score.toFixed(1) + '</div>';
+      html += '<div class="score-label">OVIX WEATHER SCORE</div>';
+
+      // Fetch full alert details for this region
+      html += '<div class="alert-section">';
+      html += '<h3>ACTIVE ALERTS (' + alerts.count + ')</h3>';
+      if (alerts.top) {
+        html += '<div class="alert-item"><span class="alert-event">' + alerts.top + '</span></div>';
+      }
+      html += '<div style="color:#555;font-size:10px;margin-top:8px;">Full alert feed coming in Phase 3</div>';
+      html += '</div>';
+
+      // Category breakdown placeholder
+      html += '<div class="alert-section">';
+      html += '<h3>OVIX CATEGORIES</h3>';
+      var cats = ['Weather', 'Traffic', 'Cyber', 'Financial', 'Power', 'Events'];
+      cats.forEach(function(c) {
+        var v = c === 'Weather' ? score : (Math.random() * 3 + 0.5);
+        html += '<div class="cat-row">';
+        html += '<span class="cat-name">' + c + '</span>';
+        html += '<span class="cat-val" style="color:' + ovixCSSColor(v) + '">' + v.toFixed(1) + '</span>';
+        html += '</div>';
+      });
+      html += '</div>';
+
+      detailBody.innerHTML = html;
+      openDetail();
+    }
+
+    // Handle category click from globe iframe
+    function showCategoryDetail(data) {
+      var cat = data.category;
+      detailTitle.textContent = '◆ OVIX: ' + cat.charAt(0).toUpperCase() + cat.slice(1);
+
+      var html = '';
+      html += '<div class="score-label" style="margin-top:20px;">NATIONAL ' + cat.toUpperCase() + ' SCORE</div>';
+
+      if (cat === 'weather') {
+        // Fetch real weather data
+        fetch(OVIX_API + '/api/ovix/weather')
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            var h = '<div class="score-big" style="color:' + ovixCSSColor(d.composite) + '">' + d.composite.toFixed(1) + '</div>';
+            h += '<div class="score-label">WEATHER COMPOSITE (' + d.source + ')</div>';
+            h += '<div class="alert-section"><h3>BY REGION</h3>';
+            d.scores.forEach(function(s) {
+              h += '<div class="cat-row">';
+              h += '<span class="cat-name">' + s.region + '</span>';
+              h += '<span class="cat-val" style="color:' + ovixCSSColor(s.score) + '">' + s.score.toFixed(1);
+              if (s.alertCount > 0) h += ' <span style="color:#666;font-size:10px;">(' + s.alertCount + ')</span>';
+              h += '</span></div>';
+              if (s.topAlert) {
+                h += '<div style="padding:2px 0 6px 12px;font-size:10px;color:#666;">' + s.topAlert + '</div>';
+              }
+            });
+            h += '</div>';
+            detailBody.innerHTML = h;
+          })
+          .catch(function() {
+            detailBody.innerHTML = '<div style="color:#666;padding:20px;">Weather API offline</div>';
+          });
+        detailBody.innerHTML = '<div style="color:#666;padding:20px;">Loading weather data...</div>';
+      } else {
+        html += '<div class="score-big" style="color:#666">—</div>';
+        html += '<div class="score-label">DATA FEED COMING SOON</div>';
+        html += '<div style="color:#555;font-size:11px;margin-top:20px;padding:0 20px;text-align:center;">';
+        html += 'The ' + cat + ' OVIX feed will be wired in a future build phase.</div>';
+        detailBody.innerHTML = html;
+      }
+
+      openDetail();
+    }
+
+    // Listen for messages from globe iframe
+    window.addEventListener('message', function(event) {
+      if (!event.data || !event.data.type) return;
+
+      if (event.data.type === 'roc-region-click') {
+        showRegionDetail(event.data);
+      }
+      if (event.data.type === 'roc-category-click') {
+        showCategoryDetail(event.data);
+      }
+    });
+
+    // =============================================
+    // ROC Ably — Presence + Signal Feed
+    // =============================================
+    // Ably connection (full key for beta — production will use token auth via Cloudflare Worker)
+    var ably = window.ably = new Ably.Realtime({
+      key: 'Hw4N-g.SCRf7w:dw4xkdDeKA_I1TbtBTEVZr2W2PN2hFBBTTcpYsZTuz4',
+      clientId: 'operator-' + Math.random().toString(36).substr(2, 6)
+    });
+    var presenceChannel = ably.channels.get('roc:presence');
+    var signalChannel = ably.channels.get('roc:signals');
+    var operatorCount = 0;
+
+    // Connection status
+    ably.connection.on('connected', function() {
+      console.log('◆ Ably connected, clientId:', ably.auth.clientId);
+      presenceChannel.presence.enter({ view: 'command-center', joined: new Date().toISOString() }, function(err) {
+        if (err) {
+          console.error('Presence enter error:', err);
+          addSignal('system', 'Presence error: ' + err.message);
+        } else {
+          console.log('◆ Entered ROC presence');
+          addSignal('system', 'Operator connected to ROC');
+          updatePresence();
+        }
+      });
+    });
+    ably.connection.on('failed', function(err) {
+      console.error('Ably connection failed:', err);
+      addSignal('system', 'Connection failed');
+    });
+
+    // Track presence
+    function updatePresence() {
+      presenceChannel.presence.get().then(function(members) {
+        operatorCount = members.length;
+        console.log('Presence update:', operatorCount, 'operators');
+        var countEl = document.getElementById('operator-count');
+        var dotsEl = document.getElementById('operator-dots');
+        if (countEl) countEl.textContent = operatorCount;
+        if (dotsEl) {
+          dotsEl.innerHTML = '';
+          for (var i = 0; i < Math.min(operatorCount, 20); i++) {
+            var dot = document.createElement('span');
+            dot.className = 'op-dot';
+            dot.style.opacity = 0.3 + Math.random() * 0.5;
+            dotsEl.appendChild(dot);
+          }
+        }
+      }).catch(function(err) {
+        console.error('Presence get error:', err);
+      });
+    }
+
+    presenceChannel.presence.subscribe('enter', function(member) {
+      updatePresence();
+      addSignal('system', 'Operator joined the ROC');
+    });
+    presenceChannel.presence.subscribe('leave', function(member) {
+      updatePresence();
+      addSignal('system', 'Operator left the ROC');
+    });
+
+    // Signal feed
+    var feedBody = document.getElementById('signal-feed-body');
+    var signalPreview = document.getElementById('signal-preview');
+
+    function addSignal(type, text) {
+      if (!feedBody) return;
+      var item = document.createElement('div');
+      item.className = 'signal-item ' + type;
+      var now = new Date();
+      var time = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+      item.innerHTML = '<span class="signal-time">' + time + '</span> ' + text;
+      feedBody.insertBefore(item, feedBody.firstChild);
+
+      // Keep feed manageable
+      while (feedBody.children.length > 50) feedBody.removeChild(feedBody.lastChild);
+
+      // Update preview
+      if (signalPreview) signalPreview.textContent = text;
+    }
+
+    // Subscribe to signals from other operators
+    signalChannel.subscribe('signal', function(msg) {
+      var d = msg.data;
+      addSignal(d.type || 'member', d.text || msg.data);
+    });
+
+    // Send signal
+    window.sendSignal = function() {
+      var input = document.getElementById('signal-input');
+      if (!input || !input.value.trim()) return;
+      var text = input.value.trim();
+      signalChannel.publish('signal', { type: 'member', text: text, from: ably.auth.clientId });
+      addSignal('member', text);
+      input.value = '';
+    };
+
+    // Toggle feed
+    window.toggleFeed = function() {
+      var feed = document.getElementById('roc-signal-feed');
+      if (feed) feed.classList.toggle('open');
+    };
+
+    // Initial presence check
+    setTimeout(updatePresence, 2000);
+
+    // Fetch OVIX composite periodically and update ambient audio
+    function fetchOVIXForAudio() {
+      fetch('https://ovix-api.tedlango.workers.dev/api/ovix/composite')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.composite !== undefined && window.rocUpdateOVIX) {
+            window.rocUpdateOVIX(d.composite);
+          }
+        }).catch(function() {});
+    }
+    fetchOVIXForAudio();
+    setInterval(fetchOVIXForAudio, 5 * 60 * 1000);
+
+    // Notify on alert-type signals
+    var origSubscribe = signalChannel.subscribe;
+    signalChannel.subscribe('signal', function(msg) {
+      var d = msg.data;
+      if (d.type === 'alert' && window.rocNotifyAlert) {
+        window.rocNotifyAlert('critical');
+      }
+    });
+  </script>
+
+  <!-- ROC Presence Bar -->
+  <div id="roc-presence">
+    <span class="status-dot"></span>
+    <span><span class="operator-count" id="operator-count">0</span> operators online</span>
+    <span class="operator-dots" id="operator-dots"></span>
+    <span class="signal-preview" id="signal-preview" onclick="toggleFeed()" style="cursor:pointer;">
+      ◆ Signal feed — click to expand
+    </span>
+  </div>
+
+  <!-- ROC Signal Feed -->
+  <div id="roc-signal-feed">
+    <div class="feed-header" onclick="toggleFeed()">
+      <span>◆ SIGNAL FEED</span>
+      <span class="toggle">▼</span>
+    </div>
+    <div class="feed-body" id="signal-feed-body"></div>
+    <div class="signal-input">
+      <input id="signal-input" type="text" placeholder="Post a signal..." onkeydown="if(event.key==='Enter')sendSignal()">
+      <button onclick="sendSignal()">SEND</button>
+    </div>
+  </div>
+
+  <!-- User Menu (top-right, shown when logged in) -->
+  <div id="user-menu-btn" onclick="toggleUserMenu()">
+    <div class="um-avatar" id="um-avatar">?</div>
+    <span class="um-handle" id="um-handle">—</span>
+  </div>
+
+  <div id="user-dropdown">
+    <div class="ud-header">
+      <div class="ud-handle" id="ud-handle">—</div>
+      <div class="ud-meta" id="ud-meta">—</div>
+    </div>
+    <div class="ud-item" onclick="openProfileEdit()">
+      <span class="ud-icon">✎</span> Edit Profile
+    </div>
+    <div class="ud-item danger" onclick="signOut()">
+      <span class="ud-icon">⏻</span> Sign Out
+    </div>
+  </div>
+
+  <!-- Profile Completion / Edit Modal -->
+  <div id="profile-modal">
+    <div class="gate-box" style="position:relative;">
+      <h3 id="pm-title" style="color:#18BC9C;font-size:13px;letter-spacing:0.1em;margin:0 0 6px;text-align:center;">COMPLETE YOUR PROFILE</h3>
+      <div id="pm-subtitle" style="color:#555;font-size:10px;text-align:center;margin-bottom:16px;">Choose how you appear in the ROC</div>
+      <div style="display:flex;gap:8px;">
+        <input id="pm-first" type="text" placeholder="First name">
+        <input id="pm-last" type="text" placeholder="Last name">
+      </div>
+      <input id="pm-handle" type="text" placeholder="Handle (e.g., ted_l)" oninput="pmCheckHandle()">
+      <div id="pm-handle-status" style="font-size:9px;margin:-4px 0 8px 2px;min-height:12px;"></div>
+      <select id="pm-industry">
+        <option value="">Industry</option>
+        <option value="Banking/Financial Services">Banking / Financial Services</option>
+        <option value="Healthcare">Healthcare</option>
+        <option value="Insurance">Insurance</option>
+        <option value="Retail">Retail</option>
+        <option value="E-Commerce">E-Commerce</option>
+        <option value="Technology">Technology</option>
+        <option value="Telecommunications">Telecommunications</option>
+        <option value="Travel/Hospitality">Travel / Hospitality</option>
+        <option value="Utilities/Energy">Utilities / Energy</option>
+        <option value="Government">Government</option>
+        <option value="Education">Education</option>
+        <option value="Media/Entertainment">Media / Entertainment</option>
+        <option value="Automotive">Automotive</option>
+        <option value="BPO/Outsourcing">BPO / Outsourcing</option>
+        <option value="Consulting">Consulting</option>
+        <option value="Other">Other</option>
+      </select>
+      <input id="pm-role" type="text" placeholder="Role (optional, e.g., WFM Analyst)">
+      <button class="gate-btn" id="pm-submit" onclick="pmSave()">SAVE PROFILE</button>
+      <div id="pm-error" style="color:#e74c3c;font-size:10px;margin-top:8px;text-align:center;min-height:14px;"></div>
+      <div id="pm-skip" style="text-align:center;margin-top:8px;">
+        <a onclick="pmClose()" style="color:#444;font-size:10px;cursor:pointer;">Skip for now</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Gate — blocks entire Open MCT until authenticated -->
+  <div id="roc-gate">
+    <div>
+      <div style="text-align:center;margin-bottom:32px;">
+        <div style="font-size:36px;color:#18BC9C;font-weight:bold;letter-spacing:0.2em;">◆ ROC</div>
+        <div style="font-size:11px;color:#555;letter-spacing:0.15em;margin-top:6px;">RESOURCE OPTIMIZATION CENTER</div>
+        <div style="font-size:10px;color:#333;margin-top:4px;">WFM Labs · v1.3.0</div>
+      </div>
+      <div class="gate-box">
+        <h3 id="g-title" style="color:#18BC9C;font-size:13px;letter-spacing:0.1em;margin:0 0 16px;text-align:center;">SIGN IN</h3>
+
+        <!-- OAuth -->
+        <div id="g-oauth">
+          <button class="gate-oauth-btn" onclick="window.location.href='https://ovix-api.tedlango.workers.dev/auth/google'">Continue with Google</button>
+          <button class="gate-oauth-btn" onclick="window.location.href='https://ovix-api.tedlango.workers.dev/auth/github'">Continue with GitHub</button>
+          <div style="text-align:center;margin:12px 0 4px;color:#333;font-size:9px;letter-spacing:0.1em;">OR</div>
+        </div>
+
+        <!-- Registration fields -->
+        <div id="g-reg" style="display:none;">
+          <div style="display:flex;gap:8px;">
+            <input id="g-first" type="text" placeholder="First name">
+            <input id="g-last" type="text" placeholder="Last name">
+          </div>
+          <input id="g-handle" type="text" placeholder="Handle (e.g., ted_l)" oninput="gCheckHandle()">
+          <div id="g-handle-status" style="font-size:9px;margin:-4px 0 8px 2px;min-height:12px;"></div>
+          <select id="g-industry">
+            <option value="">Industry</option>
+            <option value="Banking/Financial Services">Banking / Financial Services</option>
+            <option value="Healthcare">Healthcare</option>
+            <option value="Insurance">Insurance</option>
+            <option value="Retail">Retail</option>
+            <option value="E-Commerce">E-Commerce</option>
+            <option value="Technology">Technology</option>
+            <option value="Telecommunications">Telecommunications</option>
+            <option value="Travel/Hospitality">Travel / Hospitality</option>
+            <option value="Utilities/Energy">Utilities / Energy</option>
+            <option value="Government">Government</option>
+            <option value="Education">Education</option>
+            <option value="Media/Entertainment">Media / Entertainment</option>
+            <option value="Automotive">Automotive</option>
+            <option value="BPO/Outsourcing">BPO / Outsourcing</option>
+            <option value="Consulting">Consulting</option>
+            <option value="Other">Other</option>
+          </select>
+          <input id="g-role" type="text" placeholder="Role (optional, e.g., WFM Analyst)">
+          <input id="g-location" type="text" placeholder="City, Country (optional, e.g., Chicago, US)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <input id="g-show-on-map" type="checkbox" style="width:auto;margin:0;">
+            <label for="g-show-on-map" style="font-size:10px;color:#666;cursor:pointer;">Show me on the ROC globe</label>
+          </div>
+        </div>
+
+        <input id="g-email" type="email" placeholder="Email">
+        <input id="g-pass" type="password" placeholder="Password (8+ characters)">
+        <button class="gate-btn" id="g-submit" onclick="gSubmit()">SIGN IN</button>
+
+        <div id="g-toggle" style="text-align:center;margin-top:12px;font-size:10px;color:#555;">
+          New here? <a onclick="gSwitch()" style="color:#18BC9C;cursor:pointer;">Create account</a>
+        </div>
+        <div id="g-forgot" style="text-align:center;margin-top:6px;font-size:10px;">
+          <a onclick="gReset()" style="color:#444;cursor:pointer;">Forgot password?</a>
+        </div>
+        <div id="g-error" style="color:#e74c3c;font-size:10px;margin-top:8px;text-align:center;min-height:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var API = 'https://ovix-api.tedlango.workers.dev';
+    var mode = 'login';
+    var hTimer = null;
+
+    // --- Mode switch ---
+    window.gSwitch = function() {
+      mode = mode === 'login' ? 'register' : 'login';
+      document.getElementById('g-title').textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+      document.getElementById('g-reg').style.display = mode === 'register' ? 'block' : 'none';
+      document.getElementById('g-submit').textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+      document.getElementById('g-toggle').innerHTML = mode === 'login'
+        ? 'New here? <a onclick="gSwitch()" style="color:#18BC9C;cursor:pointer;">Create account</a>'
+        : 'Have an account? <a onclick="gSwitch()" style="color:#18BC9C;cursor:pointer;">Sign in</a>';
+      document.getElementById('g-forgot').style.display = mode === 'login' ? 'block' : 'none';
+      document.getElementById('g-error').textContent = '';
+    };
+
+    // --- Handle check ---
+    window.gCheckHandle = function() {
+      if (hTimer) clearTimeout(hTimer);
+      var h = document.getElementById('g-handle').value.trim().toLowerCase();
+      var s = document.getElementById('g-handle-status');
+      if (h.length < 3) { s.textContent = ''; return; }
+      s.textContent = 'checking...'; s.style.color = '#555';
+      hTimer = setTimeout(function() {
+        fetch(API + '/auth/check-handle?handle=' + encodeURIComponent(h))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            s.textContent = d.available ? '✓ available' : (d.error || '✕ taken');
+            s.style.color = d.available ? '#18BC9C' : '#e74c3c';
+          }).catch(function() { s.textContent = ''; });
+      }, 500);
+    };
+
+    // --- Password reset ---
+    window.gReset = function() {
+      document.getElementById('g-title').textContent = 'RESET PASSWORD';
+      document.getElementById('g-reg').style.display = 'none';
+      document.getElementById('g-pass').style.display = 'none';
+      document.getElementById('g-oauth').style.display = 'none';
+      document.getElementById('g-toggle').style.display = 'none';
+      document.getElementById('g-forgot').innerHTML = '<a onclick="gSwitch();gRestore();" style="color:#18BC9C;cursor:pointer;">Back to sign in</a>';
+      document.getElementById('g-submit').textContent = 'SEND RESET LINK';
+      document.getElementById('g-submit').onclick = function() {
+        var email = document.getElementById('g-email').value.trim();
+        if (!email) { document.getElementById('g-error').textContent = 'Enter your email'; return; }
+        document.getElementById('g-submit').textContent = 'SENDING...';
+        fetch(API + '/auth/reset-request', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: email }),
+        }).then(function(r) { return r.json(); }).then(function(d) {
+          var e = document.getElementById('g-error');
+          e.style.color = '#18BC9C'; e.textContent = d.message || 'Check your email.';
+          document.getElementById('g-submit').textContent = 'SENT';
+        }).catch(function() {
+          document.getElementById('g-error').textContent = 'Failed to send';
+          document.getElementById('g-submit').textContent = 'SEND RESET LINK';
+        });
+      };
+    };
+
+    window.gRestore = function() {
+      document.getElementById('g-pass').style.display = 'block';
+      document.getElementById('g-oauth').style.display = 'block';
+      document.getElementById('g-toggle').style.display = 'block';
+      document.getElementById('g-forgot').innerHTML = '<a onclick="gReset()" style="color:#444;cursor:pointer;">Forgot password?</a>';
+      document.getElementById('g-submit').onclick = gSubmit;
+      document.getElementById('g-error').style.color = '#e74c3c';
+      document.getElementById('g-error').textContent = '';
+    };
+
+    // --- Submit ---
+    window.gSubmit = function() {
+      var err = document.getElementById('g-error');
+      var btn = document.getElementById('g-submit');
+      err.textContent = ''; err.style.color = '#e74c3c';
+      btn.textContent = 'AUTHENTICATING...'; btn.disabled = true;
+
+      var endpoint, body;
+      if (mode === 'login') {
+        endpoint = '/auth/login';
+        body = { email: document.getElementById('g-email').value.trim(), password: document.getElementById('g-pass').value };
+      } else {
+        endpoint = '/auth/register';
+        body = {
+          email: document.getElementById('g-email').value.trim(),
+          password: document.getElementById('g-pass').value,
+          firstName: document.getElementById('g-first').value.trim(),
+          lastName: document.getElementById('g-last').value.trim(),
+          handle: document.getElementById('g-handle').value.trim().toLowerCase(),
+          industry: document.getElementById('g-industry').value,
+          jobRole: document.getElementById('g-role').value.trim(),
+          locationName: document.getElementById('g-location').value.trim() || undefined,
+          showOnMap: document.getElementById('g-show-on-map').checked ? 1 : 0,
+        };
+      }
+
+      fetch(API + endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(result) {
+          btn.disabled = false;
+          btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+          if (!result.ok) { err.textContent = result.data.error || 'Failed'; return; }
+          localStorage.setItem('roc-token', result.data.token);
+          localStorage.setItem('roc-user', JSON.stringify(result.data.user));
+          unlockROC(result.data.user);
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = mode === 'login' ? 'SIGN IN' : 'CREATE ACCOUNT';
+          err.textContent = 'Connection failed';
+        });
+    };
+
+    var currentUser = null;
+
+    function unlockROC(user) {
+      document.getElementById('roc-gate').classList.add('hidden');
+      if (user) {
+        currentUser = user;
+        showUserMenu(user);
+        // Check if profile needs completion (OAuth users may lack handle/industry)
+        if (!user.industry || (user.handle && /^[a-z]+\d+$/.test(user.handle))) {
+          showProfileCompletion(user);
+        }
+      }
+    }
+
+    function showUserMenu(user) {
+      // Store user data for plugins (User Profile, Signal Feed) to read
+      localStorage.setItem('roc-user', JSON.stringify(user));
+      var btn = document.getElementById('user-menu-btn');
+      if (!btn) return; // guard — overlay may be hidden
+      var initial = (user.handle || user.firstName || user.email || '?').charAt(0).toUpperCase();
+      document.getElementById('um-avatar').textContent = initial;
+      document.getElementById('um-handle').textContent = user.handle || user.email;
+      document.getElementById('ud-handle').textContent = '@' + (user.handle || 'unknown');
+      var meta = [];
+      if (user.industry) meta.push(user.industry);
+      if (user.jobRole) meta.push(user.jobRole);
+      document.getElementById('ud-meta').textContent = meta.join(' · ') || 'No profile info';
+      btn.style.display = 'flex';
+    }
+
+    window.toggleUserMenu = function() {
+      var dd = document.getElementById('user-dropdown');
+      dd.classList.toggle('open');
+    };
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+      var dd = document.getElementById('user-dropdown');
+      var btn = document.getElementById('user-menu-btn');
+      if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target)) {
+        dd.classList.remove('open');
+      }
+    });
+
+    window.signOut = function() {
+      localStorage.removeItem('roc-token');
+      localStorage.removeItem('roc-user');
+      localStorage.removeItem('roc-watchlist');
+      currentUser = null;
+      document.getElementById('user-dropdown').classList.remove('open');
+      document.getElementById('user-menu-btn').style.display = 'none';
+      document.getElementById('roc-gate').classList.remove('hidden');
+    };
+
+    // --- Profile Completion / Edit ---
+
+    var pmTimer = null;
+    var pmMode = 'complete'; // 'complete' or 'edit'
+
+    function showProfileCompletion(user) {
+      pmMode = 'complete';
+      document.getElementById('pm-title').textContent = 'COMPLETE YOUR PROFILE';
+      document.getElementById('pm-subtitle').textContent = 'Choose how you appear in the ROC';
+      document.getElementById('pm-skip').style.display = 'block';
+      prefillProfile(user);
+      document.getElementById('profile-modal').classList.add('open');
+    }
+
+    window.openProfileEdit = function() {
+      document.getElementById('user-dropdown').classList.remove('open');
+      pmMode = 'edit';
+      document.getElementById('pm-title').textContent = 'EDIT PROFILE';
+      document.getElementById('pm-subtitle').textContent = 'Update your ROC profile';
+      document.getElementById('pm-skip').style.display = 'none';
+      prefillProfile(currentUser);
+      document.getElementById('profile-modal').classList.add('open');
+    };
+
+    function prefillProfile(user) {
+      if (!user) return;
+      document.getElementById('pm-first').value = user.firstName || '';
+      document.getElementById('pm-last').value = user.lastName || '';
+      document.getElementById('pm-handle').value = user.handle || '';
+      document.getElementById('pm-industry').value = user.industry || '';
+      document.getElementById('pm-role').value = user.jobRole || '';
+      document.getElementById('pm-error').textContent = '';
+      document.getElementById('pm-handle-status').textContent = '';
+    }
+
+    window.pmClose = function() {
+      document.getElementById('profile-modal').classList.remove('open');
+    };
+
+    window.pmCheckHandle = function() {
+      if (pmTimer) clearTimeout(pmTimer);
+      var h = document.getElementById('pm-handle').value.trim().toLowerCase();
+      var s = document.getElementById('pm-handle-status');
+      if (h.length < 3) { s.textContent = ''; return; }
+      s.textContent = 'checking...'; s.style.color = '#555';
+      pmTimer = setTimeout(function() {
+        fetch(API + '/auth/check-handle?handle=' + encodeURIComponent(h))
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            // If it's their own current handle, it's fine
+            if (currentUser && currentUser.handle === h) {
+              s.textContent = '✓ your current handle'; s.style.color = '#18BC9C';
+            } else {
+              s.textContent = d.available ? '✓ available' : (d.error || '✕ taken');
+              s.style.color = d.available ? '#18BC9C' : '#e74c3c';
+            }
+          }).catch(function() { s.textContent = ''; });
+      }, 500);
+    };
+
+    window.pmSave = function() {
+      var token = localStorage.getItem('roc-token');
+      if (!token) return;
+
+      var handle = document.getElementById('pm-handle').value.trim().toLowerCase();
+      var firstName = document.getElementById('pm-first').value.trim();
+      var lastName = document.getElementById('pm-last').value.trim();
+      var industry = document.getElementById('pm-industry').value;
+      var jobRole = document.getElementById('pm-role').value.trim();
+      var err = document.getElementById('pm-error');
+      var btn = document.getElementById('pm-submit');
+
+      if (!handle || handle.length < 3) { err.textContent = 'Handle required (3+ characters)'; return; }
+      if (!firstName) { err.textContent = 'First name required'; return; }
+
+      btn.textContent = 'SAVING...'; btn.disabled = true; err.textContent = '';
+
+      fetch(API + '/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ handle: handle, firstName: firstName, lastName: lastName, industry: industry, jobRole: jobRole }),
+      }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(result) {
+          btn.disabled = false; btn.textContent = 'SAVE PROFILE';
+          if (!result.ok) { err.textContent = result.data.error || 'Failed'; return; }
+          // Update local state
+          currentUser = result.data.user;
+          localStorage.setItem('roc-user', JSON.stringify(result.data.user));
+          showUserMenu(result.data.user);
+          pmClose();
+        })
+        .catch(function() {
+          btn.disabled = false; btn.textContent = 'SAVE PROFILE';
+          err.textContent = 'Connection failed';
+        });
+    };
+
+    // Enter key
+    ['g-email', 'g-pass', 'g-first', 'g-last', 'g-handle', 'g-role'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', function(e) { if (e.key === 'Enter') gSubmit(); });
+    });
+
+    // --- OAuth callback + token check ---
+    var params = new URLSearchParams(window.location.search);
+    var authParam = params.get('auth');
+    var authError = params.get('auth_error');
+
+    function loadUserAndUnlock(token) {
+      fetch(API + '/auth/me', { headers: { 'Authorization': 'Bearer ' + token } })
+        .then(function(r) { if (!r.ok) throw new Error('Auth failed'); return r.json(); })
+        .then(function(d) { unlockROC(d.user); })
+        .catch(function() {
+          localStorage.removeItem('roc-token');
+          localStorage.removeItem('roc-user');
+        });
+    }
+
+    if (authError) {
+      document.getElementById('g-error').textContent = decodeURIComponent(authError);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (authParam) {
+      try {
+        var decoded = atob(authParam);
+        var authData = new URLSearchParams(decoded);
+        var token = authData.get('token');
+        if (token) {
+          localStorage.setItem('roc-token', token);
+          window.history.replaceState({}, '', window.location.pathname);
+          loadUserAndUnlock(token);
+        }
+      } catch(e) {}
+    } else {
+      var token = localStorage.getItem('roc-token');
+      if (token) {
+        loadUserAndUnlock(token);
+      } else {
+        // Hub session bridge: check if authenticated via Hub (same-origin)
+        var hubSession = localStorage.getItem('roc-hub-session');
+        if (hubSession) {
+          try {
+            var hs = JSON.parse(hubSession);
+            // Auto-unlock with Hub session data (no ROC API call needed for public endpoints)
+            unlockROC({
+              id: hs.memberId,
+              handle: hs.name || hs.email.split('@')[0],
+              firstName: hs.name ? hs.name.split(' ')[0] : '',
+              lastName: hs.name ? hs.name.split(' ').slice(1).join(' ') : '',
+              email: hs.email,
+              role: hs.role,
+              industry: '',
+              jobRole: '',
+            });
+          } catch(e) {}
+        }
+      }
+    }
+  })();
+  </script>
+</body>
+</html>

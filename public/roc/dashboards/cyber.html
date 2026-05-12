@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CTI Dashboard — ROC</title>
+<style>
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-panel: #141b2d;
+    --bg-card: #1e293b;
+    --border: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --accent-cyan: #06b6d4;
+    --accent-red: #ef4444;
+    --accent-orange: #f97316;
+    --accent-yellow: #eab308;
+    --accent-green: #22c55e;
+    --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+    margin: 0;
+  }
+
+  /* PAGE GRID */
+  .page-grid {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+  }
+
+  /* LEFT GAUGE PANEL */
+  .gauge-panel {
+    grid-row: 1 / -1;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* BANNER */
+  .banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .banner-title { font-size: 12px; font-weight: 700; color: var(--accent-cyan); letter-spacing: 1.5px; white-space: nowrap; text-transform: uppercase; }
+  .banner-stats { display: flex; gap: 12px; }
+  .stat-box { text-align: center; }
+  .stat-value { font-size: 14px; font-weight: 700; }
+  .stat-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
+  .level-badge { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
+  .transport { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+  .transport button:hover { background:rgba(24,188,156,0.2); }
+
+
+  /* DATA AREA */
+  .data-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .panel.grow { flex: 1; }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent-cyan);
+  }
+  .panel-count {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg-card);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+  }
+
+  /* SCROLLBAR */
+  .panel-body::-webkit-scrollbar { width: 6px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .panel-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* CARDS */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent-cyan); }
+  .card:last-child { margin-bottom: 0; }
+
+  .card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .cve-id {
+    font-weight: 700;
+    color: var(--accent-cyan);
+    font-size: 12px;
+  }
+  .vendor-product {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background: rgba(6,182,212,0.08);
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .tag-ransomware {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent-red);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .tag-apt {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent-orange);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .severity-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .card-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-date {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .card-link {
+    font-size: 10px;
+    color: var(--accent-cyan);
+    text-decoration: none;
+    margin-top: 4px;
+    display: inline-block;
+  }
+  .card-link:hover { text-decoration: underline; }
+
+  /* APT CARD */
+  .apt-name {
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--accent-orange);
+  }
+  .apt-type {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* GAUGE */
+  .gauge-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0;
+  }
+  .gauge-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    margin-top: 4px;
+  }
+
+  /* GAUGE PANEL SCROLLBAR */
+  .gauge-panel::-webkit-scrollbar { width: 6px; }
+  .gauge-panel::-webkit-scrollbar-track { background: transparent; }
+  .gauge-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .gauge-panel::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+  /* FOOTER */
+  .source-footer {
+    padding: 10px 14px;
+    font-size: 10px;
+    color: var(--text-dim);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .source-footer a {
+    color: var(--accent-cyan);
+    text-decoration: none;
+  }
+  .source-footer a:hover { text-decoration: underline; }
+
+  /* LOADING / ERROR */
+  .status-msg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+  }
+  .error-msg { color: var(--accent-red); }
+
+  /* EMPTY STATE */
+  .empty-state {
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .page-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto auto 1fr;
+      height: auto;
+      overflow-y: auto;
+    }
+    .gauge-panel {
+      grid-row: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .data-area {
+      grid-template-columns: 1fr;
+      overflow-y: auto;
+    }
+    .column { overflow: visible; }
+    .panel.grow { flex: none; max-height: 400px; }
+  }
+
+/* Universal card interaction */
+  .card { cursor:pointer; }
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
+  .card-link:hover { text-decoration:underline; }
+
+/* Hide transport controls when embedded in iframe */
+@media all {
+  body.in-iframe .transport,
+  body.in-iframe #rotation-indicator { display:none !important; }
+}
+</style>
+</head>
+<body>
+<script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
+
+
+<div class="page-grid">
+
+  <!-- LEFT: GAUGE PANEL -->
+  <div class="gauge-panel">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-cyan);margin-bottom:8px;">Threat Summary</div>
+    <div class="gauge-container" id="gauge-container">
+      <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
+      <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
+    </div>
+    <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
+    <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
+      OVIX Cyber Threat Index computed from weighted factors: SANS InfoCon threat level (15%),
+      CISA Known Exploited Vulnerabilities (25%), APT campaign activity via OTX (25%),
+      global port scanning volume via SANS ISC (20%), and CISA advisory frequency (15%).
+      Score maps to OVIX 0-10 scale for cross-domain comparison.
+    </div>
+    <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
+      Sources: CISA KEV &middot; CISA Advisories &middot; AlienVault OTX &middot; SANS ISC<br>
+      Refreshes every 5 min via OVIX API.
+    </div>
+  </div>
+
+  <div class="banner">
+    <div class="banner-title">CYBER THREAT INTEL</div>
+    <div class="banner-stats">
+      <div class="stat-box"><div class="stat-value" id="kev-count">--</div><div class="stat-label">KEV COUNT</div></div>
+      <div class="stat-box"><div class="stat-value" id="advisory-count">--</div><div class="stat-label">ADVISORIES</div></div>
+      <div class="stat-box"><div class="stat-value" id="apt-count">--</div><div class="stat-label">APT/OTX</div></div>
+    </div>
+    <div class="level-badge" id="cti-level-badge">--</div>
+    <div class="transport">
+      <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
+      <button onclick="rocNav('next')" title="Next">&#9197;</button>
+    </div>
+  </div>
+
+
+  <!-- DATA AREA (bottom-right) -->
+  <div class="data-area">
+
+    <!-- COL 1: CISA KEV -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">CISA KEV</span>
+          <span class="panel-count" id="kev-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="kev-list">
+          <div class="status-msg">Loading KEV data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 2: OTX + Ports -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">OTX Threat Intel</span>
+          <span class="panel-count" id="otx-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="otx-list">
+          <div class="status-msg">Loading OTX data...</div>
+        </div>
+      </div>
+      <div class="panel" style="flex-shrink:0;">
+        <div class="panel-header">
+          <span class="panel-title">Top Attacked Ports</span>
+          <span class="panel-count" style="color:var(--text-dim);font-size:9px;">SANS ISC</span>
+        </div>
+        <div class="panel-body" id="ports-list" style="max-height:200px;">
+          <div class="status-msg">Loading port data...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COL 3: Advisories -->
+    <div class="column">
+      <div class="panel grow">
+        <div class="panel-header">
+          <span class="panel-title">CISA Advisories</span>
+          <span class="panel-count" id="adv-panel-count">--</span>
+        </div>
+        <div class="panel-body" id="advisory-list">
+          <div class="status-msg">Loading advisories...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/cyber';
+  var REFRESH_MS = 5 * 60 * 1000;
+
+  // --- Utility ---
+  function esc(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+        ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch (e) { return iso; }
+  }
+
+  function timeSince(iso) {
+    if (!iso) return '';
+    var ms = Date.now() - new Date(iso).getTime();
+    var m = Math.floor(ms / 60000);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
+  }
+
+  function severityColor(sev) {
+    var s = parseFloat(sev) || 0;
+    if (s >= 7) return 'var(--accent-red)';
+    if (s >= 5) return 'var(--accent-orange)';
+    if (s >= 3) return 'var(--accent-yellow)';
+    return 'var(--accent-green)';
+  }
+
+  // --- CTI Score ---
+  function computeCTI(kevs, advisories, otxEvents, threatLevel, topPorts) {
+    var kevCount = kevs.length;
+    var advCount = advisories.length;
+    var aptCount = otxEvents.filter(function(e) { return e.event_type === 'apt'; }).length;
+    var ransomCount = kevs.filter(function(e) {
+      var rd = e.raw_data; if (typeof rd === 'string') try { rd = JSON.parse(rd); } catch(x){}
+      return rd && rd.ransomware === 'Known';
+    }).length;
+
+    // SANS InfoCon (0-100, weight 15%)
+    var infoconMap = { green: 10, yellow: 40, orange: 70, red: 95 };
+    var infoconScore = infoconMap[(threatLevel || {}).status] || 10;
+
+    // KEV Activity (0-100, weight 25%)
+    var kevScore = Math.min(100, (kevCount * 10) + (ransomCount * 15));
+
+    // APT/Threat Activity (0-100, weight 25%)
+    var aptScore = Math.min(100, aptCount * 8);
+
+    // Attack Volume from ports (0-100, weight 20%)
+    var totalRecords = (topPorts || []).reduce(function(s, p) { return s + (p.records || 0); }, 0);
+    var attackScore = Math.min(100, Math.round((totalRecords / 1500000) * 60));
+
+    // Advisory Activity (0-100, weight 15%)
+    var advScore = Math.min(100, advCount * 8);
+
+    var factors = [
+      { name: 'InfoCon', value: infoconScore, weight: 15 },
+      { name: 'Active Exploits', value: kevScore, weight: 25 },
+      { name: 'APT Campaigns', value: aptScore, weight: 25 },
+      { name: 'Attack Volume', value: attackScore, weight: 20 },
+      { name: 'Advisories', value: advScore, weight: 15 },
+    ];
+
+    var score = Math.round(
+      infoconScore * 0.15 + kevScore * 0.25 + aptScore * 0.25 + attackScore * 0.20 + advScore * 0.15
+    );
+    score = Math.min(score, 100);
+
+    // Render factor breakdown bars
+    renderFactors(factors, score);
+
+    return score;
+  }
+
+  function renderFactors(factors, totalScore) {
+    var el = document.getElementById('factor-bars');
+    if (!el) return;
+    var ovix = (totalScore / 10).toFixed(1);
+    var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-orange)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+
+    var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">OVIX Score: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
+    factors.forEach(function(f) {
+      var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-orange)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      html += '<div style="display:grid;grid-template-columns:90px 1fr 30px 25px;align-items:center;gap:6px;font-size:9px;margin-bottom:3px;">' +
+        '<span style="text-align:right;color:var(--text-secondary);">' + f.name + '</span>' +
+        '<div style="height:8px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + f.value + '%;background:' + barColor + ';border-radius:2px;transition:width 0.5s;"></div>' +
+        '</div>' +
+        '<span style="text-align:right;color:var(--text-dim);">' + f.value + '</span>' +
+        '<span style="text-align:right;color:var(--text-dim);">' + f.weight + '%</span>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  }
+
+  function ctiLevel(score) {
+    if (score >= 75) return { label: 'CRITICAL', color: 'var(--accent-red)' };
+    if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-orange)' };
+    if (score >= 25) return { label: 'GUARDED', color: 'var(--accent-yellow)' };
+    return { label: 'LOW', color: 'var(--accent-green)' };
+  }
+
+  // --- Gauge SVG ---
+  function drawGauge(score) {
+    var svg = document.getElementById('gauge-svg');
+    var cx = 110, cy = 110, r = 90;
+    var startAngle = Math.PI;
+    var endAngle = 2 * Math.PI;
+
+    // Background arc segments: green, yellow, orange, red
+    var segments = [
+      { start: 0, end: 0.25, color: '#22c55e' },
+      { start: 0.25, end: 0.50, color: '#eab308' },
+      { start: 0.50, end: 0.75, color: '#f97316' },
+      { start: 0.75, end: 1.0, color: '#ef4444' }
+    ];
+
+    var html = '';
+
+    // Track background
+    html += '<path d="' + arcPath(cx, cy, r, startAngle, endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
+
+    // Colored segments
+    segments.forEach(function(seg) {
+      var a1 = startAngle + (endAngle - startAngle) * seg.start;
+      var a2 = startAngle + (endAngle - startAngle) * seg.end;
+      html += '<path d="' + arcPath(cx, cy, r, a1, a2) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>';
+    });
+
+    // Active arc up to score
+    var scoreFrac = Math.max(0, Math.min(score / 100, 1));
+    if (scoreFrac > 0.005) {
+      var scoreAngle = startAngle + (endAngle - startAngle) * scoreFrac;
+      var level = ctiLevel(score);
+      html += '<path d="' + arcPath(cx, cy, r, startAngle, scoreAngle) + '" fill="none" stroke="' + level.color + '" stroke-width="18" stroke-linecap="round"/>';
+    }
+
+    // Needle
+    var needleAngle = startAngle + (endAngle - startAngle) * scoreFrac;
+    var nx = cx + (r - 30) * Math.cos(needleAngle);
+    var ny = cy + (r - 30) * Math.sin(needleAngle);
+    html += '<line x1="' + cx + '" y1="' + cy + '" x2="' + nx + '" y2="' + ny + '" stroke="' + ctiLevel(score).color + '" stroke-width="2.5" stroke-linecap="round"/>';
+    html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + ctiLevel(score).color + '"/>';
+
+    // Score text
+    html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + ctiLevel(score).color + '" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="28" font-weight="700">' + score + '</text>';
+    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">CTI SCORE</text>';
+
+    // Min/Max labels
+    html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">0</text>';
+    html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">100</text>';
+
+    svg.innerHTML = html;
+
+    var label = document.getElementById('gauge-label');
+    var lvl = ctiLevel(score);
+    label.textContent = lvl.label;
+    label.style.color = lvl.color;
+  }
+
+  function arcPath(cx, cy, r, startAngle, endAngle) {
+    var x1 = cx + r * Math.cos(startAngle);
+    var y1 = cy + r * Math.sin(startAngle);
+    var x2 = cx + r * Math.cos(endAngle);
+    var y2 = cy + r * Math.sin(endAngle);
+    var largeArc = (endAngle - startAngle > Math.PI) ? 1 : 0;
+    return 'M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x2 + ' ' + y2;
+  }
+
+  // --- Render ---
+  function renderKEV(events) {
+    var el = document.getElementById('kev-list');
+    document.getElementById('kev-panel-count').textContent = events.length;
+    if (!events.length) { el.innerHTML = '<div class="empty-state">No KEV entries in last 24h</div>'; return; }
+
+    el.innerHTML = events.map(function(e) {
+      var raw = e.raw_data || {};
+      var cveId = esc(raw.cveID || '');
+      var vendor = esc(raw.vendor || '');
+      var product = esc(raw.product || '');
+      var ransomware = raw.ransomware === 'Known';
+      var vendorProduct = (vendor && product) ? vendor + ' / ' + product : vendor || product || '';
+      var url = e.source_url || '';
+
+      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
+        '<div class="card-row">' +
+          (cveId ? '<span class="cve-id">' + cveId + '</span>' : '') +
+          (ransomware ? '<span class="tag-ransomware">Ransomware</span>' : '') +
+        '</div>' +
+        (vendorProduct ? '<div class="vendor-product" style="display:inline-block;margin-bottom:4px;">' + esc(vendorProduct) + '</div>' : '') +
+        '<div class="card-desc">' + esc(e.description) + '</div>' +
+        '<div class="card-date">' +
+          '<span class="severity-dot" style="background:' + severityColor(e.severity) + '"></span>' +
+          'Severity ' + esc(e.severity) + ' &middot; ' + fmtDate(e.occurred_at) +
+          ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')" target="_blank" rel="noopener">Source &#8599;</span>' : '') +
+        '</div>' +
+        '<div class="card-details">' + esc(e.description) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderOTX(events) {
+    var el = document.getElementById('otx-list');
+    document.getElementById('otx-panel-count').textContent = events.length;
+    if (!events.length) { el.innerHTML = '<div class="empty-state">No OTX intel in last 24h</div>'; return; }
+
+    el.innerHTML = events.map(function(e) {
+      var isApt = e.event_type === 'apt';
+      var url = e.source_url || '';
+      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
+        '<div class="card-row">' +
+          '<span class="' + (isApt ? 'apt-name' : 'cve-id') + '">' + esc(e.severity_label || 'Threat Intel') + '</span>' +
+          (isApt ? '<span class="tag-apt">APT</span>' : '<span class="apt-type">' + esc(e.event_type || 'intel') + '</span>') +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-primary);margin:4px 0;">' + esc(e.title) + '</div>' +
+        '<div class="card-desc">' + esc(e.description) + '</div>' +
+        '<div class="card-date">' +
+          '<span class="severity-dot" style="background:' + severityColor(e.severity) + '"></span>' +
+          'Severity ' + esc(e.severity) + ' &middot; ' + timeSince(e.occurred_at) +
+          ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')" target="_blank" rel="noopener">Source &#8599;</span>' : '') +
+        '</div>' +
+        '<div class="card-details">' + esc(e.description) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderAdvisories(events) {
+    var el = document.getElementById('advisory-list');
+    document.getElementById('adv-panel-count').textContent = events.length;
+    if (!events.length) { el.innerHTML = '<div class="empty-state">No advisories in last 24h</div>'; return; }
+
+    el.innerHTML = events.map(function(e) {
+      var url = e.source_url || '';
+      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
+        '<div style="font-size:12px;color:var(--text-primary);font-weight:600;margin-bottom:4px;">' + esc(e.title) + '</div>' +
+        '<div class="card-desc">' + esc(e.description) + '</div>' +
+        '<div class="card-date">' +
+          '<span class="severity-dot" style="background:' + severityColor(e.severity) + '"></span>' +
+          'Severity ' + esc(e.severity) + ' &middot; ' + fmtDate(e.occurred_at) +
+          ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')" target="_blank" rel="noopener">Source &#8599;</span>' : '') +
+        '</div>' +
+        '<span style="color:var(--text-dim);font-size:9px;">Source: CISA</span>' +
+        '<div class="card-details">' + esc(e.description) + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  var PORT_NAMES = {
+    22: 'SSH', 23: 'Telnet', 25: 'SMTP', 53: 'DNS', 68: 'DHCP', 80: 'HTTP',
+    443: 'HTTPS', 445: 'SMB', 1433: 'MSSQL', 2222: 'SSH-Alt', 3306: 'MySQL',
+    3389: 'RDP', 5900: 'VNC', 8080: 'HTTP-Alt', 8443: 'HTTPS-Alt'
+  };
+
+  function renderPorts(ports) {
+    var el = document.getElementById('ports-list');
+    if (!el) return;
+    if (!ports.length) { el.innerHTML = '<div class="empty-state">Port data unavailable</div>'; return; }
+
+    var maxRec = Math.max.apply(null, ports.map(function(p) { return p.records || 0; }));
+    el.innerHTML = ports.map(function(p) {
+      var pct = Math.round(((p.records || 0) / maxRec) * 100);
+      var label = PORT_NAMES[p.port] || ('Port ' + p.port);
+      var recs = p.records >= 1000000 ? (p.records / 1000000).toFixed(1) + 'M'
+        : p.records >= 1000 ? (p.records / 1000).toFixed(1) + 'K' : p.records;
+      return '<div style="display:grid;grid-template-columns:60px 1fr 50px;align-items:center;gap:6px;font-size:10px;padding:2px 0;">' +
+        '<span style="text-align:right;font-weight:600;color:var(--accent-cyan);">' + esc(label) + '</span>' +
+        '<div style="height:10px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + pct + '%;background:var(--accent-cyan);border-radius:2px;"></div>' +
+        '</div>' +
+        '<span style="text-align:right;color:var(--text-dim);font-size:9px;">' + recs + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function updateBanner(kevs, advisories, otxEvents, score, threatLevel) {
+    document.getElementById('kev-count').textContent = kevs.length;
+    document.getElementById('advisory-count').textContent = advisories.length;
+    document.getElementById('apt-count').textContent = otxEvents.length;
+
+    var lvl = ctiLevel(score);
+    var lb = document.getElementById('cti-level-badge');
+    if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
+
+    // InfoCon level from SANS ISC
+    var infoEl = document.getElementById('infocon-level');
+    if (infoEl && threatLevel) {
+      var icStatus = (threatLevel.status || 'unknown').toUpperCase();
+      var icColor = icStatus === 'GREEN' ? 'var(--accent-green)' : icStatus === 'YELLOW' ? 'var(--accent-yellow)' : icStatus === 'ORANGE' ? 'var(--accent-orange)' : icStatus === 'RED' ? 'var(--accent-red)' : 'var(--text-dim)';
+      infoEl.innerHTML = 'InfoCon: <span style="color:' + icColor + ';font-weight:700;">' + icStatus + '</span>';
+    }
+
+  }
+
+  // --- Fetch & Process ---
+  function fetchData() {
+    fetch(API_URL)
+      .then(function(res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function(data) {
+        // /api/cyber returns pre-split data + SANS ISC
+        var kevs = data.recentKEV || [];
+        var advisories = data.advisories || [];
+        var otxEvents = data.threats || [];
+        var topPorts = data.topPorts || [];
+        var threatLevel = data.threatLevel || {};
+
+        var score = computeCTI(kevs, advisories, otxEvents, threatLevel, topPorts);
+
+        renderKEV(kevs);
+        renderOTX(otxEvents);
+        renderAdvisories(advisories);
+        renderPorts(topPorts);
+        drawGauge(score);
+        updateBanner(kevs, advisories, otxEvents, score, threatLevel);
+      })
+      .catch(function(err) {
+        console.error('CTI fetch error:', err);
+        ['kev-list', 'otx-list', 'advisory-list'].forEach(function(id) {
+          var el = document.getElementById(id);
+          if (el.querySelector('.status-msg')) {
+            el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
+          }
+        });
+      });
+  }
+
+  // Initial draw (empty gauge)
+  drawGauge(0);
+
+  // Fetch immediately, then every 5 min
+  fetchData();
+  setInterval(fetchData, REFRESH_MS);
+})();
+</script>
+
+<script>
+window.rocNav = function(action) {
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ROT_KEY = 'roc-rotation';
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  function getState() { try { return JSON.parse(localStorage.getItem(ROT_KEY)) || {}; } catch(e) { return {}; } }
+  function setState(s) { try { localStorage.setItem(ROT_KEY, JSON.stringify(s)); } catch(e) {} }
+  function getEnabled() { var s = getState(); return s.enabledSlides || ORDER.slice(); }
+  function getCurrentPage() {
+    var path = window.location.pathname;
+    for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) return k; }
+    return 'globe';
+  }
+  var enabled = getEnabled();
+  var current = getCurrentPage();
+  var idx = enabled.indexOf(current);
+  if (idx === -1) idx = 0;
+  if (action === 'prev') {
+    var prev = enabled[(idx - 1 + enabled.length) % enabled.length];
+    window.location = ROUTES[prev];
+  } else if (action === 'next') {
+    var next = enabled[(idx + 1) % enabled.length];
+    window.location = ROUTES[next];
+  } else if (action === 'toggle') {
+    var s = getState();
+    s.active = !s.active;
+    if (!s.interval) s.interval = 30;
+    setState(s);
+    updateTransportUI();
+    if (s.active) {
+      var next2 = enabled[(idx + 1) % enabled.length];
+      setTimeout(function() {
+        var c = getState();
+        if (!c.active) return;
+        try { window.location = ROUTES[next2]; } catch(e2) { window.location = ROUTES[next2]; }
+      }, s.interval * 1000);
+    }
+  } else if (action === 'speed') {
+    var s2 = getState();
+    s2.interval = parseInt(document.getElementById('bnr-speed').value) || 30;
+    setState(s2);
+  }
+};
+function updateTransportUI() {
+  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation')) || {}; } catch(e) { s = {}; }
+  var btn = document.getElementById('bnr-play');
+  var ind = document.getElementById('rotation-indicator');
+  if (btn) { btn.innerHTML = s.active ? '&#9208;' : '&#9654;'; btn.style.background = s.active ? 'rgba(24,188,156,0.25)' : 'rgba(24,188,156,0.08)'; }
+  if (ind) ind.style.display = s.active ? 'block' : 'none';
+  var speedEl = document.getElementById('bnr-speed');
+  if (speedEl && s.interval) speedEl.value = String(s.interval);
+}
+updateTransportUI();
+// Auto-advance if rotation is active
+(function(){
+  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
+  if (!s.active) return;
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var enabled = s.enabledSlides || ORDER.slice();
+  var path = window.location.pathname;
+  var cur = 'cyber';
+  for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) { cur = k; break; } }
+  var idx = enabled.indexOf(cur); if (idx === -1) idx = 0;
+  var next = enabled[(idx + 1) % enabled.length];
+  setTimeout(function() {
+    var c; try { c = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
+    if (!c.active) return;
+    window.location = ROUTES[next];
+  }, (s.interval || 30) * 1000);
+})();
+</script>
+</body>
+</html>

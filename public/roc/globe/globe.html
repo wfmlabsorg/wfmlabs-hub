@@ -1,0 +1,3471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ROC Globe — OVIX</title>
+  <meta name="roc-version" content="1.3.0">
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060610; }
+    #cesiumContainer { width: 100%; height: 100%; }
+    .cesium-viewer-bottom { display: none !important; }
+    .cesium-widget-credits { display: none !important; }
+
+    /* Breadcrumb */
+    #breadcrumb {
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 36px; z-index: 400;
+      background: rgba(6, 6, 16, 0.95);
+      border-bottom: 1px solid rgba(24, 188, 156, 0.2);
+      display: flex; align-items: center; padding: 0 14px; gap: 4px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px; color: #666;
+      transform: translateY(-100%);
+      transition: transform 0.3s ease;
+    }
+    #breadcrumb.visible { transform: translateY(0); }
+    .crumb { color: #18BC9C; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+    .crumb:hover { background: rgba(24, 188, 156, 0.15); }
+    .crumb.current { color: #ccc; cursor: default; }
+    .crumb.current:hover { background: none; }
+    .sep { color: #333; margin: 0 2px; }
+    .back-btn {
+      background: none; border: 1px solid rgba(24, 188, 156, 0.3);
+      color: #18BC9C; font-family: inherit; font-size: 10px;
+      padding: 2px 10px; border-radius: 3px; cursor: pointer; margin-right: 8px;
+    }
+    .back-btn:hover { background: rgba(24, 188, 156, 0.15); }
+
+    /* OVIX Legend */
+    #ovix-legend {
+      position: absolute; bottom: 12px; right: 12px;
+      background: rgba(6, 6, 16, 0.9);
+      border: 1px solid rgba(24, 188, 156, 0.2);
+      border-radius: 4px; padding: 12px 16px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px; color: #888; z-index: 100;
+      user-select: none; transition: opacity 0.3s ease;
+    }
+    #ovix-legend.dimmed { opacity: 0.3; pointer-events: none; }
+    #ovix-legend .header { color: #18BC9C; font-weight: bold; letter-spacing: 0.15em; font-size: 12px; margin-bottom: 8px; }
+    #ovix-legend .cat { display: flex; justify-content: space-between; gap: 24px; padding: 3px 4px; margin: 1px -4px; border-radius: 2px; cursor: pointer; transition: background 0.15s ease; }
+    #ovix-legend .cat:hover { background: rgba(24, 188, 156, 0.12); }
+    #ovix-legend .cat .val { font-weight: bold; min-width: 28px; text-align: right; }
+    #ovix-legend .sep-line { border-top: 1px solid rgba(24, 188, 156, 0.15); margin: 6px -4px 4px; padding-top: 6px; }
+    #ovix-legend .composite { display: flex; justify-content: space-between; gap: 24px; padding: 3px 4px; }
+    #ovix-legend .composite span:first-child { color: #18BC9C; font-weight: bold; letter-spacing: 0.05em; }
+    #ovix-legend .composite .val { color: #18BC9C; font-weight: bold; font-size: 13px; }
+
+    /* Tooltip */
+    #tooltip {
+      position: absolute; display: none;
+      background: rgba(6, 6, 16, 0.95);
+      border: 1px solid rgba(24, 188, 156, 0.3);
+      border-radius: 4px; padding: 8px 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: #ccc; z-index: 200;
+      pointer-events: none; white-space: nowrap;
+    }
+    #tooltip .tt-name { color: #18BC9C; font-weight: bold; margin-bottom: 2px; }
+    #tooltip .tt-sub { color: #666; font-size: 10px; }
+
+    /* Alert info popup (clickable markers) */
+    #alert-popup {
+      position: absolute; display: none;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(243, 156, 18, 0.5);
+      border-radius: 6px; padding: 14px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: #ccc; z-index: 500;
+      max-width: 320px; white-space: normal;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    #alert-popup .ap-event { color: #f39c12; font-weight: bold; font-size: 13px; margin-bottom: 6px; }
+    #alert-popup .ap-severity { font-size: 10px; font-weight: bold; margin-bottom: 6px; padding: 2px 8px; border-radius: 3px; display: inline-block; }
+    #alert-popup .ap-area { color: #888; font-size: 10px; margin-bottom: 6px; }
+    #alert-popup .ap-desc { color: #aaa; font-size: 10px; line-height: 1.5; margin-bottom: 8px; max-height: 80px; overflow-y: auto; }
+    #alert-popup .ap-expires { color: #555; font-size: 9px; margin-bottom: 8px; }
+    #alert-popup .ap-close { position: absolute; top: 6px; right: 10px; background: none; border: none; color: #555; font-size: 14px; cursor: pointer; font-family: inherit; }
+    #alert-popup .ap-close:hover { color: #e74c3c; }
+
+    /* Event popup — used for disaster/quake marker clicks */
+    #event-popup {
+      position: absolute; display: none;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(24, 188, 156, 0.4);
+      border-radius: 6px; padding: 14px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; color: #ccc; z-index: 500;
+      max-width: 340px; white-space: normal;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    }
+    #event-popup .ep-type { font-weight: bold; font-size: 10px; letter-spacing: 0.05em; margin-bottom: 4px; }
+    #event-popup .ep-title { color: #eee; font-size: 13px; font-weight: bold; margin-bottom: 6px; }
+    #event-popup .ep-detail { color: #aaa; font-size: 10px; line-height: 1.5; margin-bottom: 6px; max-height: 80px; overflow-y: auto; }
+    #event-popup .ep-meta { color: #666; font-size: 9px; margin-bottom: 3px; }
+    #event-popup .ep-link { color: #18BC9C; font-size: 10px; text-decoration: none; }
+    #event-popup .ep-link:hover { text-decoration: underline; }
+    #event-popup .ep-close { position: absolute; top: 6px; right: 10px; background: none; border: none; color: #555; font-size: 14px; cursor: pointer; font-family: inherit; }
+    #event-popup .ep-close:hover { color: #e74c3c; }
+
+    /* Dashboard panel */
+    #dashboard {
+      position: absolute; top: 36px; left: 0; bottom: 0;
+      width: 380px; max-width: 85vw;
+      background: rgba(6, 6, 16, 0.97);
+      border-right: 1px solid rgba(24, 188, 156, 0.25);
+      z-index: 300;
+      transform: translateX(-100%);
+      transition: transform 0.3s ease;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      color: #ccc; overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    #dashboard.open { transform: translateX(0); }
+    .dash-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px; border-bottom: 1px solid rgba(24,188,156,0.15); flex-shrink: 0;
+    }
+    .dash-header h2 { margin: 0; font-size: 14px; color: #18BC9C; letter-spacing: 0.1em; font-weight: bold; }
+    .dash-close {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
+      font-size: 12px; cursor: pointer; padding: 3px 8px; border-radius: 3px; font-family: inherit;
+    }
+    .dash-close:hover { border-color: #18BC9C; color: #18BC9C; }
+    .dash-body { padding: 18px; flex: 1; }
+
+    /* Dashboard content styles */
+    .big-score { font-size: 44px; font-weight: bold; text-align: center; margin: 12px 0 4px; }
+    .score-label { text-align: center; font-size: 10px; color: #555; letter-spacing: 0.1em; margin-bottom: 16px; }
+    .cat-row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+    .cat-name { color: #888; }
+    .cat-val { font-weight: bold; }
+    .section-title { font-size: 10px; color: #555; letter-spacing: 0.1em; margin: 20px 0 10px; }
+    .alert-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 3px; padding: 8px 10px; margin-bottom: 6px; font-size: 11px; }
+    .alert-event { color: #f39c12; font-weight: bold; }
+    .alert-meta { color: #555; font-size: 10px; margin-top: 2px; }
+    .drill-card {
+      background: rgba(24, 188, 156, 0.05); border: 1px solid rgba(24, 188, 156, 0.15);
+      border-radius: 4px; padding: 10px 14px; margin-bottom: 6px;
+      cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+      transition: background 0.2s ease;
+    }
+    .drill-card:hover { background: rgba(24, 188, 156, 0.12); }
+    .drill-card .dc-name { color: #18BC9C; font-size: 12px; font-weight: bold; }
+    .drill-card .dc-sub { color: #555; font-size: 10px; }
+    .drill-card .dc-arrow { color: #333; font-size: 14px; }
+    .loading-msg { color: #555; padding: 20px; text-align: center; font-size: 11px; }
+    .event-item { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 11px; }
+    .event-item a { color: #18BC9C; text-decoration: none; }
+    .event-item a:hover { text-decoration: underline; }
+
+    /* Watchlist panel — left side at globe level */
+    #watchlist {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 340px; max-width: 85vw;
+      background: rgba(6, 6, 16, 0.95);
+      border-right: 1px solid rgba(24, 188, 156, 0.2);
+      z-index: 250;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      color: #ccc; overflow-y: auto; overflow-x: hidden;
+      display: flex; flex-direction: column;
+      transition: transform 0.3s ease;
+    }
+    #watchlist.hidden { transform: translateX(-100%); }
+    #watchlist.collapsed { transform: translateX(-320px); }
+    #watchlist.hidden.collapsed { transform: translateX(-100%); }
+
+    /* Collapse toggle button — sits on the right edge of the watchlist panel */
+    #wl-toggle {
+      position: absolute; top: 50%; right: -20px;
+      transform: translateY(-50%);
+      width: 20px; height: 48px;
+      background: rgba(6, 6, 16, 0.95);
+      border: 1px solid rgba(24, 188, 156, 0.2);
+      border-left: none;
+      border-radius: 0 4px 4px 0;
+      color: #18BC9C; font-size: 10px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      z-index: 251;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      padding: 0;
+      line-height: 1;
+    }
+    #wl-toggle:hover { background: rgba(24, 188, 156, 0.15); }
+    .wl-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; border-bottom: 1px solid rgba(24,188,156,0.15); flex-shrink: 0;
+    }
+    .wl-header h2 { margin: 0; font-size: 12px; color: #18BC9C; letter-spacing: 0.1em; font-weight: bold; }
+    .wl-add-btn {
+      background: rgba(24,188,156,0.1); border: 1px solid rgba(24,188,156,0.3);
+      color: #18BC9C; font-family: inherit; font-size: 14px; width: 28px; height: 28px;
+      border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .wl-add-btn:hover { background: rgba(24,188,156,0.2); }
+    .wl-body { padding: 8px; flex: 1; overflow-y: auto; overflow-x: hidden; }
+
+    /* Watchlist cards */
+    .wl-card {
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 4px; padding: 10px 12px; margin-bottom: 8px;
+      cursor: pointer; position: relative;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .wl-card:hover { border-color: rgba(24,188,156,0.3); background: rgba(24,188,156,0.04); }
+    .wl-card .wl-card-top {
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .wl-card .wl-card-name { font-size: 11px; color: #18BC9C; font-weight: bold; letter-spacing: 0.05em; }
+    .wl-card .wl-card-score { font-size: 22px; font-weight: bold; margin: 4px 0 2px; }
+    .wl-card .wl-card-label { font-size: 9px; color: #444; letter-spacing: 0.05em; }
+    .wl-card .wl-card-alert { font-size: 10px; color: #888; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.04); }
+    .wl-card .wl-card-alert .alert-text { color: #f39c12; }
+    .wl-card .wl-card-cats {
+      display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;
+    }
+    .wl-card .wl-cat-pill {
+      font-size: 9px; padding: 1px 6px; border-radius: 2px;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+    }
+    .wl-card .wl-remove {
+      position: absolute; top: 6px; right: 8px;
+      background: none; border: none; color: #333; font-size: 12px; cursor: pointer;
+      font-family: inherit; padding: 2px 4px;
+    }
+    .wl-card .wl-remove:hover { color: #e74c3c; }
+    .wl-card.loading { opacity: 0.5; }
+
+    /* Region picker overlay */
+    #region-picker {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 340px; max-width: 85vw;
+      background: rgba(6, 6, 16, 0.98);
+      border-right: 1px solid rgba(24, 188, 156, 0.3);
+      z-index: 260;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      color: #ccc; display: none; flex-direction: column;
+    }
+    #region-picker.open { display: flex; }
+    .rp-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; border-bottom: 1px solid rgba(24,188,156,0.15); flex-shrink: 0;
+    }
+    .rp-header h2 { margin: 0; font-size: 12px; color: #18BC9C; letter-spacing: 0.1em; }
+    .rp-close {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
+      font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-family: inherit;
+    }
+    .rp-close:hover { color: #18BC9C; border-color: #18BC9C; }
+    .rp-search {
+      margin: 8px; padding: 8px 12px; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+      color: #ccc; font-family: inherit; font-size: 11px; outline: none;
+    }
+    .rp-search:focus { border-color: rgba(24,188,156,0.4); }
+    .rp-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+    .rp-group-label { font-size: 9px; color: #555; letter-spacing: 0.1em; margin: 10px 0 4px 4px; }
+    .rp-item {
+      padding: 6px 10px; border-radius: 3px; cursor: pointer; font-size: 11px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .rp-item:hover { background: rgba(24,188,156,0.1); }
+    .rp-item.added { opacity: 0.4; cursor: default; }
+    .rp-item .rp-check { color: #18BC9C; font-size: 12px; }
+
+    /* Quake detail panel */
+    #quake-panel {
+      position: absolute; bottom: 60px; right: 12px;
+      width: 280px;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(231, 76, 60, 0.4);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px; color: #ccc; z-index: 200;
+      display: none;
+    }
+    #quake-panel.open { display: block; }
+    .qp-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; border-bottom: 1px solid rgba(231,76,60,0.2);
+    }
+    .qp-mag { font-size: 22px; font-weight: bold; }
+    .qp-close {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
+      font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-family: inherit;
+    }
+    .qp-close:hover { border-color: #e74c3c; color: #e74c3c; }
+    .qp-body { padding: 10px 14px; }
+    .qp-place { color: #ccc; font-size: 11px; margin-bottom: 6px; line-height: 1.4; }
+    .qp-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .qp-row .qp-key { color: #555; }
+    .qp-row .qp-val { color: #aaa; }
+    .qp-link { display: block; margin-top: 8px; color: #e74c3c; font-size: 10px; text-decoration: none; }
+    .qp-link:hover { text-decoration: underline; }
+
+    /* Disaster detail panel — mirrors quake-panel layout */
+    #disaster-panel {
+      position: absolute; bottom: 60px; left: 12px;
+      width: 280px;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(230, 126, 34, 0.4);
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px; color: #ccc; z-index: 200;
+      display: none;
+    }
+    #disaster-panel.open { display: block; }
+    .dp-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; border-bottom: 1px solid rgba(230,126,34,0.2);
+    }
+    .dp-type { font-size: 13px; font-weight: bold; letter-spacing: 0.08em; }
+    .dp-close {
+      background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
+      font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-family: inherit;
+    }
+    .dp-close:hover { border-color: #e67e22; color: #e67e22; }
+    .dp-body { padding: 10px 14px; }
+    .dp-title { color: #ccc; font-size: 11px; margin-bottom: 6px; line-height: 1.4; }
+    .dp-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .dp-row .dp-key { color: #555; }
+    .dp-row .dp-val { color: #aaa; }
+    .dp-link { display: block; margin-top: 8px; color: #e67e22; font-size: 10px; text-decoration: none; }
+    .dp-link:hover { text-decoration: underline; }
+
+    #debug {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(6, 6, 16, 0.9);
+      border: 1px solid rgba(24, 188, 156, 0.15);
+      border-radius: 3px; padding: 6px 10px;
+      font-family: monospace; font-size: 9px; color: #18BC9C; z-index: 100;
+      max-width: 300px; white-space: pre-wrap; max-height: 120px; overflow: auto;
+    }
+    #roc-version {
+      position: absolute; bottom: 12px; left: 12px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px;
+      color: rgba(24, 188, 156, 0.35); z-index: 50;
+      pointer-events: none; user-select: none;
+    }
+
+    /* Rotation controls */
+    #ovix-legend .nav-controls {
+      border-top: 1px solid rgba(24, 188, 156, 0.15);
+      margin: 6px -4px 0; padding: 6px 4px 0;
+    }
+    #ovix-legend .nav-transport {
+      display: flex; align-items: center; justify-content: center; gap: 4px; margin-bottom: 4px;
+    }
+    #ovix-legend .nav-btn {
+      background: rgba(24, 188, 156, 0.08); border: 1px solid rgba(24, 188, 156, 0.25);
+      color: #18BC9C; font-size: 12px; width: 26px; height: 22px;
+      border-radius: 3px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s; padding: 0; line-height: 1;
+    }
+    #ovix-legend .nav-btn:hover { background: rgba(24, 188, 156, 0.2); }
+    #ovix-legend .nav-btn.playing { background: rgba(24, 188, 156, 0.25); border-color: #18BC9C; color: #fff; }
+    #ovix-legend .nav-speed {
+      background: rgba(6, 6, 16, 0.95); border: 1px solid rgba(24, 188, 156, 0.25);
+      color: #888; font-family: inherit; font-size: 9px;
+      padding: 2px 4px; border-radius: 3px; cursor: pointer; outline: none; height: 22px;
+    }
+    #ovix-legend .slide-selector {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; margin-top: 4px;
+    }
+    #ovix-legend .slide-chip {
+      font-size: 8px; padding: 1px 5px; border-radius: 2px; cursor: pointer;
+      border: 1px solid rgba(24, 188, 156, 0.2); color: #888;
+      background: rgba(24, 188, 156, 0.05); user-select: none;
+      transition: all 0.15s;
+    }
+    #ovix-legend .slide-chip.active { background: rgba(24, 188, 156, 0.2); color: #18BC9C; border-color: #18BC9C; }
+    #ovix-legend .slide-chip:hover { border-color: rgba(24, 188, 156, 0.5); }
+    /* Rotation active indicator (shown on all pages) */
+    #rotation-indicator {
+      position: fixed; bottom: 12px; right: 12px;
+      background: rgba(6, 6, 16, 0.92);
+      border: 1px solid rgba(24, 188, 156, 0.3);
+      border-radius: 4px; padding: 4px 10px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: #18BC9C; z-index: 9999; cursor: pointer;
+      display: none; user-select: none;
+    }
+    #rotation-indicator:hover { background: rgba(6, 6, 16, 1); border-color: #e74c3c; color: #e74c3c; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="breadcrumb"></div>
+
+  <div id="ovix-legend">
+    <div class="header">◆ OVIX DOMAINS</div>
+    <div class="cat" onclick="navDomain('weather')" title="Weather Intelligence"><span>Weather</span><span class="val" id="ovix-weather">--</span></div>
+    <div class="cat" onclick="navDomain('seismic')" title="Seismic Activity"><span>Seismic</span><span class="val" id="ovix-seismic">--</span></div>
+    <div class="cat" onclick="navDomain('disaster')" title="Disaster Monitor"><span>Disaster</span><span class="val" id="ovix-disaster">--</span></div>
+    <div class="cat" onclick="navDomain('cyber')" title="Cyber Threat Intel"><span>Cyber</span><span class="val" id="ovix-cyber">--</span></div>
+    <div class="cat" onclick="navDomain('health')" title="Health Surveillance"><span>Health</span><span class="val" id="ovix-health">--</span></div>
+    <div class="cat" onclick="navDomain('infrastructure')" title="Infrastructure Status"><span>Infra</span><span class="val" id="ovix-infra">--</span></div>
+    <div class="cat" onclick="navDomain('financial')" title="Financial Markets"><span>Financial</span><span class="val" id="ovix-financial">--</span></div>
+    <div class="sep-line"></div>
+    <div class="composite"><span>COMPOSITE</span><span class="val" id="ovix-composite">--</span></div>
+    <div class="nav-controls">
+      <div class="nav-transport">
+        <button class="nav-btn" id="nav-prev" onclick="navPrev()" title="Previous dashboard">⏮</button>
+        <button class="nav-btn" id="nav-play" onclick="toggleRotation()" title="Play/Pause rotation">▶</button>
+        <button class="nav-btn" id="nav-next" onclick="navNext()" title="Next dashboard">⏭</button>
+        <select class="nav-speed" id="rot-interval" onchange="updateRotationInterval()" title="Rotation speed">
+          <option value="15">15s</option>
+          <option value="30" selected>30s</option>
+          <option value="60">60s</option>
+        </select>
+      </div>
+      <div class="slide-selector" id="slide-selector"></div>
+    </div>
+  </div>
+
+  <!-- Rotation stop indicator (visible when rotation active, on any page) -->
+  <div id="rotation-indicator" onclick="stopRotation()" title="Click to stop rotation">⏸ ROTATING</div>
+
+  <div id="tooltip"><div class="tt-name"></div><div class="tt-sub"></div></div>
+  <div id="alert-popup">
+    <button class="ap-close" onclick="closeAlertPopup()">✕</button>
+    <div class="ap-event"></div>
+    <div class="ap-severity"></div>
+    <div class="ap-area"></div>
+    <div class="ap-desc"></div>
+    <div class="ap-expires"></div>
+  </div>
+
+  <!-- Event popup — for disaster/quake marker clicks (not sidebar) -->
+  <div id="event-popup">
+    <button class="ep-close" onclick="closeEventPopup()">✕</button>
+    <div class="ep-type"></div>
+    <div class="ep-title"></div>
+    <div class="ep-detail"></div>
+    <div id="ep-meta-rows"></div>
+    <div id="ep-link-container"></div>
+  </div>
+
+  <!-- Watchlist panel (globe level) -->
+  <div id="watchlist">
+    <button id="wl-toggle" onclick="toggleWatchlistCollapse()" title="Collapse/expand watchlist">&#9664;</button>
+    <div class="wl-header">
+      <h2>◆ WATCHLIST</h2>
+      <button class="wl-add-btn" onclick="openPicker()" title="Add region">+</button>
+    </div>
+    <div class="wl-body" id="wl-body"></div>
+  </div>
+
+  <!-- Region picker overlay -->
+  <div id="region-picker">
+    <div class="rp-header">
+      <h2>ADD REGION</h2>
+      <button class="rp-close" onclick="closePicker()">✕</button>
+    </div>
+    <input class="rp-search" id="rp-search" type="text" placeholder="Search regions..." oninput="filterPicker()">
+    <div class="rp-list" id="rp-list"></div>
+  </div>
+
+  <div id="dashboard">
+    <div class="dash-header">
+      <h2 id="dash-title">—</h2>
+      <button class="dash-close" onclick="navBack()">✕ ESC</button>
+    </div>
+    <div class="dash-body" id="dash-body"></div>
+  </div>
+
+  <!-- Disaster detail panel -->
+  <div id="disaster-panel">
+    <div class="dp-header">
+      <span class="dp-type" id="dp-type">—</span>
+      <button class="dp-close" onclick="closeDisasterPanel()">✕</button>
+    </div>
+    <div class="dp-body">
+      <div class="dp-title" id="dp-title"></div>
+      <div id="dp-rows"></div>
+      <span class="dp-link" id="dp-link" style="color:#888; font-size:10px;"></span>
+    </div>
+  </div>
+
+  <!-- Quake detail panel -->
+  <div id="quake-panel">
+    <div class="qp-header">
+      <span class="qp-mag" id="qp-mag">—</span>
+      <button class="qp-close" onclick="closeQuakePanel()">✕</button>
+    </div>
+    <div class="qp-body">
+      <div class="qp-place" id="qp-place"></div>
+      <div id="qp-rows"></div>
+      <span class="qp-link" id="qp-link" style="color:#888; font-size:10px;">Source: USGS</span>
+    </div>
+  </div>
+
+  <!-- Score Delta Ping Popup -->
+  <div id="ping-popup" style="display:none; position:fixed; z-index:10002; background:#1a1a2e; border:1px solid #0f3460; border-radius:8px; padding:14px 18px; max-width:380px; color:#e0e0e0; font-family:monospace; font-size:12px; box-shadow:0 4px 24px rgba(0,0,0,0.7);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <span id="pp-badge" style="padding:3px 10px; border-radius:3px; font-size:10px; font-weight:bold; text-transform:uppercase; letter-spacing:0.5px;"></span>
+      <span onclick="document.getElementById('ping-popup').style.display='none'" style="cursor:pointer; color:#888; font-size:16px;">&times;</span>
+    </div>
+    <div id="pp-title" style="font-size:15px; font-weight:bold; color:#fff; margin-bottom:4px;"></div>
+    <div id="pp-region" style="font-size:11px; color:#aaa; margin-bottom:8px;"></div>
+    <div id="pp-delta" style="margin-bottom:8px; padding:6px 10px; background:#ffffff08; border-radius:4px; border-left:3px solid #f39c12;"></div>
+    <div id="pp-area" style="margin-bottom:8px; color:#bbb; font-size:11px; line-height:1.4;"></div>
+    <div id="pp-severity" style="margin-bottom:8px; font-size:11px;"></div>
+    <div id="pp-time" style="margin-bottom:8px; color:#888; font-size:10px;"></div>
+    <div id="pp-details-toggle" style="cursor:pointer; color:#16c784; font-size:11px; user-select:none;" onclick="togglePingDetails()">Details ▾</div>
+    <div id="pp-details" style="display:none; margin-top:8px; padding:8px 10px; background:#ffffff06; border-radius:4px; border:1px solid #ffffff10; font-size:11px; line-height:1.5; color:#ccc; max-height:180px; overflow-y:auto;"></div>
+  </div>
+
+  <div id="roc-version">v1.7.0</div>
+  <div id="roc-transport" style="position:fixed;top:8px;right:8px;z-index:10000;display:flex;align-items:center;gap:4px;background:rgba(10,14,26,0.85);padding:4px 8px;border-radius:4px;border:1px solid rgba(24,188,156,0.2);">
+    <button onclick="navPrev()" style="background:rgba(24,188,156,0.08);border:1px solid rgba(24,188,156,0.25);color:#18BC9C;font-size:12px;width:26px;height:22px;border-radius:3px;cursor:pointer;padding:0;" title="Previous">&#9198;</button>
+    <button id="globe-transport-play" onclick="toggleRotation()" style="background:rgba(24,188,156,0.08);border:1px solid rgba(24,188,156,0.25);color:#18BC9C;font-size:12px;width:26px;height:22px;border-radius:3px;cursor:pointer;padding:0;" title="Play/Pause">&#9654;</button>
+    <button onclick="navNext()" style="background:rgba(24,188,156,0.08);border:1px solid rgba(24,188,156,0.25);color:#18BC9C;font-size:12px;width:26px;height:22px;border-radius:3px;cursor:pointer;padding:0;" title="Next">&#9197;</button>
+  </div>
+  <div id="debug" style="display:none;"></div>
+  <script src="https://cdn.ably.com/lib/ably.min-2.js"></script>
+  <script src="../lib/roc-config.js"></script>
+
+  <script>
+    var dbg = document.getElementById('debug');
+    function log(m) { console.log('[ROC]', m); dbg.textContent += m + '\n'; }
+
+    function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function safeUrl(u) { return u && (u.indexOf('https://') === 0 || u.indexOf('http://') === 0) ? u : null; }
+    function safeFetch(url) {
+      return fetch(url).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+    }
+    function cssColor(s) {
+      if (s < 4.0) return '#27ae60';   // green: low volatility
+      if (s < 7.0) return '#f39c12';   // orange: elevated
+      return '#e74c3c';                // red: high volatility
+    }
+    function cesiumColor(s) { return Cesium.Color.fromCssColorString(cssColor(s)); }
+
+    try {
+      log('Cesium ' + Cesium.VERSION);
+
+      var OVIX_API = (window.RocConfig && window.RocConfig.apiBase) || 'https://ovix-api.tedlango.workers.dev';
+
+      // Cesium token + base imagery are loaded asynchronously from /api/ovix/config.
+      // Until then the globe renders without imagery (black) for ~80ms.
+      var viewer = new Cesium.Viewer('cesiumContainer', {
+        baseLayer: false,
+        animation: false, timeline: false, homeButton: false,
+        fullscreenButton: false, navigationHelpButton: false,
+        sceneModePicker: false, baseLayerPicker: false,
+        geocoder: false, infoBox: false, selectionIndicator: false,
+      });
+
+      // Reduce atmosphere haze for cleaner space background
+      viewer.scene.skyAtmosphere.brightnessShift = -0.3;
+      viewer.scene.skyAtmosphere.saturationShift = -0.2;
+      viewer.scene.fog.enabled = false;
+
+      var HOME = { lon: -30, lat: 20, height: 20000000 };
+      viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.height) });
+      log('Globe ready');
+
+      // Cesium token, base imagery, and 3D tiles all come from /api/ovix/config
+      window.RocConfig.get().then(function(cfg) {
+        if (cfg.cesiumToken) {
+          Cesium.Ion.defaultAccessToken = cfg.cesiumToken;
+          // Bing Maps Aerial with Labels (Cesium ion asset 3) — Cesium's historical default
+          Cesium.IonImageryProvider.fromAssetId(3).then(function(provider) {
+            viewer.imageryLayers.addImageryProvider(provider);
+          }).catch(function(e) { log('Imagery failed: ' + e.message); });
+        } else {
+          log('No Cesium token in config');
+        }
+        if (cfg.googleMapsKey) {
+          try {
+            Cesium.RequestScheduler.requestsByServer['tile.googleapis.com:443'] = 18;
+            var ts = new Cesium.Cesium3DTileset({
+              url: 'https://tile.googleapis.com/v1/3dtiles/root.json?key=' + cfg.googleMapsKey,
+              showCreditsOnScreen: true,
+            });
+            ts.readyPromise.catch(function(e) { viewer.scene.primitives.remove(ts); });
+            viewer.scene.primitives.add(ts);
+          } catch(e) {}
+        }
+      }).catch(function() {});
+
+      // =============================================
+      // Registry — loaded from Worker
+      // =============================================
+      var registry = { macroRegions: [], subRegions: [], metros: [] };
+      var activeMarkers = [];
+      var operatorEntities = [];
+      var quakeEntities = [];
+
+      // Marker style config per level
+      var MARKER_STYLES = {
+        macro: { size: 24, color: '#18BC9C', outline: '#18BC9C', labelFont: 'bold 14px JetBrains Mono, monospace', labelOffset: -28 },
+        sub:   { size: 18, color: '#3498db', outline: '#2980b9', labelFont: 'bold 12px JetBrains Mono, monospace', labelOffset: -24 },
+        metro: { size: 14, color: '#e67e22', outline: '#d35400', labelFont: '11px JetBrains Mono, monospace', labelOffset: -20 },
+      };
+
+      function clearMarkers() {
+        activeMarkers.forEach(function(e) { viewer.entities.remove(e); });
+        activeMarkers = [];
+      }
+
+      function addMarkers(items, level) {
+        var style = MARKER_STYLES[level];
+        items.forEach(function(item) {
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(item.lon, item.lat),
+            point: {
+              pixelSize: style.size,
+              color: Cesium.Color.fromCssColorString(style.color).withAlpha(0.9),
+              outlineColor: Cesium.Color.fromCssColorString(style.outline).withAlpha(0.6),
+              outlineWidth: 2,
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, 0.5),
+            },
+            label: {
+              text: item.name,
+              font: style.labelFont,
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 3,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(0, style.labelOffset),
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, 0.4),
+            },
+            properties: {
+              markerLevel: level,
+              itemId: item.id,
+              itemName: item.name,
+              airports: (item.airports || []).join(', '),
+            },
+          });
+          activeMarkers.push(entity);
+        });
+      }
+
+      // =============================================
+      // Enhancement 5: Color markers by OVIX score
+      // =============================================
+      function colorMarkersByScore() {
+        activeMarkers.forEach(function(entity) {
+          if (!entity.properties || !entity.properties.itemId) return;
+          var id = entity.properties.itemId.getValue();
+          // Check if we have watchlist data for this region
+          if (watchlistData && watchlistData[id]) {
+            var score = watchlistData[id].composite;
+            var color = cssColor(score);
+            entity.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.9);
+            entity.point.outlineColor = Cesium.Color.fromCssColorString(color).withAlpha(0.6);
+          }
+        });
+      }
+
+      // =============================================
+      // Enhancement 7: Pulse animation for high-score markers
+      // =============================================
+      var pulseEntities = [];
+
+      function addPulseRings() {
+        // Remove existing pulse rings
+        pulseEntities.forEach(function(e) { viewer.entities.remove(e); });
+        pulseEntities = [];
+
+        activeMarkers.forEach(function(entity) {
+          if (!entity.properties || !entity.properties.itemId) return;
+          var id = entity.properties.itemId.getValue();
+          if (watchlistData && watchlistData[id] && watchlistData[id].composite > 3.5) {
+            var pos = entity.position.getValue(Cesium.JulianDate.now());
+            if (!pos) return;
+            var pulseColor = cssColor(watchlistData[id].composite);
+            var ring = viewer.entities.add({
+              position: pos,
+              ellipse: {
+                semiMajorAxis: 80000,
+                semiMinorAxis: 80000,
+                material: Cesium.Color.fromCssColorString(pulseColor).withAlpha(0.15),
+                outline: true,
+                outlineColor: Cesium.Color.fromCssColorString(pulseColor).withAlpha(0.4),
+                outlineWidth: 2,
+                height: 0,
+              },
+            });
+            pulseEntities.push(ring);
+          }
+        });
+      }
+
+      // Enhancement 5b: Fetch and color all visible markers by their OVIX score
+      function fetchAndColorVisibleMarkers() {
+        activeMarkers.forEach(function(entity) {
+          if (!entity.properties || !entity.properties.itemId) return;
+          var id = entity.properties.itemId.getValue();
+          var level = entity.properties.markerLevel ? entity.properties.markerLevel.getValue() : '';
+
+          // For metros: always re-fetch (scores update independently per metro)
+          // For sub-regions/macros: use cache if available
+          if (level !== 'metro' && watchlistData[id]) {
+            var c = cssColor(watchlistData[id].composite);
+            entity.point.color = Cesium.Color.fromCssColorString(c).withAlpha(0.9);
+            entity.point.outlineColor = Cesium.Color.fromCssColorString(c).withAlpha(0.6);
+            return;
+          }
+          safeFetch(OVIX_API + '/api/ovix/composite?region=' + id).then(function(d) {
+            watchlistData[id] = d;
+            entity.point.color = cesiumColor(d.composite).withAlpha(0.9);
+            entity.point.outlineColor = cesiumColor(d.composite).withAlpha(0.6);
+          }).catch(function() {});
+        });
+      }
+
+      // =============================================
+      // Quake Markers
+      // =============================================
+      function quakeColor(mag) {
+        if (mag >= 6) return '#e74c3c';
+        if (mag >= 5) return '#e67e22';
+        return '#f1c40f';
+      }
+
+      function quakeSize(mag) {
+        if (mag >= 7) return 14;
+        if (mag >= 6) return 11;
+        if (mag >= 5) return 8;
+        return 5;
+      }
+
+      function clearQuakeMarkers() {
+        quakeEntities.forEach(function(e) { viewer.entities.remove(e); });
+        quakeEntities = [];
+      }
+
+      function addQuakeMarkers(quakes) {
+        clearQuakeMarkers();
+        quakes.forEach(function(q) {
+          var color = quakeColor(q.mag);
+          var size = quakeSize(q.mag);
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(q.lon, q.lat),
+            point: {
+              pixelSize: size,
+              color: Cesium.Color.fromCssColorString(color).withAlpha(0.85),
+              outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.4),
+              outlineWidth: 2,
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.2, 2e7, 0.6),
+            },
+            properties: {
+              markerLevel: 'quake',
+              quakeMag: q.mag,
+              quakeDepth: q.depth || 0,
+              quakePlace: q.place || '',
+              quakeLat: q.lat,
+              quakeLon: q.lon,
+              quakeUrl: q.url || '',
+              quakeTitle: q.title || '',
+              quakeTime: q.time || 0,
+            },
+          });
+          quakeEntities.push(entity);
+        });
+        log('◆ ' + quakes.length + ' quake markers');
+      }
+
+      function fetchQuakeMarkers() {
+        safeFetch(OVIX_API + '/api/ovix/seismic')
+          .then(function(d) {
+            var quakes = d.quakes || d;
+            if (Array.isArray(quakes)) {
+              addQuakeMarkers(quakes);
+            }
+          })
+          .catch(function(e) { log('Quake fetch failed: ' + e.message); });
+      }
+
+      // =============================================
+      // Disaster Markers (wildfire, volcano, flood, storm)
+      // =============================================
+      var disasterEntities = [];
+
+      function disasterColor(type) {
+        if (!type) return '#f1c40f';
+        var t = type.toLowerCase();
+        if (t.indexOf('wildfire') !== -1 || t.indexOf('fire') !== -1) return '#e67e22';
+        if (t.indexOf('volcano') !== -1 || t.indexOf('volcanic') !== -1) return '#e74c3c';
+        if (t.indexOf('flood') !== -1) return '#3498db';
+        if (t.indexOf('storm') !== -1 || t.indexOf('hurricane') !== -1 || t.indexOf('cyclone') !== -1 || t.indexOf('typhoon') !== -1) return '#8e44ad';
+        return '#f1c40f';
+      }
+
+      function disasterSize(severity) {
+        if (!severity) return 8;
+        var s = typeof severity === 'string' ? severity.toLowerCase() : String(severity).toLowerCase();
+        if (s === 'extreme' || s === '5') return 12;
+        if (s === 'severe' || s === '4' || s === 'high') return 10;
+        return 8;
+      }
+
+      function disasterTypeLabel(type) {
+        if (!type) return 'DISASTER';
+        // GDACS short codes (exact match)
+        switch (type) {
+          case 'EQ': return 'EARTHQUAKE';
+          case 'TC': return 'TROPICAL CYCLONE';
+          case 'FL': return 'FLOOD';
+          case 'VO': return 'VOLCANIC ERUPTION';
+          case 'DR': return 'DROUGHT';
+          case 'WF': return 'WILDFIRE';
+        }
+        // Substring matching for EONET/USGS text descriptions
+        var t = type.toLowerCase();
+        if (t.indexOf('wildfire') !== -1 || t.indexOf('fire') !== -1) return 'WILDFIRE';
+        if (t.indexOf('volcano') !== -1 || t.indexOf('volcanic') !== -1) return 'VOLCANIC ERUPTION';
+        if (t.indexOf('earthquake') !== -1) return 'EARTHQUAKE';
+        if (t.indexOf('drought') !== -1) return 'DROUGHT';
+        if (t.indexOf('flood') !== -1) return 'FLOOD';
+        if (t.indexOf('storm') !== -1) return 'STORM';
+        if (t.indexOf('hurricane') !== -1) return 'HURRICANE';
+        if (t.indexOf('cyclone') !== -1) return 'TROPICAL CYCLONE';
+        if (t.indexOf('typhoon') !== -1) return 'TYPHOON';
+        return type.toUpperCase();
+      }
+
+      function clearDisasterMarkers() {
+        disasterEntities.forEach(function(e) { viewer.entities.remove(e); });
+        disasterEntities = [];
+      }
+
+      function addDisasterMarkers(points) {
+        clearDisasterMarkers();
+        points.forEach(function(p) {
+          if (p.lat == null || p.lon == null) return;
+          var color = disasterColor(p.type || p.title || '');
+          var size = disasterSize(p.severity);
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+            show: false, // hidden by default — pings show fresh events instead
+            point: {
+              pixelSize: size,
+              color: Cesium.Color.fromCssColorString(color).withAlpha(0.88),
+              outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.35),
+              outlineWidth: 2,
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.2, 2e7, 0.6),
+            },
+            properties: {
+              markerLevel: 'disaster',
+              disasterType: p.type || (function(t) {
+                t = (t || '').toLowerCase();
+                if (t.indexOf('wildfire') >= 0 || t.indexOf('fire') >= 0) return 'wildfire';
+                if (t.indexOf('volcano') >= 0) return 'volcano';
+                if (t.indexOf('flood') >= 0) return 'flood';
+                if (t.indexOf('storm') >= 0 || t.indexOf('cyclone') >= 0 || t.indexOf('hurricane') >= 0) return 'storm';
+                if (t.indexOf('earthquake') >= 0 || t.indexOf(' m ') >= 0) return 'earthquake';
+                return 'event';
+              })(p.title),
+              disasterTitle: p.title || '',
+              disasterSource: p.source || 'EONET',
+              disasterUrl: p.url || '',
+              disasterSeverity: p.severity || '',
+              disasterDetail: p.detail || '',
+              disasterAlertLevel: p.alertLevel || '',
+              disasterLat: p.lat,
+              disasterLon: p.lon,
+            },
+          });
+          disasterEntities.push(entity);
+        });
+        log('◆ ' + points.length + ' disaster markers');
+      }
+
+      function fetchDisasterMarkers() {
+        safeFetch(OVIX_API + '/api/ovix/disasters')
+          .then(function(d) {
+            var points = d.points || d;
+            if (Array.isArray(points)) {
+              addDisasterMarkers(points);
+            }
+          })
+          .catch(function(e) { log('Disaster fetch failed: ' + e.message); });
+      }
+
+      // Disaster panel helpers
+      var disasterPanelEl = document.getElementById('disaster-panel');
+
+      window.closeDisasterPanel = function() {
+        disasterPanelEl.classList.remove('open');
+        // Release inspection lock when panel is dismissed
+        if (typeof exitInspection === 'function') exitInspection();
+      };
+
+      function showDisasterPanel(props, screenPos) {
+        var type = props.disasterType ? props.disasterType.getValue() : '';
+        var title = props.disasterTitle ? props.disasterTitle.getValue() : '';
+        var source = props.disasterSource ? props.disasterSource.getValue() : '';
+        var url = props.disasterUrl ? props.disasterUrl.getValue() : '';
+        var severity = props.disasterSeverity ? props.disasterSeverity.getValue() : '';
+        var detail = props.disasterDetail ? props.disasterDetail.getValue() : '';
+        var alertLevel = props.disasterAlertLevel ? props.disasterAlertLevel.getValue() : '';
+        var lat = props.disasterLat ? props.disasterLat.getValue() : 0;
+        var lon = props.disasterLon ? props.disasterLon.getValue() : 0;
+
+        var label = disasterTypeLabel(type || title);
+        var color = disasterColor(type || title);
+
+        var dpType = document.getElementById('dp-type');
+        dpType.textContent = label;
+        dpType.style.color = color;
+
+        document.getElementById('dp-title').textContent = title;
+
+        var rowsHtml = '';
+        // GDACS alert level badge (Green / Orange / Red)
+        if (alertLevel) {
+          var alertColor = alertLevel === 'Red' ? '#e74c3c' : alertLevel === 'Orange' ? '#f39c12' : '#27ae60';
+          rowsHtml += '<div class="dp-row"><span class="dp-key">Alert Level</span><span class="dp-val" style="color:' + alertColor + ';font-weight:bold;">' + esc(alertLevel) + '</span></div>';
+        }
+        if (severity !== '') {
+          var sevNum = parseFloat(String(severity));
+          var sevColor = sevNum >= 8 ? '#e74c3c' : sevNum >= 6 ? '#f39c12' : sevNum >= 4 ? '#f1c40f' : color;
+          rowsHtml += '<div class="dp-row"><span class="dp-key">Severity</span><span class="dp-val" style="color:' + sevColor + ';font-weight:bold;">' + esc(sevNum.toFixed(1)) + '/10</span></div>';
+        }
+        if (source) {
+          rowsHtml += '<div class="dp-row"><span class="dp-key">Source</span><span class="dp-val">' + esc(source) + '</span></div>';
+        }
+        rowsHtml += '<div class="dp-row"><span class="dp-key">Location</span><span class="dp-val">' + lat.toFixed(3) + '\u00b0, ' + lon.toFixed(3) + '\u00b0</span></div>';
+        // Always show GDACS description / detail text when present
+        if (detail) {
+          rowsHtml += '<div style="margin-top:8px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:3px;border:1px solid rgba(255,255,255,0.06);color:#aaa;font-size:9px;line-height:1.6;">' + esc(detail) + '</div>';
+        }
+        document.getElementById('dp-rows').innerHTML = rowsHtml;
+
+        var linkEl = document.getElementById('dp-link');
+        var safeDisasterUrl = safeUrl(url);
+        if (safeDisasterUrl) {
+          linkEl.href = safeDisasterUrl;
+          linkEl.style.display = 'block';
+        } else {
+          linkEl.style.display = 'none';
+        }
+
+        // Close any other floating panels before opening
+        quakePanelEl.classList.remove('open');
+        alertPopup.style.display = 'none';
+        disasterPanelEl.classList.add('open');
+        // Lock zoom navigation while the disaster panel is open
+        inspecting = true;
+        zoomLocked = true;
+      }
+
+      // Quake panel helpers
+      var quakePanelEl = document.getElementById('quake-panel');
+
+      window.closeQuakePanel = function() {
+        quakePanelEl.classList.remove('open');
+        // Release inspection lock when panel is dismissed
+        if (typeof exitInspection === 'function') exitInspection();
+      };
+
+      function showQuakePanel(props) {
+        var mag = props.quakeMag ? props.quakeMag.getValue() : 0;
+        var depth = props.quakeDepth ? props.quakeDepth.getValue() : 0;
+        var place = props.quakePlace ? props.quakePlace.getValue() : '';
+        var lat = props.quakeLat ? props.quakeLat.getValue() : 0;
+        var lon = props.quakeLon ? props.quakeLon.getValue() : 0;
+        var url = props.quakeUrl ? props.quakeUrl.getValue() : '';
+        var quakeTime = props.quakeTime ? props.quakeTime.getValue() : 0;
+
+        var color = quakeColor(mag);
+
+        // Impact description based on magnitude
+        var impact = '';
+        if (mag >= 7.0) impact = 'Major — widespread damage likely';
+        else if (mag >= 6.0) impact = 'Strong — moderate to heavy damage in populated areas';
+        else if (mag >= 5.0) impact = 'Moderate — light damage, felt widely';
+        else if (mag >= 4.0) impact = 'Light — noticeable shaking, rarely causes damage';
+        else impact = 'Minor — usually not felt';
+
+        var depthLabel = depth > 300 ? 'Deep' : depth > 70 ? 'Intermediate' : 'Shallow';
+
+        document.getElementById('qp-mag').textContent = 'M' + mag.toFixed(1);
+        document.getElementById('qp-mag').style.color = color;
+        document.getElementById('qp-place').textContent = place;
+
+        // Time since
+        var timeAgo = '';
+        if (quakeTime) {
+          var diff = Date.now() - quakeTime;
+          var hrs = Math.floor(diff / 3600000);
+          var mins = Math.floor((diff % 3600000) / 60000);
+          if (hrs > 0) timeAgo = hrs + 'h ' + mins + 'm ago';
+          else timeAgo = mins + 'm ago';
+        }
+
+        var rowsHtml = '';
+        rowsHtml += '<div style="color:' + color + ';font-size:10px;margin-bottom:8px;font-weight:bold;">' + esc(impact) + '</div>';
+        if (depth > 0) {
+          rowsHtml += '<div class="qp-row"><span class="qp-key">Depth</span><span class="qp-val">' + depth.toFixed(0) + ' km (' + depthLabel + ')</span></div>';
+        }
+        rowsHtml += '<div class="qp-row"><span class="qp-key">Location</span><span class="qp-val">' + lat.toFixed(3) + '°, ' + lon.toFixed(3) + '°</span></div>';
+        if (timeAgo) {
+          rowsHtml += '<div class="qp-row"><span class="qp-key">Time</span><span class="qp-val">' + esc(timeAgo) + '</span></div>';
+        }
+        rowsHtml += '<div class="qp-row"><span class="qp-key">Source</span><span class="qp-val">USGS</span></div>';
+        document.getElementById('qp-rows').innerHTML = rowsHtml;
+
+        var linkEl = document.getElementById('qp-link');
+        var safeQuakeUrl = safeUrl(url);
+        if (safeQuakeUrl) {
+          linkEl.href = safeQuakeUrl;
+          linkEl.style.display = 'block';
+        } else {
+          linkEl.style.display = 'none';
+        }
+
+        // Close any other floating panels before opening
+        disasterPanelEl.classList.remove('open');
+        alertPopup.style.display = 'none';
+        quakePanelEl.classList.add('open');
+        // Lock zoom navigation while the quake panel is open
+        inspecting = true;
+        zoomLocked = true;
+      }
+
+      // =============================================
+      // Navigation State
+      // =============================================
+      // Levels: 'globe' → 'macro' → 'sub' → 'metro'
+      var nav = {
+        level: 'globe',
+        stack: [],  // breadcrumb trail: [{level, id, name, lat, lon, height}]
+      };
+
+      var breadcrumbEl = document.getElementById('breadcrumb');
+      var dashboardEl = document.getElementById('dashboard');
+      var dashTitle = document.getElementById('dash-title');
+      var dashBody = document.getElementById('dash-body');
+      var legendEl = document.getElementById('ovix-legend');
+
+      function flyTo(lat, lon, height, duration) {
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(lon, lat, height || 5000000),
+          duration: duration || 1.5,
+        });
+      }
+
+      // =============================================
+      // Navigation: drill down to a level
+      // =============================================
+      function drillTo(level, id, name, lat, lon) {
+        log('Drill → ' + level + ': ' + name);
+
+        // Push to stack
+        nav.stack.push({ level: level, id: id, name: name, lat: lat, lon: lon });
+        nav.level = level;
+
+        // Clear inspection state first so closeQuakePanel/closeDisasterPanel
+        // calls to exitInspection become no-ops (dashboard managed by drillTo itself)
+        inspecting = false;
+
+        // Hide operator dots, quake markers, and disaster markers during drill-down
+        operatorEntities.forEach(function(e) { e.show = false; });
+        quakeEntities.forEach(function(e) { e.show = false; });
+        disasterEntities.forEach(function(e) { e.show = false; });
+        closeQuakePanel();
+        closeDisasterPanel();
+
+        clearMarkers();
+
+        // Reset dashboard to clean state before loading new region data
+        dashboardEl.classList.remove('open');
+        dashBody.innerHTML = '';
+
+        if (level === 'macro') {
+          // Show sub-regions within this macro region
+          var subs = registry.subRegions.filter(function(s) { return s.parent === id; });
+          addMarkers(subs, 'sub');
+          flyTo(lat, lon, 6000000);
+          legendEl.classList.add('dimmed');
+          loadDashboard(id, name, 'macro');
+        }
+        else if (level === 'sub') {
+          // Show metros within this sub-region
+          var metros = registry.metros.filter(function(m) { return m.regionId === id; });
+          if (metros.length > 0) {
+            addMarkers(metros, 'metro');
+            setTimeout(fetchAndColorVisibleMarkers, 300);
+          }
+          flyTo(lat, lon, 3000000);
+          loadDashboard(id, name, 'sub');
+        }
+        else if (level === 'metro') {
+          flyTo(lat, lon, 200000);
+          loadDashboard(id, name, 'metro');
+        }
+
+        // Enhancement 5: Color visible markers by their OVIX score
+        setTimeout(fetchAndColorVisibleMarkers, 500);
+
+        updateBreadcrumb();
+      }
+
+      // =============================================
+      // Navigation: go back
+      // =============================================
+      window.navToGlobe = function() {
+        nav.stack = [];
+        nav.level = 'globe';
+        clearMarkers();
+        addMarkers(registry.macroRegions, 'macro');
+        // Show operator dots and quake markers at globe level (disasters hidden — pings show fresh events)
+        operatorEntities.forEach(function(e) { e.show = true; });
+        quakeEntities.forEach(function(e) { e.show = true; });
+        flyTo(HOME.lat, HOME.lon, HOME.height);
+        inspecting = false;
+        dashboardEl.classList.remove('open');
+        dashBody.innerHTML = '';
+        legendEl.classList.remove('dimmed');
+        updateBreadcrumb();
+      };
+
+      window.navBack = function() {
+        // If inspecting an event, exit inspection and restore previous view
+        if (inspecting) {
+          // skipDashboardRestore=true because navBack manages dashboard state itself
+          exitInspection(true);
+          // Close dashboard so stale inspection content is cleared
+          dashboardEl.classList.remove('open');
+          dashBody.innerHTML = '';
+          // If at globe level (no stack), go home; otherwise reload the current drill level
+          var current = nav.stack.length > 0 ? nav.stack[nav.stack.length - 1] : null;
+          if (!current) {
+            // Inspection was triggered from globe level (quake/disaster panel)
+            navToGlobe();
+          } else {
+            loadDashboard(current.id, current.name, current.level);
+            flyTo(current.lat, current.lon, current.level === 'macro' ? 6000000 : current.level === 'sub' ? 3000000 : 200000);
+          }
+          return;
+        }
+        if (nav.stack.length === 0) return;
+
+        nav.stack.pop(); // remove current
+        clearMarkers();
+
+        // Close dashboard and clear stale content before replaying the parent level
+        dashboardEl.classList.remove('open');
+        dashBody.innerHTML = '';
+
+        if (nav.stack.length === 0) {
+          navToGlobe();
+          return;
+        } else {
+          // Replay to previous level
+          var prev = nav.stack[nav.stack.length - 1];
+          nav.level = prev.level;
+
+          if (prev.level === 'macro') {
+            var subs = registry.subRegions.filter(function(s) { return s.parent === prev.id; });
+            addMarkers(subs, 'sub');
+            flyTo(prev.lat, prev.lon, 6000000);
+            loadDashboard(prev.id, prev.name, 'macro');
+          } else if (prev.level === 'sub') {
+            var metros = registry.metros.filter(function(m) { return m.regionId === prev.id; });
+            if (metros.length > 0) addMarkers(metros, 'metro');
+            setTimeout(fetchAndColorVisibleMarkers, 300);
+            flyTo(prev.lat, prev.lon, 3000000);
+            loadDashboard(prev.id, prev.name, 'sub');
+          }
+        }
+
+        updateBreadcrumb();
+      };
+
+      window.navToIndex = function(idx) {
+        // Navigate to a specific breadcrumb index
+        while (nav.stack.length > idx + 1) {
+          nav.stack.pop();
+        }
+        if (nav.stack.length === 0) {
+          navBack(); // goes to globe
+          return;
+        }
+        var target = nav.stack[nav.stack.length - 1];
+        clearMarkers();
+        nav.level = target.level;
+        inspecting = false;
+
+        // Close dashboard and clear stale content before replaying
+        dashboardEl.classList.remove('open');
+        dashBody.innerHTML = '';
+
+        if (target.level === 'macro') {
+          var subs = registry.subRegions.filter(function(s) { return s.parent === target.id; });
+          addMarkers(subs, 'sub');
+          flyTo(target.lat, target.lon, 6000000);
+          loadDashboard(target.id, target.name, 'macro');
+        } else if (target.level === 'sub') {
+          var metros = registry.metros.filter(function(m) { return m.regionId === target.id; });
+          if (metros.length > 0) addMarkers(metros, 'metro');
+          setTimeout(fetchAndColorVisibleMarkers, 300);
+          flyTo(target.lat, target.lon, 3000000);
+          loadDashboard(target.id, target.name, 'sub');
+        }
+        updateBreadcrumb();
+      };
+
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') navBack(); });
+
+      function updateBreadcrumb() {
+        var isGlobe = nav.stack.length === 0;
+        breadcrumbEl.classList.toggle('visible', !isGlobe);
+        if (isGlobe) return;
+
+        var h = '<button class="back-btn" onclick="navBack()">◄ BACK</button>';
+        h += '<span class="crumb" onclick="navToGlobe()">◆ GLOBE</span>';
+
+        nav.stack.forEach(function(s, i) {
+          h += '<span class="sep"> › </span>';
+          var isCurrent = i === nav.stack.length - 1;
+          if (isCurrent) {
+            h += '<span class="crumb current">' + esc(s.name) + '</span>';
+          } else {
+            h += '<span class="crumb" onclick="navToIndex(' + i + ')">' + esc(s.name) + '</span>';
+          }
+        });
+
+        breadcrumbEl.innerHTML = h;
+      }
+
+      // =============================================
+      // Dashboard loader
+      // =============================================
+      function loadDashboard(id, name, type) {
+        // Close any floating panels and hide watchlist — dashboard takes full left side
+        disasterPanelEl.classList.remove('open');
+        quakePanelEl.classList.remove('open');
+        alertPopup.style.display = 'none';
+        if (eventPopup) eventPopup.style.display = 'none';
+        hideWatchlist();
+        inspecting = false;
+        dashTitle.textContent = '◆ ' + name;
+        dashBody.innerHTML = '<div class="loading-msg">Loading intelligence...</div>';
+        dashboardEl.classList.add('open');
+
+        var drillId = id;
+        var param = type === 'metro' ? 'metro=' : 'region=';
+
+        Promise.all([
+          safeFetch(OVIX_API + '/api/ovix/composite?' + param + id),
+          safeFetch(OVIX_API + '/api/ovix/disasters?' + param + id),
+          safeFetch(OVIX_API + '/api/ovix/weather-detail?region=' + id).catch(function() { return null; }),
+          safeFetch(OVIX_API + '/api/ovix/seismic?region=' + id).catch(function() { return null; }),
+        ]).then(function(results) {
+          // Stale guard
+          var currentItem = nav.stack[nav.stack.length - 1];
+          if (!currentItem || currentItem.id !== drillId) return;
+
+          var composite = results[0];
+          var disasters = results[1];
+          var weatherDetail = results[2];
+          var seismicDetail = results[3];
+
+          if (!composite || typeof composite.composite !== 'number') {
+            dashBody.innerHTML = '<div class="loading-msg" style="color:#e74c3c;">Invalid response</div>';
+            return;
+          }
+
+          var h = '';
+
+          // Score
+          h += '<div class="big-score" style="color:' + cssColor(composite.composite) + '">' + composite.composite.toFixed(1) + '</div>';
+          var label = type === 'metro' ? 'METRO OVIX' : (type === 'sub' ? 'REGIONAL OVIX' : 'OVIX COMPOSITE');
+          h += '<div class="score-label">' + label + '</div>';
+          h += '<div style="text-align:center;font-size:9px;color:#333;margin-bottom:12px;">Updated: ' + new Date().toLocaleTimeString() + '</div>';
+
+          // Categories
+          h += '<div class="section-title">OVIX CATEGORIES</div>';
+          (composite.categories || []).forEach(function(c) {
+            h += '<div class="cat-row">';
+            h += '<span class="cat-name">' + esc(c.category.charAt(0).toUpperCase() + c.category.slice(1)) + '</span>';
+            h += '<span class="cat-val" style="color:' + cssColor(c.score) + '">' + c.score.toFixed(1);
+            if (c.pointCount > 0) h += ' <span style="color:#555;font-size:10px;">(' + c.pointCount + ')</span>';
+            h += '</span></div>';
+            if (c.topEvent) {
+              h += '<div style="padding:2px 0 6px 12px;font-size:10px;color:#666;">' + esc(c.topEvent) + '</div>';
+            }
+          });
+
+          // Weather alerts with NWS links + globe fly-to (shown FIRST)
+          if (weatherDetail && weatherDetail.alerts && weatherDetail.alerts.length > 0) {
+            h += '<div class="section-title">WEATHER ALERTS (' + weatherDetail.alertCount + ')</div>';
+            // Enhancement 3: Severity distribution bar
+            var sevCounts = { Extreme: 0, Severe: 0, Moderate: 0, Minor: 0, Unknown: 0 };
+            weatherDetail.alerts.forEach(function(al) { var s = al.severity || 'Unknown'; if (sevCounts.hasOwnProperty(s)) sevCounts[s]++; else sevCounts.Unknown++; });
+            var totalAlerts = weatherDetail.alerts.length;
+            h += '<div style="margin-bottom:10px;"><div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,0.05);">';
+            if (sevCounts.Extreme > 0) h += '<div style="width:' + (sevCounts.Extreme/totalAlerts*100) + '%;background:#e74c3c;"></div>';
+            if (sevCounts.Severe > 0) h += '<div style="width:' + (sevCounts.Severe/totalAlerts*100) + '%;background:#f39c12;"></div>';
+            if (sevCounts.Moderate > 0) h += '<div style="width:' + (sevCounts.Moderate/totalAlerts*100) + '%;background:#f1c40f;"></div>';
+            if (sevCounts.Minor > 0) h += '<div style="width:' + (sevCounts.Minor/totalAlerts*100) + '%;background:#95a5a6;"></div>';
+            h += '</div><div style="display:flex;gap:8px;margin-top:4px;font-size:9px;color:#666;flex-wrap:wrap;">';
+            if (sevCounts.Extreme > 0) h += '<span style="color:#e74c3c;">Extreme ' + sevCounts.Extreme + '</span>';
+            if (sevCounts.Severe > 0) h += '<span style="color:#f39c12;">Severe ' + sevCounts.Severe + '</span>';
+            if (sevCounts.Moderate > 0) h += '<span style="color:#f1c40f;">Moderate ' + sevCounts.Moderate + '</span>';
+            if (sevCounts.Minor > 0) h += '<span style="color:#95a5a6;">Minor ' + sevCounts.Minor + '</span>';
+            h += '</div></div>';
+            // Enhancement 6: Last updated timestamp
+            h += '<div style="color:#444;font-size:9px;margin-bottom:8px;font-style:italic;">Updated: ' + new Date().toLocaleTimeString() + '</div>';
+            if (weatherDetail.conditions) {
+              h += '<div style="color:#555;font-size:10px;margin-bottom:8px;">Current: '
+                + esc(weatherDetail.conditions.desc)
+                + ' · ' + weatherDetail.conditions.temp.toFixed(0) + '°C'
+                + ' · Wind ' + weatherDetail.conditions.wind.toFixed(0) + ' km/h</div>';
+            }
+            // Severity distribution bar
+            var sc = weatherDetail.severityCounts || {};
+            var total = (sc.extreme||0) + (sc.severe||0) + (sc.moderate||0) + (sc.minor||0);
+            if (total > 0) {
+              h += '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:8px;">';
+              if (sc.extreme) h += '<div style="flex:' + sc.extreme + ';background:#e74c3c;" title="Extreme: ' + sc.extreme + '"></div>';
+              if (sc.severe) h += '<div style="flex:' + sc.severe + ';background:#f39c12;" title="Severe: ' + sc.severe + '"></div>';
+              if (sc.moderate) h += '<div style="flex:' + sc.moderate + ';background:#f1c40f;" title="Moderate: ' + sc.moderate + '"></div>';
+              if (sc.minor) h += '<div style="flex:' + sc.minor + ';background:#95a5a6;" title="Minor: ' + sc.minor + '"></div>';
+              h += '</div>';
+              h += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#555;margin-bottom:8px;">';
+              if (sc.extreme) h += '<span style="color:#e74c3c;">Extreme: ' + sc.extreme + '</span>';
+              if (sc.severe) h += '<span style="color:#f39c12;">Severe: ' + sc.severe + '</span>';
+              if (sc.moderate) h += '<span style="color:#f1c40f;">Moderate: ' + sc.moderate + '</span>';
+              if (sc.minor) h += '<span style="color:#95a5a6;">Minor: ' + sc.minor + '</span>';
+              h += '</div>';
+            }
+            h += '<div id="weather-alerts-container"></div>';
+            if (weatherDetail.alertCount > 5) {
+              h += '<div id="weather-expand" style="color:#18BC9C;font-size:10px;margin-top:4px;cursor:pointer;">▾ Show ' + (weatherDetail.alertCount - 5) + ' more alerts</div>';
+            }
+          }
+
+          // Seismic events — with show on globe, details, source (same pattern as weather/disasters)
+          if (seismicDetail && seismicDetail.quakes && seismicDetail.quakes.length > 0) {
+            h += '<div class="section-title">EARTHQUAKES (' + seismicDetail.count + ')</div>';
+            h += '<div id="quake-cards-container"></div>';
+            if (seismicDetail.count > 5) {
+              h += '<div id="quake-expand" style="color:#18BC9C;font-size:10px;margin-top:4px;cursor:pointer;">▾ Show ' + (seismicDetail.count - 5) + ' more earthquakes</div>';
+            }
+          }
+
+          // Active Disasters (shown AFTER earthquakes)
+          if (disasters.points && disasters.points.length > 0) {
+            disasters.points.sort(function(a, b) { return b.severity - a.severity; });
+            h += '<div class="section-title">ACTIVE DISASTERS (' + disasters.total + ')</div>';
+            var initialDisasterCount = Math.min(5, disasters.points.length);
+            h += '<div id="disaster-cards-container"></div>';
+            if (disasters.total > initialDisasterCount) {
+              h += '<div id="disaster-expand" style="color:#18BC9C;font-size:10px;margin-top:4px;cursor:pointer;">▾ Show ' + (disasters.total - initialDisasterCount) + ' more disasters</div>';
+            }
+          }
+
+          // Drill-down cards: show children if macro or sub level
+          if (type === 'macro') {
+            var subs = registry.subRegions.filter(function(s) { return s.parent === id; });
+            if (subs.length > 0) {
+              h += '<div class="section-title">SUB-REGIONS (' + subs.length + ')</div>';
+              h += '<div id="drill-cards"></div>';
+            }
+          } else if (type === 'sub') {
+            var metros = registry.metros.filter(function(m) { return m.regionId === id; });
+            if (metros.length > 0) {
+              h += '<div class="section-title">METRO HUBS (' + metros.length + ')</div>';
+              h += '<div id="drill-cards"></div>';
+            }
+          }
+
+          if (type === 'metro') {
+            h += '<div class="section-title" style="margin-top:20px;">COMING SOON</div>';
+            h += '<div style="color:#333;font-size:10px;">Flight delays · Power outages · Traffic · Cyber</div>';
+          }
+
+          h += '<div class="section-title" style="margin-top:16px;">SOURCES</div>';
+          h += '<div style="color:#444;font-size:10px;">NWS · USGS · NASA EONET · GDELT · 5min cache</div>';
+
+          dashBody.innerHTML = h;
+
+          // Attach drill-down cards (no inline onclick)
+          var container = document.getElementById('drill-cards');
+          if (container) {
+            var children = type === 'macro'
+              ? registry.subRegions.filter(function(s) { return s.parent === id; })
+              : registry.metros.filter(function(m) { return m.regionId === id; });
+
+            children.forEach(function(child) {
+              var card = document.createElement('div');
+              card.className = 'drill-card';
+              var subText = child.airports ? child.airports.join(', ') : (child.nwsStates ? child.nwsStates.join(', ') : '');
+              card.innerHTML = '<div><div class="dc-name">' + esc(child.name) + '</div>'
+                + (subText ? '<div class="dc-sub">' + esc(subText) + '</div>' : '')
+                + '</div><span class="dc-arrow">►</span>';
+              card.addEventListener('click', function() {
+                var nextLevel = type === 'macro' ? 'sub' : 'metro';
+                drillTo(nextLevel, child.id, child.name, child.lat, child.lon);
+              });
+              container.appendChild(card);
+            });
+          }
+          // Attach weather alert cards with globe fly-to
+          var alertsContainer = document.getElementById('weather-alerts-container');
+          if (alertsContainer && weatherDetail && weatherDetail.alerts) {
+            // Sort alerts: Extreme first, then Severe, Moderate, Minor
+            var sevOrder = { Extreme: 0, Severe: 1, Moderate: 2, Minor: 3, Unknown: 4 };
+            weatherDetail.alerts.sort(function(a, b) {
+              return (sevOrder[a.severity] || 4) - (sevOrder[b.severity] || 4);
+            });
+            var weatherInitialCount = 5;
+            var allWeatherCards = [];
+            weatherDetail.alerts.forEach(function(a) {
+              var sevColor = a.severity === 'Extreme' ? '#e74c3c' : a.severity === 'Severe' ? '#f39c12' : a.severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
+              var card = document.createElement('div');
+              card.className = 'alert-card';
+              card.style.cssText = 'border-left:3px solid ' + sevColor + ';cursor:pointer;';
+
+              var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+              html += '<span class="alert-event">' + esc(a.event) + '</span>';
+              html += '<span style="color:' + sevColor + ';font-size:9px;font-weight:bold;">' + esc(a.severity) + '</span>';
+              html += '</div>';
+              html += '<div class="alert-meta">' + esc((a.areaDesc || '').slice(0, 80)) + '</div>';
+              if (a.expires) {
+                var exp = new Date(a.expires);
+                html += '<div style="color:#444;font-size:9px;margin-top:2px;">Expires: ' + exp.toLocaleString() + '</div>';
+              }
+              html += '<div style="margin-top:3px;display:flex;gap:8px;">';
+              if (a.affectedZones && a.affectedZones.length > 0) {
+                html += '<span style="color:#3498db;font-size:9px;cursor:pointer;" class="fly-to-btn">📍 Show on globe</span>';
+              }
+              html += '<span style="color:#888;font-size:9px;">Source: NWS</span> ';
+              // Enhancement 2: Inline expandable summary
+              if (a.description || a.headline) {
+                html += '<span style="color:#8e44ad;font-size:9px;cursor:pointer;" class="expand-btn">Details ▾</span>';
+              }
+              html += '</div>';
+              // Hidden detail section
+              if (a.description || a.headline) {
+                html += '<div class="alert-detail-expand" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:3px;border:1px solid rgba(255,255,255,0.04);">';
+                if (a.headline) html += '<div style="color:#ccc;font-size:10px;font-weight:bold;margin-bottom:4px;">' + esc(a.headline) + '</div>';
+                if (a.description) html += '<div style="color:#888;font-size:9px;line-height:1.5;max-height:100px;overflow-y:auto;">' + esc(a.description.slice(0, 500)) + '</div>';
+                html += '</div>';
+              }
+              card.innerHTML = html;
+
+              // Fly-to handler: resolve zone coordinates and fly the globe there
+              var flyBtn = card.querySelector('.fly-to-btn');
+              if (flyBtn && a.affectedZones && a.affectedZones.length > 0) {
+                flyBtn.addEventListener('click', function(e) {
+                  e.stopPropagation();
+                  flyBtn.textContent = 'Loading...';
+                  var zoneUrl = a.affectedZones[0];
+                  fetch(OVIX_API + '/api/ovix/zone-geo?zone=' + encodeURIComponent(zoneUrl))
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .then(function(geo) {
+                      if (geo && geo.lat && geo.lon) {
+                        flyBtn.textContent = '📍 ' + (geo.name || 'Zone');
+                        // Enter inspection mode — prevents zoom navigation
+                        var eventDetailHtml = '<div class="big-score" style="color:' + sevColor + '">' + esc(a.severity) + '</div>'
+                          + '<div class="score-label">WEATHER ALERT</div>'
+                          + '<div class="section-title" style="margin-top:12px;">' + esc(a.event) + '</div>'
+                          + '<div style="color:#888;font-size:11px;margin-bottom:8px;">' + esc(a.areaDesc || '') + '</div>';
+                        if (a.headline) eventDetailHtml += '<div style="color:#ccc;font-size:10px;font-weight:bold;margin-bottom:6px;">' + esc(a.headline) + '</div>';
+                        if (a.description) eventDetailHtml += '<div style="color:#888;font-size:9px;line-height:1.5;max-height:150px;overflow-y:auto;margin-bottom:8px;">' + esc(a.description.slice(0, 800)) + '</div>';
+                        if (a.expires) eventDetailHtml += '<div style="color:#555;font-size:9px;">Expires: ' + new Date(a.expires).toLocaleString() + '</div>';
+                        eventDetailHtml += '<div style="margin-top:8px;">';
+                        eventDetailHtml += '<span style="color:#888;font-size:10px;">Source: NWS</span>';
+                        eventDetailHtml += '</div>'
+                          + '<div style="color:#333;font-size:9px;margin-top:12px;">' + geo.lat.toFixed(4) + '°, ' + geo.lon.toFixed(4) + '°</div>';
+                        enterInspection(a.event, eventDetailHtml);
+
+                        // Fly the Cesium globe to this location
+                        viewer.camera.flyTo({
+                          destination: Cesium.Cartesian3.fromDegrees(geo.lon, geo.lat, 150000),
+                          duration: 1.5,
+                        });
+                        // Add a temporary marker (clickable — shows alert popup)
+                        var marker = viewer.entities.add({
+                          position: Cesium.Cartesian3.fromDegrees(geo.lon, geo.lat),
+                          point: {
+                            pixelSize: 16,
+                            color: Cesium.Color.fromCssColorString(sevColor),
+                            outlineColor: Cesium.Color.WHITE,
+                            outlineWidth: 2,
+                            disableDepthTestDistance: 0,
+                          },
+                          label: {
+                            text: a.event,
+                            font: 'bold 11px JetBrains Mono, monospace',
+                            fillColor: Cesium.Color.fromCssColorString(sevColor),
+                            outlineColor: Cesium.Color.BLACK,
+                            outlineWidth: 2,
+                            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                            pixelOffset: new Cesium.Cartesian2(0, -20),
+                            disableDepthTestDistance: 0,
+                          },
+                          properties: {
+                            isAlertMarker: true,
+                            alertEvent: a.event || '',
+                            alertSeverity: a.severity || '',
+                            alertArea: a.areaDesc || '',
+                            alertDescription: a.description || a.headline || '',
+                            alertExpires: a.expires || '',
+                          },
+                        });
+                        // Remove marker after 30 seconds
+                        setTimeout(function() { viewer.entities.remove(marker); }, 30000);
+                      } else {
+                        flyBtn.textContent = '📍 Location unavailable';
+                      }
+                    }).catch(function() { flyBtn.textContent = '📍 Failed'; });
+                });
+              }
+
+              // Enhancement 2: Expand/collapse detail handler
+              var expandBtn = card.querySelector('.expand-btn');
+              if (expandBtn) {
+                expandBtn.addEventListener('click', function(e) {
+                  e.stopPropagation();
+                  var detail = card.querySelector('.alert-detail-expand');
+                  if (detail) {
+                    var isHidden = detail.style.display === 'none';
+                    detail.style.display = isHidden ? 'block' : 'none';
+                    expandBtn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
+                  }
+                });
+              }
+
+              allWeatherCards.push(card);
+              if (allWeatherCards.length > weatherInitialCount) card.style.display = 'none';
+              alertsContainer.appendChild(card);
+            });
+
+            // Weather expand/collapse handler
+            var weatherExpandBtn = document.getElementById('weather-expand');
+            if (weatherExpandBtn) {
+              weatherExpandBtn.addEventListener('click', function() {
+                var expanded = weatherExpandBtn.getAttribute('data-expanded') === '1';
+                allWeatherCards.forEach(function(c, i) {
+                  if (i >= weatherInitialCount) c.style.display = expanded ? 'none' : '';
+                });
+                weatherExpandBtn.textContent = expanded
+                  ? '▾ Show ' + (allWeatherCards.length - weatherInitialCount) + ' more alerts'
+                  : '▴ Show fewer alerts';
+                weatherExpandBtn.setAttribute('data-expanded', expanded ? '0' : '1');
+              });
+            }
+          }
+
+          // Render earthquake cards with show on globe, details, source
+          var quakeContainer = document.getElementById('quake-cards-container');
+          if (quakeContainer && seismicDetail && seismicDetail.quakes) {
+            var allQuakeCards = [];
+            seismicDetail.quakes.forEach(function(q) {
+              var magColor = q.mag >= 7 ? '#e74c3c' : q.mag >= 5 ? '#f39c12' : q.mag >= 4 ? '#f1c40f' : '#95a5a6';
+              var impact = q.mag >= 7 ? 'Major' : q.mag >= 6 ? 'Strong' : q.mag >= 5 ? 'Moderate' : q.mag >= 4 ? 'Light' : 'Minor';
+              var card = document.createElement('div');
+              card.className = 'alert-card';
+              card.style.cssText = 'border-left:3px solid ' + magColor + ';';
+
+              var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+              html += '<span class="alert-event">M' + q.mag.toFixed(1) + ' — ' + impact + '</span>';
+              html += '<span style="color:' + magColor + ';font-size:9px;font-weight:bold;">EARTHQUAKE</span>';
+              html += '</div>';
+              html += '<div class="alert-meta">' + esc(q.place || '') + '</div>';
+              if (q.depth) html += '<div style="color:#444;font-size:9px;margin-top:2px;">Depth: ' + q.depth + ' km</div>';
+              html += '<div style="margin-top:3px;display:flex;gap:8px;">';
+              if (q.lat && q.lon) {
+                html += '<span style="color:#3498db;font-size:9px;cursor:pointer;" class="quake-fly-btn">📍 Show on globe</span>';
+              }
+              var qUrl = safeUrl(q.url);
+              if (qUrl) {
+                html += '<span style="color:#888;font-size:9px;">Source: USGS</span>';
+              }
+              html += '</div>';
+              card.innerHTML = html;
+
+              // Show on globe handler
+              var flyBtn = card.querySelector('.quake-fly-btn');
+              if (flyBtn && q.lat && q.lon) {
+                flyBtn.addEventListener('click', function(e) {
+                  e.stopPropagation();
+                  // Lock zoom to prevent geographic drill during fly
+                  zoomLocked = true;
+                  viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(q.lon, q.lat, 300000), duration: 1.5 });
+                  setTimeout(function() { zoomLocked = false; lastZoomLevel = nav.level; }, 2000);
+                  // Show event popup (no sidebar change)
+                  showEventPopup({
+                    type: 'EARTHQUAKE', typeColor: magColor,
+                    title: 'M' + q.mag.toFixed(1) + ' — ' + (q.place || ''),
+                    detail: impact + '\nDepth: ' + (q.depth || '?') + ' km',
+                    source: 'USGS', lat: q.lat, lon: q.lon, url: q.url,
+                  }, { x: window.innerWidth / 2, y: window.innerHeight / 3 });
+                  var marker = viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(q.lon, q.lat),
+                    point: { pixelSize: 16, color: Cesium.Color.fromCssColorString(magColor), outlineColor: Cesium.Color.WHITE, outlineWidth: 2, disableDepthTestDistance: 0 },
+                    label: { text: 'M' + q.mag.toFixed(1), font: 'bold 11px JetBrains Mono, monospace', fillColor: Cesium.Color.fromCssColorString(magColor), outlineColor: Cesium.Color.BLACK, outlineWidth: 2, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -20), disableDepthTestDistance: 0 },
+                  });
+                  setTimeout(function() { viewer.entities.remove(marker); }, 30000);
+                });
+              }
+
+              allQuakeCards.push(card);
+              if (allQuakeCards.length > 5) card.style.display = 'none';
+              quakeContainer.appendChild(card);
+            });
+
+            var quakeExpandBtn = document.getElementById('quake-expand');
+            if (quakeExpandBtn) {
+              quakeExpandBtn.addEventListener('click', function() {
+                var expanded = quakeExpandBtn.getAttribute('data-expanded') === '1';
+                allQuakeCards.forEach(function(c, i) {
+                  if (i >= 5) c.style.display = expanded ? 'none' : '';
+                });
+                quakeExpandBtn.textContent = expanded
+                  ? '▾ Show ' + (allQuakeCards.length - 5) + ' more earthquakes'
+                  : '▴ Show fewer earthquakes';
+                quakeExpandBtn.setAttribute('data-expanded', expanded ? '0' : '1');
+              });
+            }
+          }
+
+          // Render disaster cards with show on globe, details, source
+          var disasterContainer = document.getElementById('disaster-cards-container');
+          if (disasterContainer && disasters.points && disasters.points.length > 0) {
+            var disasterInitialCount = 5;
+            var allDisasterCards = [];
+
+            disasters.points.forEach(function(d) {
+              var sevColor = d.severity >= 8 ? '#e74c3c' : d.severity >= 6 ? '#f39c12' : d.severity >= 4 ? '#f1c40f' : '#95a5a6';
+              // Use d.type (GDACS short codes: EQ/TC/FL/VO/DR/WF) first, then title substring
+              var typeLabel = disasterTypeLabel(d.type || d.title || '');
+              // GDACS alert level color
+              var alertLevelColor = d.alertLevel === 'Red' ? '#e74c3c' : d.alertLevel === 'Orange' ? '#f39c12' : d.alertLevel === 'Green' ? '#27ae60' : '';
+              var card = document.createElement('div');
+              card.className = 'alert-card';
+              card.style.cssText = 'border-left:3px solid ' + sevColor + ';';
+
+              var html = '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+              html += '<span class="alert-event">' + esc(d.title) + '</span>';
+              html += '<span style="color:' + sevColor + ';font-size:9px;font-weight:bold;">' + esc(typeLabel) + '</span>';
+              html += '</div>';
+              var metaLine = esc(d.source || 'EONET') + ' \u00b7 Severity ' + (d.severity || 0).toFixed(1);
+              if (d.alertLevel && alertLevelColor) metaLine += ' \u00b7 <span style="color:' + alertLevelColor + ';font-weight:bold;">' + esc(d.alertLevel) + '</span>';
+              html += '<div class="alert-meta">' + metaLine + '</div>';
+              if (d.lat && d.lon) {
+                html += '<div style="color:#444;font-size:9px;margin-top:2px;">' + d.lat.toFixed(2) + '\u00b0, ' + d.lon.toFixed(2) + '\u00b0</div>';
+              }
+              html += '<div style="margin-top:3px;display:flex;gap:8px;">';
+              if (d.lat && d.lon) {
+                html += '<span style="color:#3498db;font-size:9px;cursor:pointer;" class="disaster-fly-btn">\ud83d\udccd Show on globe</span>';
+              }
+              html += '<span style="color:#8e44ad;font-size:9px;cursor:pointer;" class="disaster-detail-btn">Details \u25be</span>';
+              if (d.url) {
+                var dUrl = safeUrl(d.url);
+                html += '<span style="color:#888;font-size:9px;">Source: ' + esc(d.source || 'GDACS') + '</span>';
+              }
+              html += '</div>';
+              html += '<div class="disaster-detail-expand" style="display:none;margin-top:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:3px;border:1px solid rgba(255,255,255,0.04);">';
+              html += '<div style="color:#ccc;font-size:10px;font-weight:bold;margin-bottom:4px;">' + esc(typeLabel) + ': ' + esc(d.title) + '</div>';
+              html += '<div style="color:#888;font-size:9px;line-height:1.5;">Source: ' + esc(d.source || 'EONET') + '<br>Severity: ' + (d.severity || 0).toFixed(1) + '/10';
+              if (d.alertLevel) html += '<br>Alert Level: <span style="color:' + (alertLevelColor || '#aaa') + ';font-weight:bold;">' + esc(d.alertLevel) + '</span>';
+              if (d.lat && d.lon) html += '<br>Location: ' + d.lat.toFixed(4) + '\u00b0, ' + d.lon.toFixed(4) + '\u00b0';
+              html += '</div>';
+              if (d.detail) html += '<div style="color:#aaa;font-size:9px;line-height:1.5;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05);">' + esc(d.detail) + '</div>';
+              html += '</div>';
+              card.innerHTML = html;
+
+              // Show on globe handler
+              var flyBtn = card.querySelector('.disaster-fly-btn');
+              if (flyBtn && d.lat && d.lon) {
+                flyBtn.addEventListener('click', function(e) {
+                  e.stopPropagation();
+                  // Lock zoom to prevent geographic drill during fly
+                  zoomLocked = true;
+                  viewer.camera.flyTo({
+                    destination: Cesium.Cartesian3.fromDegrees(d.lon, d.lat, 200000),
+                    duration: 1.5,
+                  });
+                  setTimeout(function() { zoomLocked = false; lastZoomLevel = nav.level; }, 2000);
+                  // Show event popup (no sidebar change)
+                  showEventPopup({
+                    type: typeLabel, typeColor: sevColor,
+                    title: d.title,
+                    detail: (d.detail || '') + (d.alertLevel ? '\nAlert Level: ' + d.alertLevel : ''),
+                    source: d.source || 'GDACS', lat: d.lat, lon: d.lon, url: d.url,
+                    severity: d.severity,
+                  }, { x: window.innerWidth / 2, y: window.innerHeight / 3 });
+                  // Add temporary marker
+                  var marker = viewer.entities.add({
+                    position: Cesium.Cartesian3.fromDegrees(d.lon, d.lat),
+                    point: { pixelSize: 16, color: Cesium.Color.fromCssColorString(sevColor), outlineColor: Cesium.Color.WHITE, outlineWidth: 2, disableDepthTestDistance: 0 },
+                    label: { text: typeLabel, font: 'bold 11px JetBrains Mono, monospace', fillColor: Cesium.Color.fromCssColorString(sevColor), outlineColor: Cesium.Color.BLACK, outlineWidth: 2, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -20), disableDepthTestDistance: 0 },
+                  });
+                  setTimeout(function() { viewer.entities.remove(marker); }, 30000);
+                });
+              }
+
+              // Details expand handler
+              var detailBtn = card.querySelector('.disaster-detail-btn');
+              if (detailBtn) {
+                detailBtn.addEventListener('click', function(e) {
+                  e.stopPropagation();
+                  var detail = card.querySelector('.disaster-detail-expand');
+                  if (detail) {
+                    var isHidden = detail.style.display === 'none';
+                    detail.style.display = isHidden ? 'block' : 'none';
+                    detailBtn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
+                  }
+                });
+              }
+
+              allDisasterCards.push(card);
+              if (allDisasterCards.length > disasterInitialCount) card.style.display = 'none';
+              disasterContainer.appendChild(card);
+            });
+
+            // Disaster expand handler
+            var disasterExpandBtn = document.getElementById('disaster-expand');
+            if (disasterExpandBtn) {
+              disasterExpandBtn.addEventListener('click', function() {
+                var expanded = disasterExpandBtn.getAttribute('data-expanded') === '1';
+                allDisasterCards.forEach(function(c, i) {
+                  if (i >= disasterInitialCount) c.style.display = expanded ? 'none' : '';
+                });
+                disasterExpandBtn.textContent = expanded
+                  ? '▾ Show ' + (allDisasterCards.length - disasterInitialCount) + ' more disasters'
+                  : '▴ Show fewer disasters';
+                disasterExpandBtn.setAttribute('data-expanded', expanded ? '0' : '1');
+              });
+            }
+          }
+
+        }).catch(function(e) {
+          var currentItem = nav.stack[nav.stack.length - 1];
+          if (currentItem && currentItem.id === drillId) {
+            dashBody.innerHTML = '<div class="loading-msg" style="color:#e74c3c;">Failed: ' + esc(e.message) + '</div>';
+          }
+        });
+      }
+
+      // =============================================
+      // OVIX Legend (globe level)
+      // =============================================
+      function setLegend(k, v) {
+        var el = document.getElementById('ovix-' + k);
+        if (el) { el.textContent = v.toFixed(1); el.style.color = cssColor(v); }
+      }
+
+      function fetchGlobalOVIX() {
+        // Fetch all domain scores from the canonical scores endpoint
+        // (uses domain-specific composite scoring for cyber, health, financial)
+        safeFetch(OVIX_API + '/api/ovix/scores').then(function(d) {
+          setLegend('composite', d.composite);
+          log('OVIX: ' + d.composite);
+          var mapping = {
+            weather: 'weather', seismic: 'seismic', disaster: 'disaster',
+            cyber: 'cyber', infrastructure: 'infra', financial: 'financial',
+            health: 'health', environmental: 'environmental'
+          };
+          (d.domains || []).forEach(function(dom) {
+            var legendId = mapping[dom.domain];
+            if (legendId) setLegend(legendId, dom.score);
+          });
+        }).catch(function() { log('OVIX scores fetch failed'); });
+      }
+
+      // =============================================
+      // Click handler
+      // =============================================
+      // =============================================
+      // Unified click handler — drill-down + alert popups
+      // =============================================
+      // IMPORTANT: Cesium's setInputAction REPLACES previous callbacks
+      // for the same event type. Both drill-down and alert clicks must
+      // be handled in a single LEFT_CLICK callback.
+      var alertPopup = document.getElementById('alert-popup');
+      window.closeAlertPopup = function() { alertPopup.style.display = 'none'; };
+
+      // --- Event Popup (for disaster/quake marker clicks) ---
+      var eventPopup = document.getElementById('event-popup');
+
+      window.closeEventPopup = function() { eventPopup.style.display = 'none'; };
+
+      function showEventPopup(data, screenPos) {
+        var epType = eventPopup.querySelector('.ep-type');
+        epType.textContent = data.type;
+        epType.style.color = data.typeColor || '#18BC9C';
+
+        eventPopup.querySelector('.ep-title').textContent = data.title;
+        eventPopup.querySelector('.ep-detail').textContent = data.detail || '';
+
+        var metaHtml = '';
+        if (data.severity) metaHtml += '<div class="ep-meta">Severity: ' + esc(String(data.severity)) + '/10</div>';
+        metaHtml += '<div class="ep-meta">Source: ' + esc(data.source || '') + '</div>';
+        metaHtml += '<div class="ep-meta">' + data.lat.toFixed(3) + '°, ' + data.lon.toFixed(3) + '°</div>';
+        document.getElementById('ep-meta-rows').innerHTML = metaHtml;
+
+        var linkContainer = document.getElementById('ep-link-container');
+        linkContainer.innerHTML = '<span style="color:#888; font-size:10px;">Source: ' + esc(data.source || '') + '</span>';
+
+        // Position near the click point
+        eventPopup.style.display = 'block';
+        eventPopup.style.left = Math.min(screenPos.x + 16, window.innerWidth - 360) + 'px';
+        eventPopup.style.top = Math.min(screenPos.y - 10, window.innerHeight - 250) + 'px';
+        eventPopup._justOpened = true;
+      }
+
+      // Close popups when clicking elsewhere on the globe
+      viewer.scene.canvas.addEventListener('click', function(e) {
+        setTimeout(function() {
+          if (!alertPopup._justOpened) alertPopup.style.display = 'none';
+          if (!eventPopup._justOpened) eventPopup.style.display = 'none';
+          var pp = document.getElementById('ping-popup');
+          if (pp && !pp._justOpened) pp.style.display = 'none';
+          alertPopup._justOpened = false;
+          eventPopup._justOpened = false;
+          if (pp) pp._justOpened = false;
+          // Also close event-layer popup reuse
+          if (eventPopup._evtJustOpened) { eventPopup._evtJustOpened = false; } else { /* already handled above */ }
+        }, 50);
+      });
+
+      var clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      clickHandler.setInputAction(function(click) {
+        // Use drillPick with 8px tolerance for better small-marker picking at globe zoom
+        var picks = viewer.scene.drillPick(click.position, 5, 8, 8);
+        var picked = null;
+        for (var pi = 0; pi < picks.length; pi++) {
+          if (Cesium.defined(picks[pi]) && picks[pi].id && picks[pi].id.properties) {
+            picked = picks[pi]; break;
+          }
+        }
+        if (!picked || !picked.id || !picked.id.properties) return;
+
+        var props = picked.id.properties;
+
+        // --- Alert marker popup ---
+        var isAlert = props.isAlertMarker ? props.isAlertMarker.getValue() : false;
+        if (isAlert) {
+          var event = props.alertEvent ? props.alertEvent.getValue() : '';
+          var severity = props.alertSeverity ? props.alertSeverity.getValue() : '';
+          var area = props.alertArea ? props.alertArea.getValue() : '';
+          var description = props.alertDescription ? props.alertDescription.getValue() : '';
+          var expires = props.alertExpires ? props.alertExpires.getValue() : '';
+          var sevColor = severity === 'Extreme' ? '#e74c3c' : severity === 'Severe' ? '#f39c12' : severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
+
+          alertPopup.querySelector('.ap-event').textContent = event;
+          alertPopup.querySelector('.ap-severity').textContent = severity;
+          alertPopup.querySelector('.ap-severity').style.cssText = 'background:' + sevColor + '20;color:' + sevColor + ';border:1px solid ' + sevColor + ';';
+          alertPopup.querySelector('.ap-area').textContent = area;
+          alertPopup.querySelector('.ap-desc').textContent = description || 'No description available.';
+          alertPopup.querySelector('.ap-expires').textContent = expires ? 'Expires: ' + new Date(expires).toLocaleString() : '';
+
+          alertPopup.style.display = 'block';
+          alertPopup.style.left = Math.min(click.position.x + 16, window.innerWidth - 340) + 'px';
+          alertPopup.style.top = Math.min(click.position.y - 10, window.innerHeight - 200) + 'px';
+          alertPopup._justOpened = true;
+          return;
+        }
+
+        // --- Score Delta Ping popup ---
+        var isPing = props.isPing ? props.isPing.getValue() : false;
+        if (isPing) {
+          showPingPopup({
+            category: props.pingCategory ? props.pingCategory.getValue() : '',
+            regionId: props.pingRegionId ? props.pingRegionId.getValue() : '',
+            regionName: props.pingRegionName ? props.pingRegionName.getValue() : '',
+            title: props.pingTitle ? props.pingTitle.getValue() : '',
+            detail: props.pingDetail ? props.pingDetail.getValue() : '',
+            severity: props.pingSeverity ? props.pingSeverity.getValue() : '',
+            sourceUrl: props.pingSourceUrl ? props.pingSourceUrl.getValue() : '',
+            source: props.pingSource ? props.pingSource.getValue() : '',
+            areaDesc: props.pingAreaDesc ? props.pingAreaDesc.getValue() : '',
+            score: props.pingScore ? props.pingScore.getValue() : 0,
+            delta: props.pingDelta ? props.pingDelta.getValue() : 0,
+            timestamp: props.pingTimestamp ? props.pingTimestamp.getValue() : '',
+          }, click.position);
+          return;
+        }
+
+        // --- Event layer marker popup ---
+        var isEvent = props.isEventMarker ? props.isEventMarker.getValue() : false;
+        if (isEvent) {
+          var evtDomain = props.evtDomain ? props.evtDomain.getValue() : '';
+          var evtTitle = props.evtTitle ? props.evtTitle.getValue() : '';
+          var evtDetail = props.evtDetail ? props.evtDetail.getValue() : '';
+          var evtSeverity = props.evtSeverity ? props.evtSeverity.getValue() : 0;
+          var evtSource = props.evtSource ? props.evtSource.getValue() : '';
+          var evtUrl = props.evtSourceUrl ? props.evtSourceUrl.getValue() : '';
+          var evtLat = props.evtLat ? props.evtLat.getValue() : 0;
+          var evtLon = props.evtLon ? props.evtLon.getValue() : 0;
+          var evtTime = props.evtTimestamp ? props.evtTimestamp.getValue() : '';
+
+          showEventPopup({
+            type: evtDomain.toUpperCase(),
+            typeColor: domainColor(evtDomain),
+            title: evtTitle,
+            detail: evtDetail + (evtTime ? '\n' + (function() {
+              var diff = Date.now() - new Date(evtTime).getTime();
+              var hrs = Math.floor(diff/3600000);
+              var mins = Math.floor((diff%3600000)/60000);
+              return hrs > 0 ? hrs + 'h ' + mins + 'm ago' : mins + 'm ago';
+            })() : ''),
+            source: evtSource,
+            lat: evtLat,
+            lon: evtLon,
+            url: evtUrl,
+            severity: 'Severity ' + evtSeverity,
+          }, click.position);
+          return;
+        }
+
+        // --- Drill-down navigation ---
+        var level = props.markerLevel ? props.markerLevel.getValue() : '';
+        var itemId = props.itemId ? props.itemId.getValue() : '';
+        var itemName = props.itemName ? props.itemName.getValue() : '';
+
+        // Handle quake marker click
+        // Handle earthquake marker click — event popup (no sidebar change)
+        if (level === 'quake') {
+          var qMag = props.quakeMag ? props.quakeMag.getValue() : 0;
+          var qDepth = props.quakeDepth ? props.quakeDepth.getValue() : 0;
+          var qPlace = props.quakePlace ? props.quakePlace.getValue() : '';
+          var qLat = props.quakeLat ? props.quakeLat.getValue() : 0;
+          var qLon = props.quakeLon ? props.quakeLon.getValue() : 0;
+          var qUrl = props.quakeUrl ? props.quakeUrl.getValue() : '';
+          var qTime = props.quakeTime ? props.quakeTime.getValue() : 0;
+          var qColor = quakeColor(qMag);
+          var qImpact = qMag >= 7 ? 'Major — widespread damage likely' : qMag >= 6 ? 'Strong — moderate to heavy damage' : qMag >= 5 ? 'Moderate — light damage, felt widely' : qMag >= 4 ? 'Light — noticeable shaking' : 'Minor';
+          var qDepthLabel = qDepth > 300 ? 'Deep' : qDepth > 70 ? 'Intermediate' : 'Shallow';
+          var qTimeAgo = '';
+          if (qTime) { var diff = Date.now() - qTime; var hrs = Math.floor(diff/3600000); var mins = Math.floor((diff%3600000)/60000); qTimeAgo = hrs > 0 ? hrs + 'h ' + mins + 'm ago' : mins + 'm ago'; }
+
+          showEventPopup({
+            type: 'EARTHQUAKE', typeColor: qColor,
+            title: 'M' + qMag.toFixed(1) + ' — ' + qPlace,
+            detail: qImpact + '\nDepth: ' + qDepth.toFixed(0) + ' km (' + qDepthLabel + ')' + (qTimeAgo ? '\n' + qTimeAgo : ''),
+            source: 'USGS', lat: qLat, lon: qLon, url: qUrl,
+          }, click.position);
+          return;
+        }
+
+        // Handle disaster marker click — event popup (no sidebar change)
+        if (level === 'disaster') {
+          var dType = props.disasterType ? props.disasterType.getValue() : '';
+          var dTitle = props.disasterTitle ? props.disasterTitle.getValue() : '';
+          var dSource = props.disasterSource ? props.disasterSource.getValue() : '';
+          var dUrl = props.disasterUrl ? props.disasterUrl.getValue() : '';
+          var dSeverity = props.disasterSeverity ? props.disasterSeverity.getValue() : '';
+          var dDetail = props.disasterDetail ? props.disasterDetail.getValue() : '';
+          var dAlertLevel = props.disasterAlertLevel ? props.disasterAlertLevel.getValue() : '';
+          var dLat = props.disasterLat ? props.disasterLat.getValue() : 0;
+          var dLon = props.disasterLon ? props.disasterLon.getValue() : 0;
+          var dColor = disasterColor(dType || dTitle);
+          var dLabel = disasterTypeLabel(dType || dTitle);
+
+          showEventPopup({
+            type: dLabel, typeColor: dColor,
+            title: dTitle,
+            detail: (dDetail || '') + (dAlertLevel ? '\nAlert Level: ' + dAlertLevel : ''),
+            source: dSource || 'GDACS', lat: dLat, lon: dLon, url: dUrl,
+            severity: dSeverity,
+          }, click.position);
+          return;
+        }
+
+        if (!itemId) return;
+
+        var pos = picked.id.position.getValue(Cesium.JulianDate.now());
+        var carto = Cesium.Cartographic.fromCartesian(pos);
+        var lat = Cesium.Math.toDegrees(carto.latitude);
+        var lon = Cesium.Math.toDegrees(carto.longitude);
+
+        if (level === 'macro' && nav.level === 'globe') {
+          drillTo('macro', itemId, itemName, lat, lon);
+        } else if (level === 'sub' && nav.level === 'macro') {
+          drillTo('sub', itemId, itemName, lat, lon);
+        } else if (level === 'metro' && nav.level === 'sub') {
+          drillTo('metro', itemId, itemName, lat, lon);
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+      // =============================================
+      // Hover tooltip
+      // =============================================
+      var tooltip = document.getElementById('tooltip');
+      var ttName = tooltip.querySelector('.tt-name');
+      var ttSub = tooltip.querySelector('.tt-sub');
+
+      var hoverHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      hoverHandler.setInputAction(function(movement) {
+        var picked = viewer.scene.pick(movement.endPosition);
+        if (Cesium.defined(picked) && picked.id && picked.id.properties) {
+          var props = picked.id.properties;
+          var level = props.markerLevel ? props.markerLevel.getValue() : '';
+
+          if (level === 'operator') {
+            var handle = props.operatorHandle ? props.operatorHandle.getValue() : '';
+            var industry = props.operatorIndustry ? props.operatorIndustry.getValue() : '';
+            var location = props.operatorLocation ? props.operatorLocation.getValue() : '';
+            ttName.textContent = '@' + handle;
+            var sub = [];
+            if (industry) sub.push(industry);
+            if (location) sub.push(location);
+            ttSub.textContent = sub.join(' · ') || 'ROC Operator';
+          } else if (level === 'quake') {
+            var mag = props.quakeMag ? props.quakeMag.getValue() : 0;
+            var place = props.quakePlace ? props.quakePlace.getValue() : '';
+            ttName.textContent = 'M' + mag.toFixed(1) + ' — ' + place;
+            ttSub.textContent = 'Click for details';
+          } else if (level === 'disaster') {
+            // Disaster marker hover — show title and source
+            var dTitle = props.disasterTitle ? props.disasterTitle.getValue() : '';
+            var dType = props.disasterType ? props.disasterType.getValue() : '';
+            var dSource = props.disasterSource ? props.disasterSource.getValue() : '';
+            ttName.textContent = disasterTypeLabel(dType || dTitle) + ': ' + (dTitle || 'Unknown event');
+            ttSub.textContent = (dSource ? 'Source: ' + dSource : '') + ' · Click for details';
+          } else if (props.isAlertMarker && props.isAlertMarker.getValue()) {
+            // Enhancement 4: Alert marker hover shows weather indicator
+            var alertEvt = props.alertEvent ? props.alertEvent.getValue() : '';
+            var alertSev = props.alertSeverity ? props.alertSeverity.getValue() : '';
+            var weatherIcon = alertSev === 'Extreme' ? '⚠' : alertSev === 'Severe' ? '⛈' : '🌧';
+            ttName.textContent = weatherIcon + ' ' + alertEvt;
+            ttSub.textContent = alertSev + ' — Click for details';
+          } else if (props.itemName) {
+            var name = props.itemName.getValue();
+            var airports = props.airports ? props.airports.getValue() : '';
+            var itemId = props.itemId ? props.itemId.getValue() : '';
+            // Enhancement 4: Show OVIX score in tooltip if available
+            var scoreInfo = '';
+            if (watchlistData && watchlistData[itemId]) {
+              var wScore = watchlistData[itemId].composite;
+              scoreInfo = ' · OVIX ' + wScore.toFixed(1);
+            }
+            ttName.textContent = name;
+            ttSub.textContent = (airports || 'Click to drill down') + scoreInfo;
+          } else {
+            tooltip.style.display = 'none';
+            return;
+          }
+
+          tooltip.style.display = 'block';
+          tooltip.style.left = (movement.endPosition.x + 16) + 'px';
+          tooltip.style.top = (movement.endPosition.y - 10) + 'px';
+        } else {
+          tooltip.style.display = 'none';
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+      // =============================================
+      // Zoom-driven navigation (semantic zoom)
+      // =============================================
+      var ZOOM_THRESHOLDS = {
+        globe: 12000000,   // above 12M → macro markers
+        macro: 8000000,    // 4M-12M → sub-region markers
+        sub: 1500000,      // 500K-4M → metro markers
+        metro: 500000,     // below 500K → metro dashboard
+      };
+
+      var zoomLocked = false; // locked during flyTo animations
+      var inspecting = false; // true when viewing an event (not navigating)
+      var lastZoomLevel = 'globe';
+
+      // --- Inspection Mode ---
+      // When inspecting an event, zoom navigation is suspended.
+      // The dashboard shows event details instead of metro/region info.
+      // Exits when: user clicks globe background, hits ESC, or clicks Back.
+
+      function enterInspection(title, detailHtml) {
+        inspecting = true;
+        zoomLocked = true;
+        // Close any floating panels that might overlap
+        disasterPanelEl.classList.remove('open');
+        quakePanelEl.classList.remove('open');
+        alertPopup.style.display = 'none';
+        dashTitle.textContent = '◆ ' + title;
+        dashBody.innerHTML = detailHtml;
+        dashboardEl.classList.add('open');
+      }
+
+      // skipDashboardRestore: pass true when the caller is already managing dashboard state
+      function exitInspection(skipDashboardRestore) {
+        if (!inspecting) return;
+        inspecting = false;
+        zoomLocked = false;
+        lastZoomLevel = nav.level; // resync zoom level
+        // Close any floating event panels that may have triggered inspection mode
+        if (disasterPanelEl) disasterPanelEl.classList.remove('open');
+        if (quakePanelEl) quakePanelEl.classList.remove('open');
+        if (skipDashboardRestore) return;
+        // Restore dashboard: close if at globe level, reload region data if drilled
+        var current = nav.stack.length > 0 ? nav.stack[nav.stack.length - 1] : null;
+        if (!current) {
+          // Inspection was at globe level — close the dashboard, restore watchlist
+          dashboardEl.classList.remove('open');
+          dashBody.innerHTML = '';
+          showWatchlist();
+          // Fly back to globe view
+          flyTo(HOME.lat, HOME.lon, HOME.height);
+        } else {
+          // Reload the region dashboard to replace inspection content
+          dashboardEl.classList.remove('open');
+          dashBody.innerHTML = '';
+          loadDashboard(current.id, current.name, current.level);
+        }
+      }
+
+      // Click globe background exits inspection
+      viewer.scene.canvas.addEventListener('click', function() {
+        setTimeout(function() { if (inspecting && !alertPopup._justOpened) exitInspection(); }, 100);
+      });
+
+      function getAltitude() {
+        var carto = viewer.camera.positionCartographic;
+        return carto ? carto.height : HOME.height;
+      }
+
+      function findNearestItem(items, camLat, camLon) {
+        var best = null, bestDist = Infinity;
+        items.forEach(function(item) {
+          var dlat = item.lat - camLat;
+          var dlon = item.lon - camLon;
+          var dist = dlat * dlat + dlon * dlon;
+          if (dist < bestDist) { bestDist = dist; best = item; }
+        });
+        return best;
+      }
+
+      function onZoomChange() {
+        if (zoomLocked || !registry.macroRegions.length) return;
+
+        var alt = getAltitude();
+        var camCarto = viewer.camera.positionCartographic;
+        var camLat = Cesium.Math.toDegrees(camCarto.latitude);
+        var camLon = Cesium.Math.toDegrees(camCarto.longitude);
+
+        var newLevel;
+        if (alt > ZOOM_THRESHOLDS.globe) newLevel = 'globe';
+        else if (alt > ZOOM_THRESHOLDS.macro) newLevel = 'macro';
+        else if (alt > ZOOM_THRESHOLDS.sub) newLevel = 'sub';
+        else newLevel = 'metro';
+
+        if (newLevel === lastZoomLevel) return;
+        var prevLevel = lastZoomLevel;
+        lastZoomLevel = newLevel;
+
+        // Zooming OUT — collapse navigation
+        if (newLevel === 'globe' && prevLevel !== 'globe') {
+          nav.stack = [];
+          nav.level = 'globe';
+          clearMarkers();
+          addMarkers(registry.macroRegions, 'macro');
+          // Restore operator dots and quake markers at globe level (disasters hidden — pings show fresh events)
+          operatorEntities.forEach(function(e) { e.show = true; });
+          quakeEntities.forEach(function(e) { e.show = true; });
+          dashboardEl.classList.remove('open');
+          legendEl.classList.remove('dimmed');
+          showWatchlist();
+          updateBreadcrumb();
+          return;
+        }
+
+        // Zooming INTO macro level — find nearest macro region
+        if (newLevel === 'macro' && prevLevel === 'globe') {
+          hideWatchlist();
+          // Hide operator dots, quake markers, and disaster markers during drill-down
+          operatorEntities.forEach(function(e) { e.show = false; });
+          quakeEntities.forEach(function(e) { e.show = false; });
+          disasterEntities.forEach(function(e) { e.show = false; });
+          var nearest = findNearestItem(registry.macroRegions, camLat, camLon);
+          if (nearest) {
+            nav.stack = [{ level: 'macro', id: nearest.id, name: nearest.name, lat: nearest.lat, lon: nearest.lon }];
+            nav.level = 'macro';
+            inspecting = false;
+            dashboardEl.classList.remove('open');
+            dashBody.innerHTML = '';
+            clearMarkers();
+            var subs = registry.subRegions.filter(function(s) { return s.parent === nearest.id; });
+            addMarkers(subs, 'sub');
+            legendEl.classList.add('dimmed');
+            loadDashboard(nearest.id, nearest.name, 'macro');
+            updateBreadcrumb();
+          }
+          return;
+        }
+
+        // Zooming INTO sub level — find nearest sub-region
+        if (newLevel === 'sub' && (prevLevel === 'macro' || prevLevel === 'globe')) {
+          var nearestSub = findNearestItem(registry.subRegions, camLat, camLon);
+          if (nearestSub) {
+            // Ensure macro is in stack
+            var parentMacro = registry.macroRegions.find(function(m) { return m.id === nearestSub.parent; });
+            if (parentMacro) {
+              nav.stack = [
+                { level: 'macro', id: parentMacro.id, name: parentMacro.name, lat: parentMacro.lat, lon: parentMacro.lon },
+                { level: 'sub', id: nearestSub.id, name: nearestSub.name, lat: nearestSub.lat, lon: nearestSub.lon },
+              ];
+            } else {
+              nav.stack = [{ level: 'sub', id: nearestSub.id, name: nearestSub.name, lat: nearestSub.lat, lon: nearestSub.lon }];
+            }
+            nav.level = 'sub';
+            inspecting = false;
+            dashboardEl.classList.remove('open');
+            dashBody.innerHTML = '';
+            clearMarkers();
+            var metros = registry.metros.filter(function(m) { return m.regionId === nearestSub.id; });
+            if (metros.length > 0) addMarkers(metros, 'metro');
+            setTimeout(fetchAndColorVisibleMarkers, 300);
+            loadDashboard(nearestSub.id, nearestSub.name, 'sub');
+            updateBreadcrumb();
+          }
+          return;
+        }
+
+        // Zooming INTO metro level — find nearest metro
+        if (newLevel === 'metro') {
+          var nearestMetro = findNearestItem(registry.metros, camLat, camLon);
+          if (nearestMetro) {
+            // Build full stack
+            var subRegion = registry.subRegions.find(function(s) { return s.id === nearestMetro.regionId; });
+            var macroRegion = subRegion ? registry.macroRegions.find(function(m) { return m.id === subRegion.parent; }) : null;
+            nav.stack = [];
+            if (macroRegion) nav.stack.push({ level: 'macro', id: macroRegion.id, name: macroRegion.name, lat: macroRegion.lat, lon: macroRegion.lon });
+            if (subRegion) nav.stack.push({ level: 'sub', id: subRegion.id, name: subRegion.name, lat: subRegion.lat, lon: subRegion.lon });
+            nav.stack.push({ level: 'metro', id: nearestMetro.id, name: nearestMetro.name, lat: nearestMetro.lat, lon: nearestMetro.lon });
+            nav.level = 'metro';
+            inspecting = false;
+            dashboardEl.classList.remove('open');
+            dashBody.innerHTML = '';
+            clearMarkers();
+            loadDashboard(nearestMetro.id, nearestMetro.name, 'metro');
+            updateBreadcrumb();
+          }
+          return;
+        }
+
+        // Zooming OUT from metro to sub — re-show metro markers with correct colors
+        if (newLevel === 'sub' && prevLevel === 'metro') {
+          // Pop metro from stack if present
+          if (nav.stack.length > 0 && nav.stack[nav.stack.length - 1].level === 'metro') {
+            nav.stack.pop();
+          }
+          var currentSub = nav.stack.length > 0 ? nav.stack[nav.stack.length - 1] : null;
+          if (currentSub && currentSub.level === 'sub') {
+            nav.level = 'sub';
+            inspecting = false;
+            dashboardEl.classList.remove('open');
+            dashBody.innerHTML = '';
+            clearMarkers();
+            var metros = registry.metros.filter(function(m) { return m.regionId === currentSub.id; });
+            if (metros.length > 0) addMarkers(metros, 'metro');
+            setTimeout(fetchAndColorVisibleMarkers, 300);
+            loadDashboard(currentSub.id, currentSub.name, 'sub');
+            updateBreadcrumb();
+          }
+          return;
+        }
+
+        // Zooming OUT from sub to macro — re-show sub markers
+        if (newLevel === 'macro' && prevLevel === 'sub') {
+          // Pop sub from stack
+          while (nav.stack.length > 0 && nav.stack[nav.stack.length - 1].level !== 'macro') {
+            nav.stack.pop();
+          }
+          var currentMacro = nav.stack.length > 0 ? nav.stack[nav.stack.length - 1] : null;
+          if (currentMacro && currentMacro.level === 'macro') {
+            nav.level = 'macro';
+            inspecting = false;
+            dashboardEl.classList.remove('open');
+            dashBody.innerHTML = '';
+            clearMarkers();
+            var subs = registry.subRegions.filter(function(s) { return s.parent === currentMacro.id; });
+            addMarkers(subs, 'sub');
+            loadDashboard(currentMacro.id, currentMacro.name, 'macro');
+            updateBreadcrumb();
+          }
+          return;
+        }
+      }
+
+      // Lock zoom detection during flyTo to prevent thrashing
+      var origFlyTo = flyTo;
+      flyTo = function(lat, lon, height, duration) {
+        zoomLocked = true;
+        origFlyTo(lat, lon, height, duration);
+        setTimeout(function() {
+          zoomLocked = false;
+          lastZoomLevel = nav.level; // sync after animation
+        }, (duration || 1.5) * 1000 + 500);
+      };
+
+      // Watch camera changes (throttled)
+      var zoomTimer = null;
+      viewer.camera.changed.addEventListener(function() {
+        if (zoomTimer) clearTimeout(zoomTimer);
+        zoomTimer = setTimeout(onZoomChange, 300);
+      });
+      viewer.camera.percentageChanged = 0.1; // trigger on 10% change
+
+      // =============================================
+      // Auth — token from parent Open MCT gate
+      // =============================================
+      var authState = { token: null, user: null };
+
+      // Read token set by parent page's login gate (same origin = shared localStorage)
+      var savedToken = localStorage.getItem('roc-token');
+      if (savedToken) {
+        authState.token = savedToken;
+        // Load user profile + apply preferences
+        fetch(OVIX_API + '/auth/me', { headers: { 'Authorization': 'Bearer ' + savedToken } })
+          .then(function(r) { if (!r.ok) throw new Error('Auth failed'); return r.json(); })
+          .then(function(d) {
+            authState.user = d.user;
+            log('User: ' + (d.user.handle || d.user.email));
+            // Apply server-side watchlist if available
+            if (d.user.preferences && d.user.preferences.watchlist && Array.isArray(d.user.preferences.watchlist)) {
+              localStorage.setItem('roc-watchlist', JSON.stringify(d.user.preferences.watchlist));
+              refreshWatchlist();
+            }
+          })
+          .catch(function() { authState.token = null; });
+      }
+
+      function syncPreferences() {
+        if (!authState.token) return;
+        var list = getWatchlist();
+        fetch(OVIX_API + '/auth/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authState.token },
+          body: JSON.stringify({ watchlist: list }),
+        }).catch(function() {}); // silent sync
+      }
+
+      // =============================================
+      // Watchlist — multi-region monitoring
+      // =============================================
+      var DEFAULT_WATCHLIST = ['north-america'];
+      var watchlistEl = document.getElementById('watchlist');
+      var wlBody = document.getElementById('wl-body');
+      var pickerEl = document.getElementById('region-picker');
+      var rpList = document.getElementById('rp-list');
+      var rpSearch = document.getElementById('rp-search');
+      var watchlistData = {}; // regionId → composite data
+
+      function getWatchlist() {
+        try {
+          var saved = localStorage.getItem('roc-watchlist');
+          return saved ? JSON.parse(saved) : DEFAULT_WATCHLIST;
+        } catch (e) { return DEFAULT_WATCHLIST; }
+      }
+
+      function saveWatchlist(list) {
+        localStorage.setItem('roc-watchlist', JSON.stringify(list));
+        syncPreferences(); // push to server if logged in
+      }
+
+      // =============================================
+      // Watchlist collapse/expand
+      // =============================================
+      var wlToggleBtn = document.getElementById('wl-toggle');
+
+      window.toggleWatchlistCollapse = function() {
+        var collapsed = watchlistEl.classList.toggle('collapsed');
+        localStorage.setItem('roc-watchlist-collapsed', collapsed ? '1' : '0');
+        wlToggleBtn.innerHTML = collapsed ? '&#9654;' : '&#9664;';
+      };
+
+      // Restore collapse state on boot
+      (function() {
+        if (localStorage.getItem('roc-watchlist-collapsed') === '1') {
+          watchlistEl.classList.add('collapsed');
+          wlToggleBtn.innerHTML = '&#9654;';
+        }
+      })();
+
+      function showWatchlist() { watchlistEl.classList.remove('hidden'); }
+      function hideWatchlist() { watchlistEl.classList.add('hidden'); }
+
+      function refreshWatchlist() {
+        var list = getWatchlist();
+        wlBody.innerHTML = '';
+
+        if (list.length === 0) {
+          wlBody.innerHTML = '<div style="color:#444;padding:16px;text-align:center;font-size:11px;">No regions pinned.<br>Click + to add regions.</div>';
+          return;
+        }
+
+        list.forEach(function(regionId) {
+          var card = document.createElement('div');
+          card.className = 'wl-card loading';
+          card.id = 'wl-' + regionId;
+
+          // Find region info
+          var info = (registry.subRegions || []).find(function(r) { return r.id === regionId; })
+                  || (registry.macroRegions || []).find(function(r) { return r.id === regionId; });
+          var name = info ? info.name : regionId;
+
+          card.innerHTML = '<div class="wl-card-top">'
+            + '<div><div class="wl-card-name">' + esc(name) + '</div>'
+            + '<div class="wl-card-score" style="color:#333;">--</div>'
+            + '<div class="wl-card-label">LOADING</div></div>'
+            + '</div>'
+            + '<button class="wl-remove" title="Remove">&times;</button>';
+
+          // Click card → drill to region
+          card.addEventListener('click', function(e) {
+            if (e.target.classList.contains('wl-remove')) return;
+            if (!info) return;
+            // Determine if this is a macro or sub region
+            var isMacro = (registry.macroRegions || []).some(function(m) { return m.id === regionId; });
+            if (isMacro) {
+              drillTo('macro', regionId, name, info.lat, info.lon);
+            } else {
+              // Need to push macro parent first
+              var parentMacro = (registry.macroRegions || []).find(function(m) { return m.id === info.parent; });
+              if (parentMacro) {
+                nav.stack = [{ level: 'macro', id: parentMacro.id, name: parentMacro.name, lat: parentMacro.lat, lon: parentMacro.lon }];
+                nav.level = 'macro';
+              }
+              drillTo('sub', regionId, name, info.lat, info.lon);
+            }
+            hideWatchlist();
+          });
+
+          // Remove button
+          card.querySelector('.wl-remove').addEventListener('click', function(e) {
+            e.stopPropagation();
+            var list = getWatchlist().filter(function(id) { return id !== regionId; });
+            saveWatchlist(list);
+            refreshWatchlist();
+          });
+
+          wlBody.appendChild(card);
+        });
+
+        // Fetch data for all cards in parallel
+        list.forEach(function(regionId) {
+          var param = (registry.macroRegions || []).some(function(m) { return m.id === regionId; })
+            ? 'region=' : 'region=';
+          safeFetch(OVIX_API + '/api/ovix/composite?' + param + regionId).then(function(d) {
+            watchlistData[regionId] = d;
+            updateWatchlistCard(regionId, d);
+            // Enhancement 5 & 7: Update marker colors and pulse rings
+            colorMarkersByScore();
+            addPulseRings();
+          }).catch(function() {
+            var card = document.getElementById('wl-' + regionId);
+            if (card) {
+              card.classList.remove('loading');
+              card.querySelector('.wl-card-score').textContent = '?';
+              card.querySelector('.wl-card-label').textContent = 'DATA UNAVAILABLE';
+            }
+          });
+        });
+      }
+
+      function updateWatchlistCard(regionId, data) {
+        var card = document.getElementById('wl-' + regionId);
+        if (!card) return;
+        card.classList.remove('loading');
+
+        var scoreEl = card.querySelector('.wl-card-score');
+        var labelEl = card.querySelector('.wl-card-label');
+
+        scoreEl.textContent = data.composite.toFixed(1);
+        scoreEl.style.color = cssColor(data.composite);
+        labelEl.textContent = 'OVIX COMPOSITE';
+
+        // Add category pills
+        var catsHtml = '<div class="wl-card-cats">';
+        (data.categories || []).forEach(function(c) {
+          catsHtml += '<span class="wl-cat-pill" style="color:' + cssColor(c.score) + '">'
+            + c.category.slice(0, 3).toUpperCase() + ' ' + c.score.toFixed(1) + '</span>';
+        });
+        catsHtml += '</div>';
+
+        // Add top alert if any
+        var alertHtml = '';
+        var topCat = (data.categories || []).filter(function(c) { return c.topEvent; }).sort(function(a, b) { return b.score - a.score; })[0];
+        if (topCat && topCat.topEvent) {
+          alertHtml = '<div class="wl-card-alert"><span class="alert-text">' + esc(topCat.topEvent).slice(0, 60) + '</span></div>';
+        }
+
+        // Insert after label
+        var existingCats = card.querySelector('.wl-card-cats');
+        if (existingCats) existingCats.remove();
+        var existingAlert = card.querySelector('.wl-card-alert');
+        if (existingAlert) existingAlert.remove();
+
+        labelEl.insertAdjacentHTML('afterend', catsHtml + alertHtml);
+      }
+
+      // --- Region Picker ---
+
+      window.openPicker = function() {
+        pickerEl.classList.add('open');
+        rpSearch.value = '';
+        renderPickerList('');
+        rpSearch.focus();
+      };
+
+      window.closePicker = function() {
+        pickerEl.classList.remove('open');
+      };
+
+      window.filterPicker = function() {
+        renderPickerList(rpSearch.value.toLowerCase());
+      };
+
+      function renderPickerList(filter) {
+        var list = getWatchlist();
+        var h = '';
+
+        // Group by macro region
+        (registry.macroRegions || []).forEach(function(macro) {
+          var subs = (registry.subRegions || []).filter(function(s) { return s.parent === macro.id; });
+          var allItems = [macro].concat(subs);
+
+          // Filter
+          var filtered = allItems.filter(function(item) {
+            return !filter || item.name.toLowerCase().indexOf(filter) >= 0 || item.id.indexOf(filter) >= 0;
+          });
+
+          if (filtered.length === 0) return;
+
+          h += '<div class="rp-group-label">' + esc(macro.name) + '</div>';
+          filtered.forEach(function(item) {
+            var isAdded = list.indexOf(item.id) >= 0;
+            h += '<div class="rp-item' + (isAdded ? ' added' : '') + '" data-id="' + esc(item.id) + '">';
+            h += '<span>' + esc(item.name) + '</span>';
+            if (isAdded) h += '<span class="rp-check">✓</span>';
+            else h += '<span style="color:#333;">+</span>';
+            h += '</div>';
+          });
+        });
+
+        rpList.innerHTML = h;
+
+        // Attach click handlers
+        rpList.querySelectorAll('.rp-item:not(.added)').forEach(function(el) {
+          el.addEventListener('click', function() {
+            var id = el.getAttribute('data-id');
+            var list = getWatchlist();
+            if (list.indexOf(id) < 0) {
+              list.push(id);
+              saveWatchlist(list);
+              renderPickerList(rpSearch.value.toLowerCase());
+              refreshWatchlist();
+            }
+          });
+        });
+      }
+
+      // --- Watchlist visibility tied to navigation ---
+
+      // Override navToGlobe to show watchlist
+      var origNavToGlobe = window.navToGlobe;
+      window.navToGlobe = function() {
+        origNavToGlobe();
+        showWatchlist();
+      };
+
+      // Override drillTo to hide watchlist
+      var origDrillTo = drillTo;
+      drillTo = function(level, id, name, lat, lon) {
+        hideWatchlist();
+        closePicker();
+        origDrillTo(level, id, name, lat, lon);
+      };
+
+      // =============================================
+      // Operator map dots (users who opted in to globe visibility)
+      // =============================================
+      function clearOperatorDots() {
+        operatorEntities.forEach(function(e) { viewer.entities.remove(e); });
+        operatorEntities = [];
+      }
+
+      function addOperatorDots(operators) {
+        clearOperatorDots();
+        operators.forEach(function(op) {
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(op.lon, op.lat),
+            point: {
+              pixelSize: 8,
+              color: Cesium.Color.fromCssColorString('#a8d8ff').withAlpha(0.95),
+              outlineColor: Cesium.Color.fromCssColorString('#ffffff').withAlpha(0.5),
+              outlineWidth: 1,
+              disableDepthTestDistance: 0,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.2, 2e7, 0.6),
+            },
+            properties: {
+              markerLevel: 'operator',
+              operatorHandle: op.handle,
+              operatorIndustry: op.industry || '',
+              operatorLocation: op.locationName || '',
+            },
+          });
+          operatorEntities.push(entity);
+        });
+        log('◆ ' + operators.length + ' operators on globe');
+      }
+
+      function fetchOperatorDots() {
+        var token = authState.token || localStorage.getItem('roc-token');
+        if (!token) return; // not logged in
+        fetch(OVIX_API + '/api/users/map', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        }).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function(d) {
+            if (nav.level === 'globe') {
+              addOperatorDots(d.operators || []);
+            }
+          }).catch(function(e) { /* silent — optional feature */ });
+      }
+
+      // =============================================
+      // Score-based marker coloring — update marker colors from OVIX scores
+      // =============================================
+      function updateMarkerColors() {
+        fetch(OVIX_API + '/api/ovix/scores?category=weather')
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(d) {
+            if (!d || !d.regions) return;
+            d.regions.forEach(function(r) {
+              // Find the active marker for this region
+              var marker = activeMarkers.find(function(m) {
+                return m.properties && m.properties.itemId &&
+                       m.properties.itemId.getValue() === r.region_id;
+              });
+              if (marker && marker.point) {
+                var color = r.score <= 2 ? '#18BC9C' : r.score <= 4 ? '#27ae60' : r.score <= 6 ? '#f39c12' : r.score <= 8 ? '#e67e22' : '#e74c3c';
+                marker.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.9);
+                marker.point.outlineColor = Cesium.Color.fromCssColorString(color).withAlpha(0.5);
+                // Update label to show score
+                if (marker.label) {
+                  marker.label.text = r.region_id.split('-').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ') + ' ' + r.score.toFixed(1);
+                }
+              }
+            });
+          }).catch(function() {});
+      }
+
+      // =============================================
+      // Boot: load registry then show macro markers
+      // =============================================
+      safeFetch(OVIX_API + '/api/ovix/regions').then(function(data) {
+        registry = data;
+        log(data.counts.macroRegions + ' macro, ' + data.counts.subRegions + ' sub, ' + data.counts.metros + ' metros');
+        addMarkers(registry.macroRegions, 'macro');
+        fetchGlobalOVIX();
+        setInterval(fetchGlobalOVIX, 5 * 60 * 1000);
+        // Load watchlist
+        refreshWatchlist();
+        setInterval(refreshWatchlist, 5 * 60 * 1000); // refresh every 5min
+        // Load operator dots (globe-level only)
+        fetchOperatorDots();
+        setInterval(fetchOperatorDots, 10 * 60 * 1000); // refresh every 10min
+        // Load quake markers (public, no auth)
+        fetchQuakeMarkers();
+        setInterval(fetchQuakeMarkers, 10 * 60 * 1000); // refresh every 10min
+        // Load disaster markers (wildfire, volcano, flood, storm)
+        fetchDisasterMarkers();
+        setInterval(fetchDisasterMarkers, 10 * 60 * 1000); // refresh every 10min
+
+        // Color markers by OVIX scores
+        setTimeout(updateMarkerColors, 3000); // initial delay for markers to render
+        setInterval(updateMarkerColors, 5 * 60 * 1000); // refresh every 5min
+        // =============================================
+        // =============================================
+        // Globe Layers — toggle-able overlays
+        // =============================================
+        var layers = {};
+        var owmKey = '';
+
+        // Disable Cesium's default double-click zoom-to-ground
+        viewer.screenSpaceEventHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+        // Layer registry — defines all available layers
+        var LAYER_DEFS = [
+          // Radar
+          { id: 'radar',    group: 'Radar',   label: 'Global Radar',  icon: '\u{1F30D}' },
+          { id: 'nexrad',   group: 'Radar',   label: 'US NEXRAD',     icon: '\u{1F1FA}\u{1F1F8}' },
+          // Weather (OWM — needs API key)
+          { id: 'clouds',   group: 'Weather', label: 'Cloud Cover',   icon: '\u2601' },
+          { id: 'temp',     group: 'Weather', label: 'Temperature',   icon: '\u{1F321}' },
+          { id: 'wind',     group: 'Weather', label: 'Wind Speed',    icon: '\u{1F32C}' },
+          { id: 'precip',   group: 'Weather', label: 'Precipitation', icon: '\u{1F327}' },
+          // Display
+          { id: 'daynight', group: 'Display', label: 'Day / Night',   icon: '\u{1F311}' },
+        ];
+
+        // Layer state (persisted in localStorage)
+        var layerStates = {};
+        LAYER_DEFS.forEach(function(d) { layerStates[d.id] = false; });
+        try {
+          var saved = localStorage.getItem('roc-globe-layers');
+          if (saved) {
+            var parsed = JSON.parse(saved);
+            Object.keys(parsed).forEach(function(k) { if (k in layerStates) layerStates[k] = parsed[k]; });
+          }
+        } catch(e) {}
+
+        // --- Global Radar: RainViewer ---
+        function loadGlobalRadar() {
+          fetch('https://api.rainviewer.com/public/weather-maps.json')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              var frames = d.radar && d.radar.past;
+              if (!frames || frames.length === 0) return;
+              var latest = frames[frames.length - 1];
+              var tileUrl = 'https://tilecache.rainviewer.com' + latest.path + '/256/{z}/{x}/{y}/2/1_1.png';
+              if (layers.radar) viewer.imageryLayers.remove(layers.radar);
+              layers.radar = viewer.imageryLayers.addImageryProvider(
+                new Cesium.UrlTemplateImageryProvider({ url: tileUrl, maximumLevel: 7, credit: 'RainViewer' })
+              );
+              layers.radar.alpha = 0.6;
+              layers.radar.show = layerStates.radar;
+              log('Global radar loaded');
+            }).catch(function(e) { log('Radar: ' + e.message); });
+        }
+
+        // --- US NEXRAD: IEM RIDGE ---
+        function loadNexradLayer() {
+          if (layers.nexrad) viewer.imageryLayers.remove(layers.nexrad);
+          layers.nexrad = viewer.imageryLayers.addImageryProvider(
+            new Cesium.UrlTemplateImageryProvider({
+              url: 'https://mesonet.agron.iastate.edu/cache/tile.py/1.0.0/ridge::USCOMP-N0Q-0/{z}/{x}/{y}.png',
+              maximumLevel: 10, credit: 'IEM / NOAA NEXRAD',
+            })
+          );
+          layers.nexrad.alpha = 0.65;
+          layers.nexrad.show = layerStates.nexrad;
+          log('NEXRAD loaded');
+        }
+
+        // --- OpenWeatherMap Weather Layers ---
+        // Free tier: clouds_new, temp_new, wind_new, precipitation_new
+        function loadOWMLayer(id, owmLayerCode) {
+          if (!owmKey) { log(id + ': no OWM key'); return; }
+          if (layers[id]) viewer.imageryLayers.remove(layers[id]);
+          layers[id] = viewer.imageryLayers.addImageryProvider(
+            new Cesium.UrlTemplateImageryProvider({
+              url: 'https://tile.openweathermap.org/map/' + owmLayerCode + '/{z}/{x}/{y}.png?appid=' + owmKey,
+              maximumLevel: 9, credit: 'OpenWeatherMap',
+            })
+          );
+          layers[id].alpha = 0.6;
+          layers[id].show = layerStates[id];
+          log(id + ' layer loaded');
+        }
+
+        var OWM_LAYER_MAP = {
+          clouds: 'clouds_new',
+          temp: 'temp_new',
+          wind: 'wind_new',
+          precip: 'precipitation_new',
+        };
+
+        // --- Day/Night ---
+        function initDayNightLayer() {
+          viewer.scene.globe.enableLighting = layerStates.daynight;
+          viewer.clock.currentTime = Cesium.JulianDate.now();
+          viewer.clock.shouldAnimate = layerStates.daynight;
+        }
+
+        // --- Toggle any layer ---
+        window.toggleLayer = function(name) {
+          layerStates[name] = !layerStates[name];
+          localStorage.setItem('roc-globe-layers', JSON.stringify(layerStates));
+
+          // Radar
+          if (name === 'radar' && layers.radar) layers.radar.show = layerStates.radar;
+          if (name === 'nexrad') {
+            if (!layers.nexrad) loadNexradLayer();
+            else layers.nexrad.show = layerStates.nexrad;
+          }
+          // OWM layers (lazy-load on first toggle)
+          if (OWM_LAYER_MAP[name]) {
+            if (!layers[name]) loadOWMLayer(name, OWM_LAYER_MAP[name]);
+            else layers[name].show = layerStates[name];
+          }
+          // Day/Night
+          if (name === 'daynight') {
+            viewer.scene.globe.enableLighting = layerStates.daynight;
+            viewer.clock.currentTime = Cesium.JulianDate.now();
+            viewer.clock.shouldAnimate = layerStates.daynight;
+          }
+          updateLayerButtons();
+        };
+
+        // --- Collapsible layer control panel ---
+        var layerPanel = document.createElement('div');
+        layerPanel.id = 'layer-controls';
+        layerPanel.style.cssText = 'position:absolute;top:140px;right:12px;z-index:100;font-family:"JetBrains Mono",monospace;font-size:10px;width:170px;';
+
+        var panelCollapsed = false;
+        try { panelCollapsed = localStorage.getItem('roc-layers-collapsed') === 'true'; } catch(e) {}
+
+        function buildLayerPanel() {
+          var btnStyle = 'display:block;width:100%;padding:4px 10px;margin-bottom:2px;border-radius:3px;cursor:pointer;font-family:inherit;font-size:10px;border:1px solid rgba(255,255,255,0.08);background:rgba(6,6,16,0.8);color:#888;text-align:left;white-space:nowrap;';
+          var groupStyle = 'color:#555;letter-spacing:0.08em;font-size:8px;margin:6px 0 3px;cursor:pointer;user-select:none;';
+
+          var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;cursor:pointer;" onclick="toggleLayerPanel()">'
+            + '<span style="color:#18BC9C;letter-spacing:0.1em;font-size:9px;font-weight:bold;">LAYERS</span>'
+            + '<span id="layer-panel-arrow" style="color:#555;font-size:10px;">' + (panelCollapsed ? '\u25BC' : '\u25B2') + '</span>'
+            + '</div>';
+
+          if (!panelCollapsed) {
+            // Group layers
+            var groups = {};
+            LAYER_DEFS.forEach(function(d) {
+              if (!groups[d.group]) groups[d.group] = [];
+              groups[d.group].push(d);
+            });
+
+            var groupOrder = ['Radar', 'Weather', 'Display'];
+            groupOrder.forEach(function(gName) {
+              var items = groups[gName];
+              if (!items) return;
+              html += '<div style="' + groupStyle + '">' + gName.toUpperCase() + '</div>';
+              items.forEach(function(d) {
+                var needsKey = !!OWM_LAYER_MAP[d.id];
+                var disabled = needsKey && !owmKey;
+                var label = d.icon + ' ' + d.label;
+                if (disabled) label += ' \u{1F512}';
+                html += '<button id="layer-' + d.id + '" onclick="toggleLayer(\'' + d.id + '\')"'
+                  + (disabled ? ' disabled title="Needs OWM API key"' : '')
+                  + ' style="' + btnStyle + (disabled ? 'opacity:0.4;cursor:default;' : '') + '">' + label + '</button>';
+              });
+            });
+
+            if (!owmKey) {
+              html += '<div style="color:#444;font-size:8px;margin-top:6px;line-height:1.3;">Weather layers need<br>OWM_API_KEY in Worker</div>';
+            }
+          }
+
+          layerPanel.innerHTML = html;
+          updateLayerButtons();
+        }
+
+        window.toggleLayerPanel = function() {
+          panelCollapsed = !panelCollapsed;
+          localStorage.setItem('roc-layers-collapsed', panelCollapsed);
+          buildLayerPanel();
+        };
+
+        document.body.appendChild(layerPanel);
+
+        function updateLayerButtons() {
+          LAYER_DEFS.forEach(function(d) {
+            var btn = document.getElementById('layer-' + d.id);
+            if (btn && !btn.disabled) {
+              var active = layerStates[d.id];
+              btn.style.background = active ? 'rgba(24,188,156,0.2)' : 'rgba(6,6,16,0.8)';
+              btn.style.color = active ? '#18BC9C' : '#888';
+              btn.style.borderColor = active ? 'rgba(24,188,156,0.4)' : 'rgba(255,255,255,0.08)';
+            }
+          });
+        }
+
+        // Initialize — pull cached config, then build panel
+        window.RocConfig.get().then(function(cfg) {
+          owmKey = cfg.owmKey || '';
+          if (owmKey) log('OWM key loaded');
+          buildLayerPanel();
+          // Load any OWM layers that were previously toggled on
+          Object.keys(OWM_LAYER_MAP).forEach(function(id) {
+            if (layerStates[id] && owmKey) loadOWMLayer(id, OWM_LAYER_MAP[id]);
+          });
+        }).catch(function() { buildLayerPanel(); });
+
+        // Initialize non-OWM layers
+        loadGlobalRadar();
+        if (layerStates.nexrad) loadNexradLayer();
+        initDayNightLayer();
+        setInterval(loadGlobalRadar, 10 * 60 * 1000);
+        setInterval(function() { if (layerStates.nexrad) loadNexradLayer(); }, 5 * 60 * 1000);
+
+        log('◆ OVIX Globe v1.7.0 ready');
+      }).catch(function(e) {
+        log('Registry failed: ' + e.message);
+      });
+
+      // =============================================
+      // Score Delta Pings — Real-time event visualization
+      // =============================================
+      var pingEntities = []; // {entity, ring, data, createdAt}
+      var PING_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 hours
+      var pingPopup = document.getElementById('ping-popup');
+
+      function pingColor(data) {
+        // Color by score severity, not just category
+        var score = parseFloat(data.score) || 0;
+        if (score >= 7.0) return '#e74c3c';   // red — high
+        if (score >= 4.0) return '#f39c12';   // orange — elevated
+        return '#3498db';                      // blue — moderate change
+      }
+
+      function addPingEntity(data) {
+        if (!data || !data.id || !data.lat || !data.lon) return;
+        // Deduplicate
+        for (var i = 0; i < pingEntities.length; i++) {
+          if (pingEntities[i].data.id === data.id) return;
+        }
+
+        var color = pingColor(data);
+        var pos = Cesium.Cartesian3.fromDegrees(parseFloat(data.lon), parseFloat(data.lat));
+        var createdAt = new Date(data.timestamp || data.created_at || Date.now()).getTime();
+        var age = Date.now() - createdAt;
+        if (age > PING_MAX_AGE_MS) return; // too old
+
+        // Alpha based on age (6-hour decay)
+        var alpha = age < 3600000 ? 0.95      // 0-1hr: bright
+                  : age < 7200000 ? 0.7       // 1-2hr: slightly dimmer
+                  : age < 14400000 ? 0.45     // 2-4hr: fading
+                  : 0.2;                       // 4-6hr: very faint
+
+        // Point marker — depth testing ON so pings behind the globe are hidden
+        var entity = viewer.entities.add({
+          position: pos,
+          point: {
+            pixelSize: 16,
+            color: Cesium.Color.fromCssColorString(color).withAlpha(alpha),
+            outlineColor: Cesium.Color.WHITE.withAlpha(alpha * 0.8),
+            outlineWidth: 3,
+            scaleByDistance: new Cesium.NearFarScalar(1e5, 1.4, 1e7, 0.7),
+          },
+          properties: {
+            isPing: true,
+            pingId: data.id,
+            pingCategory: data.category,
+            pingRegionId: data.regionId || data.region_id || '',
+            pingRegionName: data.regionName || data.region_name || '',
+            pingTitle: data.title || '',
+            pingDetail: data.detail || '',
+            pingSeverity: data.severity || '',
+            pingSourceUrl: data.sourceUrl || data.source_url || '',
+            pingSource: data.source || '',
+            pingAreaDesc: data.areaDesc || data.area_desc || '',
+            pingScore: data.score || 0,
+            pingDelta: data.delta || 0,
+            pingTimestamp: data.timestamp || data.created_at || '',
+          },
+        });
+
+        // Pulsing ring for new pings (< 5 min old) — bold and visible
+        var ring = null;
+        if (age < 300000) {
+          var birthTime = Date.now();
+          var pingCol = color; // capture for closure
+          ring = viewer.entities.add({
+            position: pos,
+            ellipse: {
+              semiMajorAxis: new Cesium.CallbackProperty(function() {
+                var elapsed = (Date.now() - birthTime) % 2500;
+                return 40000 + (elapsed / 2500) * 60000;
+              }, false),
+              semiMinorAxis: new Cesium.CallbackProperty(function() {
+                var elapsed = (Date.now() - birthTime) % 2500;
+                return 40000 + (elapsed / 2500) * 60000;
+              }, false),
+              material: Cesium.Color.fromCssColorString(pingCol).withAlpha(0.22),
+              outline: true,
+              outlineColor: Cesium.Color.fromCssColorString(pingCol).withAlpha(0.55),
+              outlineWidth: 2.5,
+              height: 0,
+            },
+          });
+          // Stop pulsing after 5 minutes (replace with static ring)
+          setTimeout(function() {
+            if (ring) {
+              try {
+                ring.ellipse.semiMajorAxis = 70000;
+                ring.ellipse.semiMinorAxis = 70000;
+                ring.ellipse.material = Cesium.Color.fromCssColorString(pingCol).withAlpha(0.12);
+                ring.ellipse.outlineColor = Cesium.Color.fromCssColorString(pingCol).withAlpha(0.3);
+              } catch(e) {}
+            }
+          }, 300000);
+        } else if (age < 3600000) {
+          // Static ring for pings 5min-1hr old
+          ring = viewer.entities.add({
+            position: pos,
+            ellipse: {
+              semiMajorAxis: 70000,
+              semiMinorAxis: 70000,
+              material: Cesium.Color.fromCssColorString(color).withAlpha(0.12),
+              outline: true,
+              outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.3),
+              outlineWidth: 1.5,
+              height: 0,
+            },
+          });
+        }
+
+        pingEntities.push({ entity: entity, ring: ring, data: data, createdAt: createdAt });
+        log('◆ Ping: ' + data.category + ' ' + data.title + ' (' + data.regionName + ')');
+      }
+
+      // Aging interval — update alpha and remove expired pings every 60s
+      setInterval(function() {
+        var now = Date.now();
+        pingEntities = pingEntities.filter(function(p) {
+          var age = now - p.createdAt;
+          if (age > PING_MAX_AGE_MS) {
+            viewer.entities.remove(p.entity);
+            if (p.ring) viewer.entities.remove(p.ring);
+            return false;
+          }
+          var alpha = age < 3600000 ? 0.95 : age < 7200000 ? 0.7 : age < 14400000 ? 0.45 : 0.2;
+          try {
+            var color = pingColor(p.data);
+            p.entity.point.color = Cesium.Color.fromCssColorString(color).withAlpha(alpha);
+            p.entity.point.outlineColor = Cesium.Color.WHITE.withAlpha(alpha * 0.8);
+            if (p.ring && age > 3600000) {
+              // Remove ring after 1 hour
+              viewer.entities.remove(p.ring);
+              p.ring = null;
+            }
+          } catch(e) {}
+          return true;
+        });
+      }, 60000);
+
+      function showPingPopup(data, screenPos) {
+        var badge = document.getElementById('pp-badge');
+        var score = parseFloat(data.score) || 0;
+        var badgeColor = score >= 7 ? '#e74c3c' : score >= 4 ? '#f39c12' : '#3498db';
+        var isSeismic = data.category === 'seismic';
+        badge.textContent = isSeismic ? 'SEISMIC' : 'WEATHER';
+        badge.style.background = badgeColor + '30';
+        badge.style.color = badgeColor;
+        badge.style.border = '1px solid ' + badgeColor;
+
+        document.getElementById('pp-title').textContent = esc(data.title);
+
+        // Region name
+        var regionEl = document.getElementById('pp-region');
+        regionEl.textContent = '';
+        if (data.regionName) regionEl.textContent = data.regionName;
+
+        // Score delta with visual emphasis
+        var deltaEl = document.getElementById('pp-delta');
+        var delta = parseFloat(data.delta) || 0;
+        var deltaSign = delta > 0 ? '+' : '';
+        var prevScore = (score - delta).toFixed(1);
+        deltaEl.style.borderLeftColor = badgeColor;
+        deltaEl.innerHTML = '<span style="color:#fff;font-size:13px;font-weight:bold;">OVIX ' + esc(prevScore) + ' → ' + esc(score.toFixed(1)) + '</span>' +
+          '<span style="color:' + badgeColor + ';font-weight:bold;margin-left:8px;">(' + deltaSign + delta.toFixed(1) + ')</span>';
+
+        // Area description
+        var areaEl = document.getElementById('pp-area');
+        if (data.areaDesc) {
+          areaEl.style.display = 'block';
+          areaEl.innerHTML = '<span style="color:#888;">Area:</span> ' + esc(data.areaDesc);
+        } else {
+          areaEl.style.display = 'none';
+        }
+
+        // Severity
+        var sevEl = document.getElementById('pp-severity');
+        if (data.severity) {
+          var sevColor = data.severity === 'Extreme' ? '#e74c3c' : data.severity === 'Severe' ? '#f39c12' : '#f1c40f';
+          sevEl.style.display = 'block';
+          sevEl.innerHTML = '<span style="color:#888;">Severity:</span> <span style="color:' + sevColor + ';font-weight:bold;">' + esc(data.severity) + '</span>' +
+            '<span style="color:#888;margin-left:12px;">Source:</span> ' + esc(data.source || '');
+        } else {
+          sevEl.style.display = 'none';
+        }
+
+        // Time ago
+        var ts = data.timestamp || '';
+        if (ts) {
+          var ago = Date.now() - new Date(ts).getTime();
+          var hrs = Math.floor(ago / 3600000);
+          var mins = Math.floor((ago % 3600000) / 60000);
+          document.getElementById('pp-time').textContent = (hrs > 0 ? hrs + 'h ' + mins + 'm ago' : mins + 'm ago') + ' — ' + (data.source || '');
+        }
+
+        // Reset details panel
+        var detailsEl = document.getElementById('pp-details');
+        var toggleEl = document.getElementById('pp-details-toggle');
+        detailsEl.style.display = 'none';
+        detailsEl.innerHTML = '';
+        toggleEl.textContent = 'Details ▾';
+        toggleEl.style.display = 'inline';
+
+        // Store region and source for lazy detail fetch
+        pingPopup._pingRegion = data.regionId || '';
+        pingPopup._pingSource = data.source || '';
+        pingPopup._pingTitle = data.title || '';
+        pingPopup._detailsLoaded = false;
+
+        pingPopup.style.display = 'block';
+        pingPopup.style.left = Math.min(screenPos.x + 16, window.innerWidth - 400) + 'px';
+        pingPopup.style.top = Math.min(screenPos.y - 10, window.innerHeight - 280) + 'px';
+        pingPopup._justOpened = true;
+      }
+
+      window.togglePingDetails = function() {
+        var detailsEl = document.getElementById('pp-details');
+        var toggleEl = document.getElementById('pp-details-toggle');
+
+        if (detailsEl.style.display !== 'none') {
+          detailsEl.style.display = 'none';
+          toggleEl.textContent = 'Details ▾';
+          return;
+        }
+
+        detailsEl.style.display = 'block';
+        toggleEl.textContent = 'Details ▴';
+
+        // Fetch details if not already loaded
+        if (pingPopup._detailsLoaded) return;
+        pingPopup._detailsLoaded = true;
+
+        var region = pingPopup._pingRegion;
+        var source = pingPopup._pingSource;
+        var title = pingPopup._pingTitle;
+
+        if (source === 'NWS' && region) {
+          detailsEl.innerHTML = '<span style="color:#888;">Loading alert details...</span>';
+          safeFetch(OVIX_API + '/api/ovix/weather-detail?region=' + region).then(function(d) {
+            var alerts = d.alerts || [];
+            if (alerts.length === 0) {
+              detailsEl.innerHTML = '<span style="color:#888;">No active alerts for this region.</span>';
+              return;
+            }
+            // Find matching alert or show first severe one
+            var match = null;
+            for (var i = 0; i < alerts.length; i++) {
+              if (alerts[i].event === title) { match = alerts[i]; break; }
+            }
+            if (!match) match = alerts[0];
+
+            var html = '<div style="font-weight:bold;color:#fff;margin-bottom:4px;">' + esc(match.event || '') + '</div>';
+            if (match.headline) html += '<div style="margin-bottom:6px;">' + esc(match.headline) + '</div>';
+            if (match.description) html += '<div style="color:#aaa;">' + esc(match.description).replace(/\n/g, '<br>') + '</div>';
+            if (match.area_desc) html += '<div style="margin-top:6px;color:#888;">Area: ' + esc(match.area_desc) + '</div>';
+            if (match.expires) html += '<div style="color:#888;">Expires: ' + new Date(match.expires).toLocaleString() + '</div>';
+            detailsEl.innerHTML = html;
+          }).catch(function() {
+            detailsEl.innerHTML = '<span style="color:#888;">Could not load details.</span>';
+          });
+        } else if (source === 'USGS') {
+          detailsEl.innerHTML = '<span style="color:#ccc;">' + esc(pingPopup._pingTitle) + '</span>';
+        } else {
+          detailsEl.innerHTML = '<span style="color:#888;">No additional details available.</span>';
+        }
+      };
+
+      // Initialize pings: subscribe to Ably + REST catch-up
+      window.RocConfig.get().then(function(cfg) {
+        // Ably real-time subscription
+        if (cfg.ablySubscribeKey && window.Ably) {
+          try {
+            var ably = new Ably.Realtime({ key: cfg.ablySubscribeKey });
+            var pingsChannel = ably.channels.get('roc:pings');
+            pingsChannel.subscribe('ping', function(msg) {
+              addPingEntity(msg.data);
+            });
+            log('◆ Ably pings channel subscribed');
+          } catch(e) {
+            log('Ably pings error: ' + e.message);
+          }
+        }
+
+        // REST catch-up: load pings from last 6 hours
+        safeFetch(OVIX_API + '/api/ovix/pings?hours=6').then(function(d) {
+          var pingsData = d.pings || [];
+          log('◆ Pings catch-up: ' + pingsData.length + ' recent pings');
+          for (var i = 0; i < pingsData.length; i++) {
+            addPingEntity(pingsData[i]);
+          }
+        }).catch(function() {});
+      }).catch(function() {});
+
+      // =============================================
+      // EVENTS LAYER — raw events from /api/events
+      // =============================================
+      var eventEntities = [];
+
+      // Event fill color based on severity (matches OVIX green/orange/red scheme)
+      function eventSeverityColor(severity) {
+        var s = parseFloat(severity) || 1;
+        if (s >= 7) return '#e74c3c';   // red
+        if (s >= 5) return '#f39c12';   // orange
+        return '#27ae60';               // green
+      }
+
+      // Domain outline color — distinguishes event type at a glance
+      function domainColor(domain) {
+        var colors = {
+          weather: '#3498db', seismic: '#e74c3c', disaster: '#f39c12',
+          cyber: '#9b59b6', health: '#2ecc71', infrastructure: '#f1c40f',
+          financial: '#ecf0f1', environmental: '#1abc9c'
+        };
+        return colors[domain] || '#95a5a6';
+      }
+
+      function eventMarkerSize(severity) {
+        var sev = parseFloat(severity) || 5;
+        if (sev >= 8) return 18;
+        if (sev >= 6) return 14;
+        return 10;
+      }
+
+      function clearEventEntities() {
+        for (var i = 0; i < eventEntities.length; i++) {
+          try { viewer.entities.remove(eventEntities[i]); } catch(e) {}
+        }
+        eventEntities = [];
+      }
+
+      function loadEvents() {
+        safeFetch(OVIX_API + '/api/events?hours=6&severity=7&limit=30').then(function(d) {
+          var events = d.events || d.data || d || [];
+          if (!Array.isArray(events)) { log('Events layer: unexpected response format'); return; }
+          clearEventEntities();
+          log('◆ Events layer: ' + events.length + ' events loaded');
+
+          for (var i = 0; i < events.length; i++) {
+            var evt = events[i];
+            if (!evt.lat || !evt.lon) continue;
+
+            var lat = parseFloat(evt.lat);
+            var lon = parseFloat(evt.lon);
+            if (isNaN(lat) || isNaN(lon)) continue;
+
+            var domain = (evt.domain || evt.category || '').toLowerCase();
+            var sev = parseFloat(evt.severity) || 5;
+            var fillColor = eventSeverityColor(sev);
+            var outColor = domainColor(domain);
+            var size = eventMarkerSize(sev);
+
+            var entity = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat),
+              point: {
+                pixelSize: size + 4,
+                color: Cesium.Color.fromCssColorString(fillColor).withAlpha(0.9),
+                outlineColor: Cesium.Color.fromCssColorString(outColor).withAlpha(0.7),
+                outlineWidth: 2,
+                scaleByDistance: new Cesium.NearFarScalar(1e5, 1.4, 2e7, 0.8),
+                disableDepthTestDistance: 5000000,
+              },
+              properties: {
+                isEventMarker: true,
+                evtDomain: domain,
+                evtTitle: evt.title || evt.headline || '',
+                evtDetail: evt.detail || evt.description || '',
+                evtSeverity: sev,
+                evtSource: evt.source || '',
+                evtSourceUrl: evt.source_url || evt.url || '',
+                evtLat: lat,
+                evtLon: lon,
+                evtTimestamp: evt.timestamp || evt.created_at || '',
+              },
+            });
+            eventEntities.push(entity);
+          }
+        }).catch(function(err) {
+          log('Events layer error: ' + (err.message || err));
+        });
+      }
+
+      // Initial load
+      loadEvents();
+      // Refresh every 5 minutes
+      setInterval(loadEvents, 5 * 60 * 1000);
+
+    } catch(e) {
+      log('ERROR: ' + e.message);
+      log(e.stack);
+    }
+
+    // =============================================
+    // Dashboard Navigation & Rotation
+    // =============================================
+    (function() {
+      var DASHBOARD_ROUTES = {
+        globe:     '/globe/globe.html',
+        scores:    '/dashboards/scores.html',
+        weather:   '/dashboards/weather.html',
+        seismic:   '/dashboards/seismic.html',
+        disaster:  '/dashboards/disaster.html',
+        cyber:     '/dashboards/cyber.html',
+        health:    '/dashboards/health.html',
+        infrastructure: '/dashboards/infrastructure.html',
+        financial: '/dashboards/financial.html',
+        environmental: '/dashboards/environmental.html',
+        geopolitical: '/dashboards/geopolitical.html',
+        travel:    '/dashboards/travel.html'
+      };
+
+      // Ordered rotation sequence
+      var ROTATION_ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+
+      // Navigate to a domain dashboard
+      window.navDomain = function(domain) {
+        var url = DASHBOARD_ROUTES[domain];
+        if (!url) return;
+        window.location = url;
+      };
+
+      // --- Rotation state via localStorage ---
+      var ROT_KEY = 'roc-rotation';
+      function getRotState() {
+        try { return JSON.parse(localStorage.getItem(ROT_KEY)) || {}; } catch(e) { return {}; }
+      }
+      function setRotState(s) {
+        try { localStorage.setItem(ROT_KEY, JSON.stringify(s)); } catch(e) {}
+      }
+
+      // Init rotation interval from saved state
+      var savedState = getRotState();
+      var intervalSelect = document.getElementById('rot-interval');
+      if (savedState.interval && intervalSelect) {
+        intervalSelect.value = String(savedState.interval);
+      }
+
+      var indicator = document.getElementById('rotation-indicator');
+      var playBtn = document.getElementById('nav-play');
+
+      function updateRotUI() {
+        var s = getRotState();
+        var gtp = document.getElementById('globe-transport-play');
+        if (s.active) {
+          if (indicator) indicator.style.display = 'block';
+          if (playBtn) { playBtn.textContent = '⏸'; playBtn.classList.add('playing'); playBtn.title = 'Pause rotation'; }
+          if (gtp) { gtp.innerHTML = '&#9208;'; gtp.style.background = 'rgba(24,188,156,0.25)'; }
+        } else {
+          if (indicator) indicator.style.display = 'none';
+          if (playBtn) { playBtn.textContent = '▶'; playBtn.classList.remove('playing'); playBtn.title = 'Play rotation'; }
+          if (gtp) { gtp.innerHTML = '&#9654;'; gtp.style.background = 'rgba(24,188,156,0.08)'; }
+        }
+        updateSlideSelector();
+      }
+
+      // Build slide selector chips
+      function updateSlideSelector() {
+        var el = document.getElementById('slide-selector');
+        if (!el) return;
+        var s = getRotState();
+        var enabled = s.enabledSlides || ROTATION_ORDER.slice();
+        el.innerHTML = ROTATION_ORDER.map(function(key) {
+          var labels = { globe:'Globe', cyber:'Cyber', health:'Health', financial:'Finance', scores:'Scores' };
+          var isActive = enabled.indexOf(key) !== -1;
+          return '<span class="slide-chip' + (isActive ? ' active' : '') + '" onclick="toggleSlide(\'' + key + '\')">' + (labels[key] || key) + '</span>';
+        }).join('');
+      }
+
+      window.toggleSlide = function(key) {
+        var s = getRotState();
+        var enabled = s.enabledSlides || ROTATION_ORDER.slice();
+        var idx = enabled.indexOf(key);
+        if (idx !== -1 && enabled.length > 1) {
+          enabled.splice(idx, 1);
+        } else if (idx === -1) {
+          enabled.push(key);
+        }
+        s.enabledSlides = enabled;
+        setRotState(s);
+        updateSlideSelector();
+      };
+
+      window.toggleRotation = function() {
+        var s = getRotState();
+        if (s.active) { window.stopRotation(); } else { startRotation(); }
+      };
+
+      window.navPrev = function() {
+        var current = getCurrentPage();
+        var s = getRotState();
+        var enabled = s.enabledSlides || ROTATION_ORDER.slice();
+        var idx = enabled.indexOf(current);
+        if (idx === -1) idx = 0;
+        var prev = enabled[(idx - 1 + enabled.length) % enabled.length];
+        window.location = DASHBOARD_ROUTES[prev];
+      };
+
+      window.navNext = function() {
+        var current = getCurrentPage();
+        var s = getRotState();
+        var enabled = s.enabledSlides || ROTATION_ORDER.slice();
+        var idx = enabled.indexOf(current);
+        if (idx === -1) idx = 0;
+        var next = enabled[(idx + 1) % enabled.length];
+        window.location = DASHBOARD_ROUTES[next];
+      };
+
+      function startRotation() {
+        var interval = parseInt((document.getElementById('rot-interval') || {}).value || '30', 10);
+        setRotState({ active: true, interval: interval, currentPage: getCurrentPage() });
+        updateRotUI();
+        scheduleNext(interval);
+      }
+
+      window.stopRotation = function() {
+        setRotState({ active: false, interval: getRotState().interval || 30 });
+        if (window._rotTimer) { clearTimeout(window._rotTimer); window._rotTimer = null; }
+        updateRotUI();
+      };
+
+      window.updateRotationInterval = function() {
+        var s = getRotState();
+        var newInterval = parseInt((document.getElementById('rot-interval') || {}).value || '30', 10);
+        s.interval = newInterval;
+        setRotState(s);
+        if (s.active) {
+          if (window._rotTimer) { clearTimeout(window._rotTimer); }
+          scheduleNext(newInterval);
+        }
+      };
+
+      function getCurrentPage() {
+        var path = window.location.pathname;
+        for (var key in DASHBOARD_ROUTES) {
+          if (path.indexOf(DASHBOARD_ROUTES[key]) !== -1) return key;
+        }
+        return 'globe';
+      }
+
+      function getNextPage(current) {
+        var s = getRotState();
+        var enabled = s.enabledSlides || ROTATION_ORDER.slice();
+        var idx = enabled.indexOf(current);
+        if (idx === -1) idx = 0;
+        return enabled[(idx + 1) % enabled.length];
+      }
+
+      function scheduleNext(intervalSec) {
+        if (window._rotTimer) clearTimeout(window._rotTimer);
+        window._rotTimer = setTimeout(function() {
+          var s = getRotState();
+          if (!s.active) return;
+          var current = getCurrentPage();
+          var next = getNextPage(current);
+          s.currentPage = next;
+          setRotState(s);
+          window.location = DASHBOARD_ROUTES[next];
+        }, intervalSec * 1000);
+      }
+
+      // On page load: continue rotation if active
+      updateRotUI();
+      var initState = getRotState();
+      if (initState.active) {
+        scheduleNext(initState.interval || 30);
+      }
+    })();
+  </script>
+</body>
+</html>
