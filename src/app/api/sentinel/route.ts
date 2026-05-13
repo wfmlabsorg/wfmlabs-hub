@@ -233,8 +233,8 @@ export async function POST(req: Request) {
           overrideAccess: true,
         })
 
-        // If severity >= 7, also publish an Article
-        let articleId: number | undefined
+        // If severity >= 7, also publish an Operational Brief
+        let briefId: number | undefined
         if (data.severity !== undefined && data.severity >= 7) {
           const slug =
             data.slug ||
@@ -253,35 +253,40 @@ export async function POST(req: Request) {
             topicIds = topics.docs.map((t) => t.id as number)
           }
 
-          const article = await payload.create({
-            collection: 'articles',
+          const brief = await payload.create({
+            collection: 'briefs',
             data: {
               title: data.title,
               slug,
               body: markdownToLexical(data.body),
-              primaryContributor: sentinelId,
-              author: sentinelId,
-              status: 'published',
-              publishedAt: new Date().toISOString(),
-              publishDate: new Date().toISOString(),
-              category: 'industry-analysis',
-              description: data.category
+              agent: sentinelId,
+              briefType: 'incident',
+              category: data.category || 'general',
+              severity: data.severity,
+              severityLabel: data.severityLabel,
+              regionId: data.regionId,
+              regionName: data.regionName,
+              excerpt: data.category
                 ? `[Incident: ${data.category}] Severity ${data.severity}/10`
                 : undefined,
-              tier: 'free',
+              status: 'published',
+              publishedAt: new Date().toISOString(),
+              relatedSignal: signal.id as number,
+              sourceUrl: data.sourceUrl,
+              metadata: data.metadata,
               ...(topicIds.length > 0 ? { topics: topicIds } : {}),
             },
             overrideAccess: true,
           })
 
-          articleId = article.id as number
+          briefId = brief.id as number
         }
 
         return Response.json(
           {
             success: true,
             signalId: signal.id,
-            ...(articleId ? { articleId } : {}),
+            ...(briefId ? { briefId } : {}),
           },
           { status: 201 }
         )
@@ -312,26 +317,24 @@ export async function POST(req: Request) {
           topicIds = topics.docs.map((t) => t.id as number)
         }
 
-        const article = await payload.create({
-          collection: 'articles',
+        const brief = await payload.create({
+          collection: 'briefs',
           data: {
             title: data.title,
             slug,
             body: markdownToLexical(data.body),
-            primaryContributor: sentinelId,
-            author: sentinelId,
+            agent: sentinelId,
+            briefType: 'summary',
+            category: 'summary',
+            excerpt: 'Daily OVIX Summary',
             status: 'published',
             publishedAt: new Date().toISOString(),
-            publishDate: new Date().toISOString(),
-            category: 'industry-analysis',
-            description: 'Daily OVIX Summary',
-            tier: 'free',
             ...(topicIds.length > 0 ? { topics: topicIds } : {}),
           },
           overrideAccess: true,
         })
 
-        return Response.json({ success: true, id: article.id }, { status: 201 })
+        return Response.json({ success: true, id: brief.id }, { status: 201 })
       }
 
       case 'signal': {

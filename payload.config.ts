@@ -11,6 +11,7 @@ import { Members } from '@/collections/Members'
 import { Topics } from '@/collections/Topics'
 import { Papers } from '@/collections/Papers'
 import { Articles } from '@/collections/Articles'
+import { Briefs } from '@/collections/Briefs'
 import { Tools } from '@/collections/Tools'
 import { NewsletterIssues } from '@/collections/NewsletterIssues'
 import { WikiEntries } from '@/collections/WikiEntries'
@@ -73,6 +74,7 @@ export default buildConfig({
     Topics,
     Papers,
     Articles,
+    Briefs,
     Tools,
     NewsletterIssues,
     WikiEntries,
