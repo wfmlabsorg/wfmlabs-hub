@@ -28,6 +28,8 @@ interface SentinelPayload {
     | 'infrastructure'
     | 'health'
     | 'financial'
+    | 'environmental'
+    | 'summary'
     | 'general'
   regionId?: string
   regionName?: string
