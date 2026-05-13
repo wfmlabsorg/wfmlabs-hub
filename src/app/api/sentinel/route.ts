@@ -38,6 +38,13 @@ interface SentinelPayload {
   sourceUrl?: string
 }
 
+/** Map Sentinel category to valid Signals category (signals don't have 'summary') */
+function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'general' {
+  const valid = ['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'general'] as const
+  if (cat && (valid as readonly string[]).includes(cat)) return cat as typeof valid[number]
+  return 'general'
+}
+
 /**
  * Convert markdown text to Lexical JSON.
  * Handles: **bold**, *italic*, [links](url), headings, paragraphs.
@@ -225,7 +232,7 @@ export async function POST(req: Request) {
             source: 'sentinel',
             severity: data.severity,
             severityLabel: data.severityLabel,
-            category: data.category,
+            category: toSignalCategory(data.category),
             regionId: data.regionId,
             regionName: data.regionName,
             author: sentinelId,
@@ -356,7 +363,7 @@ export async function POST(req: Request) {
             source: 'sentinel',
             severity: data.severity,
             severityLabel: data.severityLabel,
-            category: data.category,
+            category: toSignalCategory(data.category),
             regionId: data.regionId,
             regionName: data.regionName,
             author: sentinelId,
