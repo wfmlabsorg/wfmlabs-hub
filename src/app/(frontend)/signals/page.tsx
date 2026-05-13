@@ -91,6 +91,7 @@ export default function SignalsPage() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   const fetchSignals = useCallback((category: string | null) => {
     setLoading(true)
@@ -220,6 +221,7 @@ export default function SignalsPage() {
             const color = domainColors[sig.category || 'general'] || domainColors.general
             const icon = categoryIcons[sig.category || 'general'] || categoryIcons.general
             const badge = severityBadgeColors[sig.severityLabel || 'info'] || severityBadgeColors.info
+            const isExpanded = expandedId === sig.id
 
             return (
               <div
@@ -229,7 +231,10 @@ export default function SignalsPage() {
                   display: 'flex',
                   overflow: 'hidden',
                   borderRadius: 'var(--radius-lg)',
+                  cursor: 'pointer',
+                  transition: 'box-shadow 0.15s',
                 }}
+                onClick={() => setExpandedId(isExpanded ? null : sig.id)}
               >
                 {/* Color left border */}
                 <div
@@ -243,10 +248,10 @@ export default function SignalsPage() {
                 <div
                   style={{
                     flex: 1,
-                    padding: '1rem 1.25rem',
+                    padding: '0.75rem 1.25rem',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '0.5rem',
+                    gap: '0.25rem',
                   }}
                 >
                   {/* Title row */}
@@ -255,10 +260,9 @@ export default function SignalsPage() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.5rem',
-                      flexWrap: 'wrap',
                     }}
                   >
-                    <span style={{ fontSize: '0.875rem' }}>{icon}</span>
+                    <span style={{ fontSize: '0.875rem', flexShrink: 0 }}>{icon}</span>
                     <span
                       style={{
                         fontSize: '0.9375rem',
@@ -266,6 +270,9 @@ export default function SignalsPage() {
                         color: 'var(--fg)',
                         flex: 1,
                         minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {sig.title}
@@ -289,28 +296,32 @@ export default function SignalsPage() {
                         ? ` ${sig.severity.toFixed(1)}`
                         : ''}
                     </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', flexShrink: 0 }}>
+                      {timeAgo(sig.createdAt)}
+                    </span>
+                    {/* Chevron */}
+                    <span
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--fg-faint)',
+                        flexShrink: 0,
+                        transition: 'transform 0.2s ease',
+                        transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                      }}
+                    >
+                      {'\u25BC'}
+                    </span>
                   </div>
 
-                  {/* Message */}
+                  {/* Collapsed meta line */}
                   <div
                     style={{
-                      fontSize: '0.8125rem',
-                      color: 'var(--fg-muted)',
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {sig.message}
-                  </div>
-
-                  {/* Meta row */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '0.75rem',
                       fontSize: '0.75rem',
                       color: 'var(--fg-faint)',
+                      display: 'flex',
+                      gap: '0.5rem',
                       alignItems: 'center',
-                      flexWrap: 'wrap',
                     }}
                   >
                     <span style={{ fontWeight: 500 }}>{sig.source}</span>
@@ -320,20 +331,92 @@ export default function SignalsPage() {
                         <span>{sig.regionName}</span>
                       </>
                     )}
-                    {sig.category && (
-                      <>
-                        <span style={{ opacity: 0.4 }}>{'\u00b7'}</span>
-                        <span
-                          style={{
-                            color,
-                            fontWeight: 500,
-                          }}
-                        >
-                          {domainLabels[sig.category] || sig.category}
-                        </span>
-                      </>
-                    )}
-                    <span style={{ marginLeft: 'auto' }}>{timeAgo(sig.createdAt)}</span>
+                  </div>
+
+                  {/* Expandable detail section */}
+                  <div
+                    style={{
+                      maxHeight: isExpanded ? '500px' : '0px',
+                      overflow: 'hidden',
+                      transition: 'max-height 0.3s ease, opacity 0.2s ease',
+                      opacity: isExpanded ? 1 : 0,
+                    }}
+                  >
+                    <div style={{ paddingTop: '0.5rem' }}>
+                      {/* Message */}
+                      <div
+                        style={{
+                          fontSize: '0.8125rem',
+                          color: 'var(--fg-muted)',
+                          lineHeight: 1.6,
+                          marginBottom: '0.75rem',
+                        }}
+                      >
+                        {sig.message}
+                      </div>
+
+                      {/* Detail grid */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'auto 1fr',
+                          gap: '0.25rem 0.75rem',
+                          fontSize: '0.75rem',
+                          color: 'var(--fg-faint)',
+                        }}
+                      >
+                        {sig.category && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>Category</span>
+                            <span style={{ color, fontWeight: 500 }}>
+                              {domainLabels[sig.category] || sig.category}
+                            </span>
+                          </>
+                        )}
+                        <span style={{ fontWeight: 500 }}>Source</span>
+                        <span>{sig.source}</span>
+                        {sig.regionName && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>Region</span>
+                            <span>{sig.regionName}</span>
+                          </>
+                        )}
+                        {sig.signalType && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>Type</span>
+                            <span>{sig.signalType}</span>
+                          </>
+                        )}
+                        {sig.severity !== undefined && sig.severity !== null && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>Severity</span>
+                            <span>
+                              {sig.severity.toFixed(2)} ({sig.severityLabel || 'info'})
+                            </span>
+                          </>
+                        )}
+                        {sig.sourceUrl && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>Link</span>
+                            <a
+                              href={sig.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              style={{
+                                color,
+                                textDecoration: 'underline',
+                                textUnderlineOffset: '2px',
+                              }}
+                            >
+                              {sig.sourceUrl.length > 60
+                                ? sig.sourceUrl.slice(0, 57) + '...'
+                                : sig.sourceUrl}
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
