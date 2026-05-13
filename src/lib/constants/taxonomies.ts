@@ -37,6 +37,21 @@ export const SOURCING_TYPES = [
   { label: 'BPO Vendor', value: 'bpo-vendor' },
 ] as const
 
+export const WORK_MODELS = [
+  { label: 'In-Office', value: 'in-office' },
+  { label: 'Hybrid', value: 'hybrid' },
+  { label: 'Virtual / Remote', value: 'virtual' },
+] as const
+
+export const VIRTUAL_GEO_SPREAD = [
+  { label: 'Single City', value: 'single-city' },
+  { label: 'Single State', value: 'single-state' },
+  { label: 'Regional US', value: 'regional-us' },
+  { label: 'National US', value: 'national-us' },
+  { label: 'Multi-Country', value: 'multi-country' },
+  { label: 'Global', value: 'global' },
+] as const
+
 export const FOOTPRINT_WORKFORCE_TYPES = [
   { label: 'Contact Center', value: 'contact-center' },
   { label: 'Back Office', value: 'back-office' },
