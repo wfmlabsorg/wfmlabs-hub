@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "prebuild": "bash scripts/copy-openmct.sh",
-    "build": "payload generate:importmap && next build",
+    "build": "payload migrate && payload generate:importmap && next build",
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --write .",
