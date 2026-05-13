@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { RichTextContent } from '@/components/ui/RichTextContent'
+import { MarkdownContent } from '@/components/ui/MarkdownContent'
 import { DiscussionSection } from '@/components/discussion/DiscussionSection'
 import React from 'react'
 
@@ -14,6 +15,11 @@ const CATEGORY_LABELS: Record<string, string> = {
   metric: 'Metric',
   role: 'Role',
   glossary: 'Glossary',
+}
+
+/** Detect if description contains markdown formatting (tables, headings, code blocks, etc.) */
+function hasMarkdownContent(text: string): boolean {
+  return /^#{1,6}\s|^\|.+\||\n```|^\- |\n\- |^\* |\n\* |^\d+\.\s/m.test(text)
 }
 
 function formatDate(d: string) {
@@ -154,21 +160,7 @@ export default async function WikiDetailPage({
             </div>
           </header>
 
-          {/* Description / lead paragraph */}
-          {entry.description && (
-            <p
-              style={{
-                fontSize: '1.0625rem',
-                color: 'var(--fg-muted)',
-                lineHeight: 1.7,
-                marginBottom: '1.5rem',
-              }}
-            >
-              {entry.description}
-            </p>
-          )}
-
-          {/* Article body */}
+          {/* Article body — prefer markdown description if present */}
           <div
             className="doc-body"
             style={{
@@ -177,7 +169,25 @@ export default async function WikiDetailPage({
               color: 'var(--fg)',
             }}
           >
-            <RichTextContent content={entry.body} />
+            {entry.description && hasMarkdownContent(entry.description) ? (
+              <MarkdownContent content={entry.description} />
+            ) : (
+              <>
+                {entry.description && (
+                  <p
+                    style={{
+                      fontSize: '1.0625rem',
+                      color: 'var(--fg-muted)',
+                      lineHeight: 1.7,
+                      marginBottom: '1.5rem',
+                    }}
+                  >
+                    {entry.description}
+                  </p>
+                )}
+                <RichTextContent content={entry.body} />
+              </>
+            )}
           </div>
 
           {/* Discussion */}
