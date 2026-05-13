@@ -45,6 +45,14 @@ function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'e
   return 'general'
 }
 
+/** Map Sentinel category to valid Briefs category (briefs have 'summary' but not 'events') */
+function toBriefCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'cyber' | 'health' | 'infrastructure' | 'financial' | 'environmental' | 'summary' | 'general' {
+  const valid = ['weather', 'seismic', 'disaster', 'cyber', 'health', 'infrastructure', 'financial', 'environmental', 'summary', 'general'] as const
+  if (cat && (valid as readonly string[]).includes(cat)) return cat as typeof valid[number]
+  if (cat === 'events') return 'general'
+  return 'general'
+}
+
 /**
  * Convert markdown text to Lexical JSON.
  * Handles: **bold**, *italic*, [links](url), headings, paragraphs.
@@ -270,7 +278,7 @@ export async function POST(req: Request) {
               body: markdownToLexical(data.body),
               agent: sentinelId,
               briefType: 'incident',
-              category: data.category || 'general',
+              category: toBriefCategory(data.category),
               severity: data.severity,
               severityLabel: data.severityLabel,
               regionId: data.regionId,
