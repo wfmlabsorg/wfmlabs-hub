@@ -9,9 +9,12 @@ import config from '@payload-config'
  */
 
 export async function POST(req: Request) {
-  // Authenticate: ROC API key or admin session
-  const apiKey = req.headers.get('x-roc-api-key')
-  const isValidApiKey = apiKey && process.env.ROC_API_KEY && apiKey === process.env.ROC_API_KEY
+  // Authenticate: ROC API key, Sentinel API key, or admin session
+  const rocKey = req.headers.get('x-roc-api-key')
+  const sentinelKey = req.headers.get('x-sentinel-api-key')
+  const isValidApiKey =
+    (rocKey && process.env.ROC_API_KEY && rocKey === process.env.ROC_API_KEY) ||
+    (sentinelKey && process.env.SENTINEL_API_KEY && sentinelKey === process.env.SENTINEL_API_KEY)
 
   const payload = await getPayload({ config })
 
