@@ -1,16 +1,10 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
 
 /**
  * Access gating middleware.
- *
- * Public routes (no auth required):
- *   /, /pricing, /login, /about, /api/auth/*, /api/signals (GET), /api/beacon, /api/sentinel
- *   /roc/openmct/* (static assets), /_next/*, /favicon*
- *
- * Everything else requires authentication.
- * Authenticated users without active subscription see /subscribe prompt.
+ * Uses cookie presence check (not JWT verification) for speed.
+ * The actual auth verification happens in the page/API handlers.
  */
 
 const PUBLIC_PATHS = [
@@ -21,51 +15,44 @@ const PUBLIC_PATHS = [
 ]
 
 const PUBLIC_PREFIXES = [
-  '/api/auth/',
-  '/api/beacon',
-  '/api/sentinel',
-  '/api/signals',
-  '/roc/openmct/',
+  '/api/',
+  '/roc/',
   '/_next/',
   '/favicon',
+  '/admin',
 ]
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Allow public paths
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next()
 
-  // Allow public prefixes
+  // Allow public prefixes (API routes handle their own auth)
   if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next()
 
   // Allow static assets
-  if (pathname.match(/\.(js|css|png|jpg|svg|ico|woff2?|map)$/)) return NextResponse.next()
+  if (pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?|map|html|json)$/)) return NextResponse.next()
 
-  // Check auth
-  const token = await getToken({ req: request, secret: process.env.AUTH_SECRET })
+  // Check for auth cookie presence
+  // NextAuth v5 uses __Secure-authjs.session-token (production) or authjs.session-token (dev)
+  const hasSession =
+    request.cookies.has('__Secure-authjs.session-token') ||
+    request.cookies.has('authjs.session-token') ||
+    request.cookies.has('next-auth.session-token') ||
+    request.cookies.has('__Secure-next-auth.session-token')
 
-  if (!token) {
-    // Not logged in → redirect to login with return URL
+  if (!hasSession) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('callbackUrl', pathname)
     return NextResponse.redirect(loginUrl)
   }
-
-  // Logged in — all registered users get full access (trial mode)
-  // Subscription enforcement comes with Stripe integration
 
   return NextResponse.next()
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 }
