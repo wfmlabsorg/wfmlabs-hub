@@ -2,22 +2,9 @@ import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
-import { AssetCard } from '@/components/cards/AssetCard'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 
-const ovixDomains = [
-  { name: 'weather', color: '#3b82f6' },
-  { name: 'seismic', color: '#ef4444' },
-  { name: 'disaster', color: '#f97316' },
-  { name: 'infrastructure', color: '#8b5cf6' },
-  { name: 'cyber', color: '#22c55e' },
-  { name: 'health', color: '#ec4899' },
-  { name: 'financial', color: '#f59e0b' },
-  { name: 'environmental', color: '#14b8a6' },
-  { name: 'news', color: '#64748b' },
-]
-
-async function OvixStatusCard() {
+async function OvixStatusBadge() {
   const data = await fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', {
     next: { revalidate: 300 },
   })
@@ -28,60 +15,35 @@ async function OvixStatusCard() {
 
   const totalFeeds = data.totalFeeds || 0
   const healthy = data.healthy || 0
-  const stale = totalFeeds - healthy
 
   return (
     <a
       href="/data-sources"
-      className="card"
       style={{
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '1rem 1.25rem',
+        gap: '0.375rem',
+        fontSize: '0.6875rem',
+        color: 'var(--fg-muted)',
         textDecoration: 'none',
-        color: 'inherit',
-        gap: '1rem',
-        flexWrap: 'wrap',
+        padding: '0.25rem 0.5rem',
+        borderRadius: '999px',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <span style={{ fontSize: '1.25rem' }}>{'\uD83D\uDCE1'}</span>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>OVIX Status</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-            {totalFeeds} feeds · {healthy} healthy · {stale} stale
-          </div>
-        </div>
-      </div>
-      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
-        {ovixDomains.map((d) => (
-          <span
-            key={d.name}
-            title={d.name}
-            style={{
-              display: 'inline-block',
-              width: '0.5rem',
-              height: '0.5rem',
-              borderRadius: '50%',
-              background: d.color,
-            }}
-          />
-        ))}
-        <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.5rem' }}>
-          View all {'\u2192'}
-        </span>
-      </div>
+      <span
+        style={{
+          display: 'inline-block',
+          width: '0.375rem',
+          height: '0.375rem',
+          borderRadius: '50%',
+          background: healthy === totalFeeds ? '#22c55e' : '#f59e0b',
+        }}
+      />
+      OVIX {healthy}/{totalFeeds}
     </a>
   )
-}
-
-const assetTypeMap: Record<string, { label: string; path: string; type: string }> = {
-  'wiki-entries': { label: 'Wiki', path: '/wiki', type: 'wiki-entry' },
-  papers: { label: 'Research', path: '/research', type: 'paper' },
-  tools: { label: 'Tools', path: '/tools', type: 'tool' },
-  articles: { label: 'Articles', path: '/articles', type: 'article' },
-  'newsletter-issues': { label: 'Compass', path: '/compass', type: 'newsletter-issue' },
 }
 
 export const dynamic = 'force-dynamic'
@@ -143,55 +105,27 @@ export default async function HomePage() {
   // Authenticated → full dashboard
   const payload = await getPayload({ config })
 
-  // Fetch featured items across collections
-  const collections = ['wiki-entries', 'papers', 'tools', 'articles', 'newsletter-issues'] as const
-  const results = await Promise.all(
-    collections.map((slug) =>
-      payload
-        .find({
-          collection: slug,
-          limit: 3,
-          where: { isFeatured: { equals: true } },
-          sort: '-updatedAt',
-          depth: 1,
-          overrideAccess: true,
-        })
-        .catch(() => ({ docs: [], totalDocs: 0 })),
-    ),
-  )
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const featured: Array<{ item: any; collection: string }> = []
-  results.forEach((result, i) => {
-    result.docs.forEach((doc) => {
-      featured.push({ item: doc, collection: collections[i] })
+  // Fetch featured tools (4 random)
+  const toolsResult = await payload
+    .find({
+      collection: 'tools',
+      limit: 20,
+      sort: '-updatedAt',
+      depth: 1,
+      overrideAccess: true,
     })
-  })
+    .catch(() => ({ docs: [], totalDocs: 0 }))
 
-  // If no featured items, get recent items instead
-  let displayItems = featured
-  if (displayItems.length === 0) {
-    const recentResults = await Promise.all(
-      collections.map((slug) =>
-        payload
-          .find({
-            collection: slug,
-            limit: 2,
-            sort: '-updatedAt',
-            depth: 1,
-            overrideAccess: true,
-          })
-          .catch(() => ({ docs: [], totalDocs: 0 })),
-      ),
-    )
-    recentResults.forEach((result, i) => {
-      result.docs.forEach((doc) => {
-        displayItems.push({ item: doc, collection: collections[i] })
-      })
-    })
+  // Shuffle and pick 4
+  const allTools = [...toolsResult.docs]
+  for (let i = allTools.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[allTools[i], allTools[j]] = [allTools[j], allTools[i]]
   }
+  const featuredTools = allTools.slice(0, 4)
 
   // Get counts for stats bar
+  const collections = ['wiki-entries', 'papers', 'tools', 'articles', 'newsletter-issues'] as const
   const counts = await Promise.all([
     ...collections.map((slug) =>
       payload
@@ -215,64 +149,39 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* Hero */}
+      {/* Section 1: Hero Actions */}
       <section
         style={{
-          textAlign: 'center',
-          padding: '5rem 1rem 4rem',
-          borderBottom: '1px solid var(--border)',
+          padding: '2.5rem 1rem 1rem',
+          maxWidth: '80rem',
+          margin: '0 auto',
         }}
       >
-        <h1
-          style={{
-            fontSize: 'clamp(2rem, 5vw, 3rem)',
-            fontWeight: 800,
-            lineHeight: 1.2,
-            marginBottom: '1rem',
-          }}
-        >
-          <span style={{ color: 'var(--accent)' }}>WFM Labs</span> Hub
-        </h1>
-        <p
-          style={{
-            fontSize: '1.125rem',
-            color: 'var(--fg-muted)',
-            maxWidth: '36rem',
-            margin: '0 auto 2rem',
-            lineHeight: 1.6,
-          }}
-        >
-          The practitioner workspace for workforce management. Research papers,
-          interactive tools, wiki knowledge, and a builder community.
-        </p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <a href="/wiki" className="btn btn-primary" style={{ padding: '0.625rem 1.5rem' }}>
-            Explore Wiki
+          <a
+            href="/roc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-primary"
+            style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
+          >
+            Explore the ROC
           </a>
-          <a href="/research" className="btn btn-secondary" style={{ padding: '0.625rem 1.5rem' }}>
-            Browse Research
+          <a href="/tools" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
+            Try the Tools
           </a>
-          <a href="/tools" className="btn btn-secondary" style={{ padding: '0.625rem 1.5rem' }}>
-            Try Tools
+          <a href="/signals" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
+            Live Signals
           </a>
         </div>
-      </section>
 
-      {/* Stats bar */}
-      <section
-        style={{
-          background: 'var(--bg-secondary)',
-          borderBottom: '1px solid var(--border)',
-          padding: '1rem',
-        }}
-      >
+        {/* Stats — subtle, below hero actions */}
         <div
           style={{
-            maxWidth: '40rem',
-            margin: '0 auto',
             display: 'flex',
             justifyContent: 'center',
-            gap: '3rem',
+            gap: '2rem',
+            marginTop: '1.25rem',
             flexWrap: 'wrap',
           }}
         >
@@ -281,99 +190,150 @@ export default async function HomePage() {
             { label: 'Members', value: totalMembers },
             { label: 'Topics', value: totalTopics },
           ].map((stat) => (
-            <div key={stat.label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--accent)' }}>
-                {stat.value}
-              </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {stat.label}
-              </div>
-            </div>
+            <span key={stat.label} style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
+              <span style={{ fontWeight: 600, color: 'var(--fg)' }}>{stat.value}</span>{' '}
+              {stat.label}
+            </span>
           ))}
         </div>
       </section>
 
-      {/* Signal Feed + OVIX Status — side by side */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+      {/* Section 2: Globe Preview */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
+        <style>{`
+          .globe-preview:hover .globe-overlay { opacity: 1; }
+        `}</style>
+        <a
+          href="/roc"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="globe-preview"
+          style={{
+            display: 'block',
+            position: 'relative',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+            background: '#0a0a0f',
+            border: '1px solid var(--border)',
+            textDecoration: 'none',
+            color: 'inherit',
+          }}
+        >
+          <iframe
+            src="/roc/globe/globe.html"
+            title="ROC Globe Preview"
+            style={{
+              width: '100%',
+              height: '450px',
+              border: 'none',
+              pointerEvents: 'none',
+              display: 'block',
+            }}
+          />
+          <div
+            className="globe-overlay"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'rgba(0,0,0,0.4)',
+              opacity: 0,
+              transition: 'opacity 0.2s',
+            }}
+          >
+            <span
+              style={{
+                color: '#fff',
+                fontSize: '1.125rem',
+                fontWeight: 600,
+                padding: '0.75rem 1.5rem',
+                background: 'rgba(0,0,0,0.6)',
+                borderRadius: 'var(--radius-lg)',
+                backdropFilter: 'blur(4px)',
+              }}
+            >
+              Open ROC Command Center {'\u2192'}
+            </span>
+          </div>
+        </a>
+      </section>
+
+      {/* Section 3: Live Signal Feed */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
         <div className="card" style={{ padding: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
-              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>Signal Feed</h3>
+              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>Live Signals</h3>
             </div>
-            <a href="/signals" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
-              View all {'\u2192'}
-            </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <OvixStatusBadge />
+              <a href="/signals" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
+                View all {'\u2192'}
+              </a>
+            </div>
           </div>
-          <SignalFeed limit={6} compact />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <OvixStatusCard />
+          <SignalFeed limit={10} compact />
         </div>
       </section>
 
-      {/* Featured / Recent content */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.5rem' }}>
-          {featured.length > 0 ? 'Featured' : 'Recent Activity'}
-        </h2>
-
-        {displayItems.length > 0 ? (
+      {/* Section 4: Featured Tools */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>Featured Tools</h2>
+          <a href="/tools" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
+            Browse all {'\u2192'}
+          </a>
+        </div>
+        {featuredTools.length > 0 ? (
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(16rem, 1fr))',
               gap: '1rem',
             }}
           >
-            {displayItems.slice(0, 6).map(({ item, collection }) => {
-              const meta = assetTypeMap[collection]
-              return (
-                <AssetCard
-                  key={`${collection}-${item.id}`}
-                  title={item.title}
-                  description={item.description || item.abstract || item.excerpt}
-                  slug={item.slug}
-                  assetType={meta.type}
-                  category={item.category || null}
-                  status={item.status}
-                  tier={item.tier}
-                  topics={item.topics}
-                  primaryContributor={item.primaryContributor}
-                  stats={item.stats}
-                  href={`${meta.path}/${item.slug}`}
-                />
-              )
-            })}
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {featuredTools.map((tool: any) => (
+              <a
+                key={tool.id}
+                href={`/tools/${tool.slug}`}
+                className="card"
+                style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit' }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '0.375rem' }}>
+                  {tool.title}
+                </div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                  {tool.description
+                    ? tool.description.length > 120
+                      ? tool.description.slice(0, 120) + '...'
+                      : tool.description
+                    : 'Interactive tool'}
+                </div>
+              </a>
+            ))}
           </div>
         ) : (
           <div
             style={{
               textAlign: 'center',
-              padding: '3rem 2rem',
+              padding: '2rem',
               border: '1px dashed var(--border)',
               borderRadius: 'var(--radius-lg)',
               color: 'var(--fg-muted)',
+              fontSize: '0.875rem',
             }}
           >
-            <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-              No content yet
-            </p>
-            <p style={{ fontSize: '0.875rem' }}>
-              Assets will appear here once they are created in the admin panel.
-            </p>
+            Tools will appear here once created.
           </div>
         )}
       </section>
 
-      {/* Quick links */}
-      <section
-        style={{
-          maxWidth: '80rem',
-          margin: '0 auto',
-          padding: '0 1rem 3rem',
-        }}
-      >
+      {/* Section 5: Quick Links */}
+      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
         <div
           style={{
             display: 'grid',
@@ -382,22 +342,16 @@ export default async function HomePage() {
           }}
         >
           {[
-            { title: 'Wiki', desc: 'WFM knowledge base — concepts, processes, metrics', href: '/wiki', icon: '\uD83D\uDCD6' },
             { title: 'Research', desc: 'Curated papers and industry research', href: '/research', icon: '\uD83D\uDD2C' },
-            { title: 'Tools', desc: 'Interactive calculators and planning tools', href: '/tools', icon: '\uD83D\uDEE0\uFE0F' },
-            { title: 'Articles', desc: 'Community articles and thought pieces', href: '/articles', icon: '\uD83D\uDCDD' },
-            { title: 'Compass', desc: 'Contact Center Compass newsletter archive', href: '/compass', icon: '\uD83E\uDDED' },
-            { title: 'Members', desc: 'Community practitioners and builders', href: '/members', icon: '\uD83D\uDC65' },
+            { title: 'APIs', desc: 'Live data feeds and integrations', href: '/data-sources', icon: '\uD83D\uDCE1' },
+            { title: 'Discussions', desc: 'Community conversations and Q&A', href: '/discussions', icon: '\uD83D\uDCAC' },
+            { title: 'Docs', desc: 'Platform documentation and guides', href: '/wiki', icon: '\uD83D\uDCD6' },
           ].map((link) => (
             <a
               key={link.href}
               href={link.href}
               className="card"
-              style={{
-                padding: '1.25rem',
-                textDecoration: 'none',
-                color: 'inherit',
-              }}
+              style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit' }}
             >
               <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{link.icon}</div>
               <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '0.25rem' }}>
