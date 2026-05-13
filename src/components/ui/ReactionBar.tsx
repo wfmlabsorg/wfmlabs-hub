@@ -5,14 +5,13 @@ import React, { useState, useOptimistic } from 'react'
 interface ReactionBarProps {
   targetType: string
   targetId: number | string
-  counts: { like: number; insightful: number; practical: number; question: number }
+  counts: { like: number; insightful: number; practical: number }
 }
 
 const reactionConfig = [
   { type: 'like', emoji: '\u2665', label: 'Like' },
   { type: 'insightful', emoji: '\uD83D\uDCA1', label: 'Insightful' },
   { type: 'practical', emoji: '\uD83D\uDD27', label: 'Practical' },
-  { type: 'question', emoji: '\u2753', label: 'Question' },
 ] as const
 
 export function ReactionBar({ targetType, targetId, counts }: ReactionBarProps) {

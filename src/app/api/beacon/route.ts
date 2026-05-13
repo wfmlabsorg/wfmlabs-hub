@@ -22,6 +22,7 @@ interface BeaconPayload {
   // For 'comment' / 'engage'
   articleId?: number | string
   commentBody?: string
+  parentDiscussionId?: number | string
 }
 
 /**
@@ -224,6 +225,7 @@ export async function POST(req: Request) {
             body: markdownToLexical(data.commentBody),
             isResolved: false,
             reactionCount: 0,
+            ...(data.parentDiscussionId ? { parentDiscussion: Number(data.parentDiscussionId) } : {}),
           },
           overrideAccess: true,
         })

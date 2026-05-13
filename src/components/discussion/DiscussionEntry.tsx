@@ -33,8 +33,8 @@ export async function DiscussionEntry({ discussion }: DiscussionEntryProps) {
 
   // Fetch reaction counts for this discussion
   const payload = await getPayload({ config })
-  const reactionTypes = ['like', 'insightful', 'practical', 'question'] as const
-  const counts = { like: 0, insightful: 0, practical: 0, question: 0 }
+  const reactionTypes = ['like', 'insightful', 'practical'] as const
+  const counts = { like: 0, insightful: 0, practical: 0 }
 
   for (const rType of reactionTypes) {
     const r = await payload.find({
