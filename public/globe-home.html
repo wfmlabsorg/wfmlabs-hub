@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OVIX Globe</title>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060610; }
+    #cesiumContainer { width: 100%; height: 100%; }
+    .cesium-viewer-bottom, .cesium-widget-credits { display: none !important; }
+
+    /* Region tooltip */
+    #tooltip {
+      position: absolute; display: none; pointer-events: none;
+      background: rgba(6, 6, 16, 0.95);
+      border: 1px solid rgba(24, 188, 156, 0.3);
+      border-radius: 6px; padding: 10px 14px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-size: 12px; color: #ccc; z-index: 200;
+      white-space: nowrap; max-width: 280px;
+    }
+    #tooltip .tt-name { font-weight: 700; margin-bottom: 4px; font-size: 13px; }
+    #tooltip .tt-score { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+    #tooltip .tt-level { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+    #tooltip .tt-domains { font-size: 10px; color: #888; line-height: 1.6; }
+    #tooltip .tt-domains span { font-weight: 600; }
+
+    /* Composite badge */
+    #global-badge {
+      position: absolute; top: 12px; right: 12px; z-index: 100;
+      background: rgba(6, 6, 16, 0.9);
+      border: 1px solid rgba(24, 188, 156, 0.2);
+      border-radius: 6px; padding: 10px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      text-align: center;
+    }
+    #global-badge .label { font-size: 9px; color: #18BC9C; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 2px; }
+    #global-badge .score { font-size: 22px; font-weight: 800; color: #ccc; }
+    #global-badge .level { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+  <div id="tooltip"></div>
+  <div id="global-badge">
+    <div class="label">OVIX Global</div>
+    <div class="score" id="global-score">--</div>
+    <div class="level" id="global-level" style="color:#666">LOADING</div>
+  </div>
+
+  <script>
+    var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
+    var tooltip = document.getElementById('tooltip');
+    var regionScores = {};
+
+    // Score → color
+    function scoreColor(s) {
+      if (s == null) return '#555';
+      if (s >= 8) return '#e74c3c';
+      if (s >= 6) return '#f39c12';
+      if (s >= 4) return '#f1c40f';
+      if (s >= 2) return '#2ecc71';
+      return '#18BC9C';
+    }
+    function scoreLevel(s) {
+      if (s == null) return 'NO DATA';
+      if (s >= 8) return 'CRITICAL';
+      if (s >= 6) return 'ELEVATED';
+      if (s >= 4) return 'MODERATE';
+      if (s >= 2) return 'LOW';
+      return 'MINIMAL';
+    }
+
+    // Init viewer
+    var viewer = new Cesium.Viewer('cesiumContainer', {
+      baseLayer: false,
+      animation: false, timeline: false, homeButton: false,
+      fullscreenButton: false, navigationHelpButton: false,
+      sceneModePicker: false, baseLayerPicker: false,
+      geocoder: false, infoBox: false, selectionIndicator: false,
+    });
+
+    viewer.scene.skyAtmosphere.brightnessShift = -0.3;
+    viewer.scene.skyAtmosphere.saturationShift = -0.2;
+    viewer.scene.fog.enabled = false;
+
+    // Start with a nice view
+    viewer.camera.setView({
+      destination: Cesium.Cartesian3.fromDegrees(-30, 20, 22000000)
+    });
+
+    // Gentle auto-rotation
+    var rotating = true;
+    viewer.clock.onTick.addEventListener(function() {
+      if (!rotating) return;
+      viewer.scene.camera.rotateRight(0.0003);
+    });
+
+    // Stop rotation on interaction, resume after 8s idle
+    var idleTimer = null;
+    var handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction(function() {
+      rotating = false;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(function() { rotating = true; }, 8000);
+    }, Cesium.ScreenSpaceEventType.LEFT_DOWN);
+    handler.setInputAction(function() {
+      rotating = false;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(function() { rotating = true; }, 8000);
+    }, Cesium.ScreenSpaceEventType.WHEEL);
+
+    // Load Cesium token + imagery
+    fetch(OVIX_API + '/api/ovix/config')
+      .then(function(r) { return r.json(); })
+      .then(function(cfg) {
+        if (cfg.cesiumToken) {
+          Cesium.Ion.defaultAccessToken = cfg.cesiumToken;
+          Cesium.IonImageryProvider.fromAssetId(3).then(function(p) {
+            viewer.imageryLayers.addImageryProvider(p);
+          }).catch(function() {});
+        }
+      }).catch(function() {});
+
+    // Load regions and place markers
+    fetch(OVIX_API + '/api/ovix/regions')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var macros = data.macroRegions || [];
+        var subs = data.subRegions || [];
+
+        // Place sub-region markers (more granular)
+        subs.forEach(function(r) { addRegionMarker(r, 'sub'); });
+        // Place macro markers (larger, for when zoomed out)
+        macros.forEach(function(r) { addRegionMarker(r, 'macro'); });
+
+        // Fetch scores for all regions
+        fetchAllScores(macros, subs);
+      }).catch(function() {});
+
+    function addRegionMarker(region, level) {
+      var isMacro = level === 'macro';
+      var size = isMacro ? 20 : 14;
+      var labelFont = isMacro
+        ? 'bold 13px -apple-system, BlinkMacSystemFont, sans-serif'
+        : '11px -apple-system, BlinkMacSystemFont, sans-serif';
+
+      viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(region.lon, region.lat),
+        point: {
+          pixelSize: size,
+          color: Cesium.Color.fromCssColorString('#555').withAlpha(0.8),
+          outlineColor: Cesium.Color.fromCssColorString('#555').withAlpha(0.4),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, isMacro ? 0.6 : 0.4),
+          show: true,
+        },
+        label: {
+          text: region.name,
+          font: labelFont,
+          fillColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineColor: Cesium.Color.BLACK,
+          outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+          pixelOffset: new Cesium.Cartesian2(0, isMacro ? -26 : -20),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, isMacro ? 0.5 : 0.3),
+          show: true,
+        },
+        properties: {
+          regionId: region.id,
+          regionName: region.name,
+          level: level,
+        },
+      });
+    }
+
+    // Fetch composite scores and colorize markers
+    function fetchAllScores(macros, subs) {
+      var all = macros.concat(subs);
+      all.forEach(function(r) {
+        fetch(OVIX_API + '/api/ovix/composite?region=' + r.id)
+          .then(function(resp) { return resp.json(); })
+          .then(function(d) {
+            if (d && d.composite != null) {
+              regionScores[r.id] = d;
+              colorizeMarker(r.id, d.composite);
+            }
+          }).catch(function() {});
+      });
+
+      // Fetch global composite for badge
+      fetch(OVIX_API + '/api/ovix/scores')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d && d.composite != null) {
+            var el = document.getElementById('global-score');
+            var lvl = document.getElementById('global-level');
+            el.textContent = d.composite.toFixed(1);
+            el.style.color = scoreColor(d.composite);
+            lvl.textContent = scoreLevel(d.composite);
+            lvl.style.color = scoreColor(d.composite);
+          }
+        }).catch(function() {});
+    }
+
+    function colorizeMarker(regionId, score) {
+      var color = scoreColor(score);
+      viewer.entities.values.forEach(function(e) {
+        if (e.properties && e.properties.regionId &&
+            e.properties.regionId.getValue() === regionId) {
+          e.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.9);
+          e.point.outlineColor = Cesium.Color.fromCssColorString(color).withAlpha(0.5);
+        }
+      });
+    }
+
+    // Hover tooltip
+    var hoverHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    hoverHandler.setInputAction(function(movement) {
+      var picked = viewer.scene.pick(movement.endPosition);
+      if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.regionId) {
+        var id = picked.id.properties.regionId.getValue();
+        var name = picked.id.properties.regionName.getValue();
+        var data = regionScores[id];
+
+        var html = '<div class="tt-name">' + name + '</div>';
+        if (data && data.composite != null) {
+          html += '<div class="tt-score" style="color:' + scoreColor(data.composite) + '">' + data.composite.toFixed(1) + '</div>';
+          html += '<div class="tt-level" style="color:' + scoreColor(data.composite) + '">' + scoreLevel(data.composite) + '</div>';
+          if (data.domains && data.domains.length > 0) {
+            html += '<div class="tt-domains">';
+            data.domains.slice(0, 4).forEach(function(d) {
+              html += '<span>' + d.domain + '</span> ' + (d.score != null ? d.score.toFixed(1) : '--');
+              if (d.topEvent) html += ' — ' + d.topEvent.slice(0, 40);
+              html += '<br>';
+            });
+            html += '</div>';
+          }
+        } else {
+          html += '<div class="tt-level" style="color:#555">Loading...</div>';
+        }
+
+        tooltip.innerHTML = html;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (movement.endPosition.x + 16) + 'px';
+        tooltip.style.top = (movement.endPosition.y - 10) + 'px';
+
+        // Keep tooltip on screen
+        var rect = tooltip.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+          tooltip.style.left = (movement.endPosition.x - rect.width - 16) + 'px';
+        }
+        if (rect.bottom > window.innerHeight) {
+          tooltip.style.top = (movement.endPosition.y - rect.height - 10) + 'px';
+        }
+
+        viewer.canvas.style.cursor = 'pointer';
+      } else {
+        tooltip.style.display = 'none';
+        viewer.canvas.style.cursor = 'default';
+      }
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    // Click → navigate to ROC with region context
+    var clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    clickHandler.setInputAction(function(click) {
+      var picked = viewer.scene.pick(click.position);
+      if (Cesium.defined(picked) && picked.id && picked.id.properties && picked.id.properties.regionId) {
+        var id = picked.id.properties.regionId.getValue();
+        window.top.location.href = '/roc';
+      }
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    // Refresh scores every 5 min
+    setInterval(function() {
+      Object.keys(regionScores).forEach(function(id) {
+        fetch(OVIX_API + '/api/ovix/composite?region=' + id)
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (d && d.composite != null) {
+              regionScores[id] = d;
+              colorizeMarker(id, d.composite);
+            }
+          }).catch(function() {});
+      });
+    }, 5 * 60 * 1000);
+  </script>
+</body>
+</html>

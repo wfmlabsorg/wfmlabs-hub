@@ -198,66 +198,29 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Section 2: Globe Preview */}
+      {/* Section 2: Interactive OVIX Globe */}
       <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
-        <style>{`
-          .globe-preview:hover .globe-overlay { opacity: 1; }
-        `}</style>
-        <a
-          href="/roc"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="globe-preview"
+        <div
           style={{
-            display: 'block',
             position: 'relative',
             borderRadius: 'var(--radius-lg)',
             overflow: 'hidden',
-            background: '#0a0a0f',
+            background: '#060610',
             border: '1px solid var(--border)',
-            textDecoration: 'none',
-            color: 'inherit',
           }}
         >
           <iframe
-            src="/roc/globe/globe.html"
-            title="ROC Globe Preview"
+            src="/globe-home.html"
+            title="OVIX Globe"
             style={{
               width: '100%',
-              height: '450px',
+              height: '480px',
               border: 'none',
-              pointerEvents: 'none',
               display: 'block',
             }}
+            allow="accelerometer"
           />
-          <div
-            className="globe-overlay"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'rgba(0,0,0,0.4)',
-              opacity: 0,
-              transition: 'opacity 0.2s',
-            }}
-          >
-            <span
-              style={{
-                color: '#fff',
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                padding: '0.75rem 1.5rem',
-                background: 'rgba(0,0,0,0.6)',
-                borderRadius: 'var(--radius-lg)',
-                backdropFilter: 'blur(4px)',
-              }}
-            >
-              Open ROC Command Center {'\u2192'}
-            </span>
-          </div>
-        </a>
+        </div>
       </section>
 
       {/* Section 3: Live Signal Feed */}
