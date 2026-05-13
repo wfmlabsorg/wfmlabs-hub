@@ -9,12 +9,11 @@ const navLinks = [
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/articles', label: 'Articles' },
-  { href: '/wiki', label: 'Docs' },
-  { href: '/frameworks', label: 'Frameworks' },
+  { href: '/signals', label: 'Signals' },
   { href: '/data-sources', label: 'APIs' },
-  { href: '/scenarios', label: 'Scenarios' },
   { href: '/members', label: 'Members' },
   { href: '/discussions', label: 'Discussions' },
+  { href: '/wiki', label: 'Docs' },
   { href: '/pricing', label: 'Pricing' },
 ]
 
