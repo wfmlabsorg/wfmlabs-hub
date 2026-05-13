@@ -82,6 +82,42 @@ export default async function DocsPage() {
             alignSelf: 'flex-start',
           }}
         >
+          {/* Changelog quick link */}
+          <Link
+            href="/wiki/roc-changelog"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 0.625rem',
+              marginBottom: '1rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: 'var(--accent)',
+              textDecoration: 'none',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--border)',
+              transition: 'background 0.15s',
+            }}
+            className="changelog-link"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{ flexShrink: 0 }}
+            >
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            Latest Changes
+          </Link>
+
           <h2
             style={{
               fontSize: '0.6875rem',
@@ -258,6 +294,9 @@ export default async function DocsPage() {
         .docs-sidebar a:hover {
           background: var(--bg-surface) !important;
           color: var(--fg) !important;
+        }
+        .changelog-link:hover {
+          background: var(--bg-surface) !important;
         }
         .docs-sidebar {
           border-right: 1px solid var(--border);
