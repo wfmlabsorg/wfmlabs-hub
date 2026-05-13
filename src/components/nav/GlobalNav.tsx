@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { UserMenu } from './UserMenu'
 
 const navLinks = [
-  { href: '/roc', label: 'ROC', accent: true, newTab: true },
+  { href: '/roc', label: 'ROC', newTab: true },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/articles', label: 'Articles' },
@@ -18,6 +19,7 @@ const navLinks = [
 ]
 
 export function GlobalNav() {
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
@@ -80,33 +82,42 @@ export function GlobalNav() {
           }}
           className="nav-desktop"
         >
-          {navLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              target={link.newTab ? '_blank' : undefined}
-              rel={link.newTab ? 'noopener' : undefined}
-              style={{
-                padding: '0.375rem 0.75rem',
-                fontSize: '0.875rem',
-                color: link.accent ? 'var(--accent)' : 'var(--fg-muted)',
-                fontWeight: link.accent ? 700 : undefined,
-                borderRadius: 'var(--radius)',
-                textDecoration: 'none',
-                transition: 'color 0.15s, background 0.15s',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = link.accent ? 'var(--accent)' : 'var(--fg)'
-                e.currentTarget.style.background = 'var(--bg-secondary)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--fg-muted)'
-                e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              {link.label}
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href || pathname.startsWith(link.href + '/')
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                target={link.newTab ? '_blank' : undefined}
+                rel={link.newTab ? 'noopener' : undefined}
+                style={{
+                  padding: '0.375rem 0.75rem',
+                  fontSize: '0.875rem',
+                  color: isActive ? 'var(--accent)' : 'var(--fg-muted)',
+                  fontWeight: isActive ? 700 : undefined,
+                  borderRadius: 'var(--radius)',
+                  textDecoration: 'none',
+                  transition: 'color 0.15s, background 0.15s',
+                  background: isActive ? 'var(--bg-secondary)' : 'transparent',
+                  borderBottom: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = 'var(--fg)'
+                    e.currentTarget.style.background = 'var(--bg-secondary)'
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    e.currentTarget.style.color = 'var(--fg-muted)'
+                    e.currentTarget.style.background = 'transparent'
+                  }
+                }}
+              >
+                {link.label}
+              </a>
+            )
+          })}
         </div>
 
         {/* Search */}
@@ -153,24 +164,28 @@ export function GlobalNav() {
             background: 'var(--bg)',
           }}
         >
-          {navLinks.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              target={link.newTab ? '_blank' : undefined}
-              rel={link.newTab ? 'noopener' : undefined}
-              style={{
-                display: 'block',
-                padding: '0.5rem 0',
-                color: 'var(--fg-muted)',
-                fontSize: '0.875rem',
-                textDecoration: 'none',
-              }}
-              onClick={() => setMobileOpen(false)}
-            >
-              {link.label}
-            </a>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href || pathname.startsWith(link.href + '/')
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                target={link.newTab ? '_blank' : undefined}
+                rel={link.newTab ? 'noopener' : undefined}
+                style={{
+                  display: 'block',
+                  padding: '0.5rem 0',
+                  color: isActive ? 'var(--accent)' : 'var(--fg-muted)',
+                  fontWeight: isActive ? 700 : undefined,
+                  fontSize: '0.875rem',
+                  textDecoration: 'none',
+                }}
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </a>
+            )
+          })}
           <div style={{ marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px solid var(--border)' }}>
             <input type="text" placeholder="Search..." className="input" style={{ height: '2rem', fontSize: '0.8125rem' }} />
           </div>
