@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
+import { AssetCard } from '@/components/cards/AssetCard'
 
 async function OvixStatusBadge() {
   const data = await fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', {
@@ -238,7 +239,7 @@ export default async function HomePage() {
               </a>
             </div>
           </div>
-          <SignalFeed limit={10} compact />
+          <SignalFeed limit={5} compact />
         </div>
       </section>
 
@@ -251,32 +252,25 @@ export default async function HomePage() {
           </a>
         </div>
         {featuredTools.length > 0 ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(16rem, 1fr))',
-              gap: '1rem',
-            }}
-          >
+          <div className="tools-grid">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {featuredTools.map((tool: any) => (
-              <a
+              <AssetCard
                 key={tool.id}
+                title={tool.title}
+                description={tool.description}
+                slug={tool.slug}
+                assetType="tool"
+                category={tool.category || null}
+                status={tool.status}
+                tier={tool.tier}
+                stats={tool.stats}
+                primaryContributor={tool.primaryContributor}
+                isFeatured={tool.isFeatured}
+                updatedAt={tool.updatedAt}
+                createdAt={tool.createdAt}
                 href={`/tools/${tool.slug}`}
-                className="card"
-                style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit' }}
-              >
-                <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '0.375rem' }}>
-                  {tool.title}
-                </div>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-                  {tool.description
-                    ? tool.description.length > 120
-                      ? tool.description.slice(0, 120) + '...'
-                      : tool.description
-                    : 'Interactive tool'}
-                </div>
-              </a>
+              />
             ))}
           </div>
         ) : (
