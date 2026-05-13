@@ -92,25 +92,36 @@ export default function SignalsPage() {
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [page, setPage] = useState(1)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const [totalDocs, setTotalDocs] = useState(0)
 
-  const fetchSignals = useCallback((category: string | null) => {
+  const fetchSignals = useCallback((category: string | null, pg: number) => {
     setLoading(true)
     const params = new URLSearchParams()
     params.set('limit', '50')
+    params.set('page', String(pg))
     if (category) params.set('category', category)
 
     fetch(`/api/signals?${params}`)
       .then((r) => r.json())
       .then((data) => {
         setSignals(data.docs || [])
+        setHasNextPage(data.hasNextPage || false)
+        setTotalDocs(data.totalDocs || 0)
         setLoading(false)
       })
       .catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    fetchSignals(activeCategory)
+    setPage(1)
+    fetchSignals(activeCategory, 1)
   }, [activeCategory, fetchSignals])
+
+  useEffect(() => {
+    if (page > 1) fetchSignals(activeCategory, page)
+  }, [page, activeCategory, fetchSignals])
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
@@ -127,6 +138,11 @@ export default function SignalsPage() {
         </h1>
         <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
           Operational Intelligence Feed
+          {totalDocs > 0 && (
+            <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.75rem' }}>
+              {totalDocs.toLocaleString()} signals
+            </span>
+          )}
         </p>
       </div>
 
@@ -422,6 +438,57 @@ export default function SignalsPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {(page > 1 || hasNextPage) && (
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '1rem',
+            marginTop: '2rem',
+            paddingTop: '1rem',
+            borderTop: '1px solid var(--border)',
+          }}
+        >
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
+              background: page <= 1 ? 'transparent' : 'var(--bg-secondary)',
+              color: page <= 1 ? 'var(--fg-faint)' : 'var(--fg)',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: page <= 1 ? 'default' : 'pointer',
+            }}
+          >
+            {'\u2190'} Newer
+          </button>
+          <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>
+            Page {page}
+          </span>
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={!hasNextPage}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border)',
+              background: !hasNextPage ? 'transparent' : 'var(--bg-secondary)',
+              color: !hasNextPage ? 'var(--fg-faint)' : 'var(--fg)',
+              fontSize: '0.8125rem',
+              fontWeight: 500,
+              cursor: !hasNextPage ? 'default' : 'pointer',
+            }}
+          >
+            Older {'\u2192'}
+          </button>
         </div>
       )}
     </div>

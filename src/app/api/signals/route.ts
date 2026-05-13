@@ -108,24 +108,89 @@ export async function POST(req: Request) {
   }
 }
 
+const VALID_CATEGORIES = [
+  'weather', 'seismic', 'disaster', 'events', 'cyber',
+  'infrastructure', 'health', 'financial', 'environmental', 'general',
+]
+
 export async function GET(req: Request) {
   const payload = await getPayload({ config })
   const url = new URL(req.url)
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 100)
+  const page = Math.max(parseInt(url.searchParams.get('page') || '1'), 1)
   const category = url.searchParams.get('category')
   const regionId = url.searchParams.get('region')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {}
-  if (category) where.category = { equals: category }
+  if (category && VALID_CATEGORIES.includes(category)) {
+    where.category = { equals: category }
+  }
   if (regionId) where.regionId = { equals: regionId }
 
   const signals = await payload.find({
     collection: 'signals',
     where: Object.keys(where).length > 0 ? where : undefined,
     limit,
+    page,
     sort: '-createdAt',
   })
 
   return Response.json(signals)
+}
+
+/**
+ * DELETE /api/signals?older_than=48h — Purge signals older than specified duration.
+ * Requires admin session or ROC API key.
+ */
+export async function DELETE(req: Request) {
+  const rocKey = req.headers.get('x-roc-api-key')
+  const isValidApiKey = rocKey && process.env.ROC_API_KEY && rocKey === process.env.ROC_API_KEY
+
+  const payload = await getPayload({ config })
+
+  if (!isValidApiKey) {
+    try {
+      const cookieHeader = req.headers.get('cookie') || ''
+      const headers = new Headers()
+      headers.set('cookie', cookieHeader)
+      const { user } = await payload.auth({ headers })
+      if (!user || (user as unknown as Record<string, unknown>).role !== 'admin') {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    } catch {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+  }
+
+  const url = new URL(req.url)
+  const hours = parseInt(url.searchParams.get('hours') || '48')
+  const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
+
+  try {
+    const old = await payload.find({
+      collection: 'signals',
+      where: { createdAt: { less_than: cutoff } },
+      limit: 100,
+      sort: 'createdAt',
+    })
+
+    let deleted = 0
+    for (const doc of old.docs) {
+      await payload.delete({ collection: 'signals', id: doc.id, overrideAccess: true })
+      deleted++
+    }
+
+    const remaining = old.totalDocs - deleted
+    return Response.json({
+      deleted,
+      remaining,
+      cutoff,
+      message: remaining > 0
+        ? `Deleted ${deleted}. ${remaining} more older signals remain — call again to continue.`
+        : `Deleted ${deleted}. All signals older than ${hours}h removed.`,
+    })
+  } catch (e) {
+    return Response.json({ error: 'Purge failed' }, { status: 500 })
+  }
 }
