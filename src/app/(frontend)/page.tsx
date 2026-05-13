@@ -299,10 +299,10 @@ export default async function HomePage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
-              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>ROC Signal Feed</h3>
+              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>Signal Feed</h3>
             </div>
-            <a href="/roc" target="_blank" rel="noopener" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
-              Open ROC {'\u2192'}
+            <a href="/signals" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
+              View all {'\u2192'}
             </a>
           </div>
           <SignalFeed limit={6} compact />
