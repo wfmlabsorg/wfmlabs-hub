@@ -6,6 +6,64 @@ Format: `[date] — [summary]` with details.
 
 ---
 
+## 2026-05-13 — Gating, Agents, Signals, Docs Redesign
+
+### Access Gating
+- All content behind authentication — unauthenticated visitors see landing page only
+- Landing page: "Human Expertise Meets Agent Intelligence" + 3 pillars + CTA
+- New signups auto-provisioned as trial, Ted notified via email + system signal
+- Middleware cookie-based auth check (fixed redirect loop from JWT verification)
+
+### Agents
+- **Sentinel** live — incident analyst, every 5 min, 14 incidents detected on first run
+- **Beacon v0.2** — memory DB, dedup, verified wiki links only (no fabricated URLs)
+- Beacon engagement loop tested — responded to Ted's comment on RTA article
+- Agent team spec: Beacon, Sentinel, Sigma (JupyterLite), Forecast, Atlas
+- Expanded agent profiles: specialization, capabilities, personality, cadence, model
+
+### Signals Page
+- Dedicated `/signals` page with domain color-coded cards
+- Filter chips by category (weather/seismic/disaster/cyber/health/etc.)
+- Severity badges, source, region, time-ago display
+- Homepage signal feed links to `/signals`
+
+### Navigation
+- Active page highlighting (accent color + underline) replaces static ROC highlight
+- Uses `usePathname()` for route detection
+
+### Docs Knowledge Base
+- `/wiki` redesigned from card grid to knowledge-base layout
+- Sidebar table of contents by category
+- Entries grouped with descriptions and last-updated dates
+- Detail pages: breadcrumb nav, clean typography, right sidebar with metadata
+- 19 ROC docs migrated as wiki entries
+
+### Workforce Footprint
+- Work model field: In-Office / Hybrid / Virtual per location
+- Geographic spread for virtual workers: Single City → Global
+- Full ISO country list (195 countries)
+- "Other" workforce type shows free text field
+
+### Commerce Planning
+- Pricing page: Individual $199/yr, Team $799/yr (5 seats), Corporate $2,499/yr (25 seats)
+- Value strategy doc: 3 pillars (OVIX, Intelligence Briefings, Custom Agents)
+- ADR-0018 (commerce tiers), ADR-0019 (value strategy)
+- Founding Member program (first 100, lifetime rate lock)
+
+### Admin
+- OAuth-only admin login (Payload email/password form hidden)
+- Admin bridge generates Payload JWT from NextAuth session
+- Membership tiers: free/trial/practitioner/practitioner-plus
+
+### Other
+- Research paper cards: source attribution, category filtering, 15 papers updated
+- API data source descriptions: operator, license, registration, cost
+- Feed description keys remapped to match API IDs
+- Discussion threads on articles, wiki, compass detail pages
+- Articles in nav, article categories (think-tank, opinion, tutorial, etc.)
+
+---
+
 ## 2026-05-12 — Phase A Deploy + ROC Migration Plan + Auth Bridge
 
 ### Deployment
