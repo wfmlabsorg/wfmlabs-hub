@@ -12,6 +12,8 @@ import {
   CUSTOMER_GEO_SCOPES,
   US_REGIONS,
   US_STATES,
+  WORK_MODELS,
+  VIRTUAL_GEO_SPREAD,
 } from '@/lib/constants/taxonomies'
 
 interface Topic {
@@ -43,6 +45,8 @@ interface FootprintRow {
   sourcing: string
   workforceType: string
   otherWorkforceType: string
+  workModel: string
+  geoSpread: string
 }
 
 const emptyFootprintRow: FootprintRow = {
@@ -53,6 +57,8 @@ const emptyFootprintRow: FootprintRow = {
   sourcing: '',
   workforceType: '',
   otherWorkforceType: '',
+  workModel: 'in-office',
+  geoSpread: '',
 }
 
 export default function SetupPage() {
@@ -889,6 +895,39 @@ export default function SetupPage() {
                           />
                         </div>
                       )}
+                      {/* Row 3: Work Model + Geo Spread */}
+                      <div style={{ display: 'grid', gridTemplateColumns: row.workModel === 'virtual' || row.workModel === 'hybrid' ? '1fr 1fr' : '1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Work Model</label>
+                          <select
+                            value={row.workModel}
+                            onChange={(e) => {
+                              updateFootprintRow(i, 'workModel', e.target.value)
+                              if (e.target.value === 'in-office') updateFootprintRow(i, 'geoSpread', '')
+                            }}
+                            style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                          >
+                            {WORK_MODELS.map((m) => (
+                              <option key={m.value} value={m.value}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {(row.workModel === 'virtual' || row.workModel === 'hybrid') && (
+                          <div>
+                            <label style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', display: 'block', marginBottom: '0.125rem' }}>Geographic Spread</label>
+                            <select
+                              value={row.geoSpread}
+                              onChange={(e) => updateFootprintRow(i, 'geoSpread', e.target.value)}
+                              style={{ ...selectStyle, padding: '0.4375rem 0.5rem', fontSize: '0.8125rem' }}
+                            >
+                              <option value="">Select</option>
+                              {VIRTUAL_GEO_SPREAD.map((g) => (
+                                <option key={g.value} value={g.value}>{g.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
