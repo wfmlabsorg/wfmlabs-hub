@@ -33,7 +33,7 @@
   .transport { display:flex; align-items:center; gap:4px; flex-shrink:0; }
   .transport button { background:rgba(24,188,156,.08); border:1px solid rgba(24,188,156,.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
 
-  .data-area { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; min-height:0; overflow:hidden; }
+  .data-area { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:10px; padding:10px; min-height:0; overflow:hidden; }
   .column { display:flex; flex-direction:column; gap:12px; min-height:0; overflow:hidden; }
   .panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
   .panel.grow { flex:1; }
@@ -78,12 +78,13 @@
     </div>
     <div id="factor-bars" style="padding:8px 0 4px;width:100%"></div>
     <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
-      Environmental score from air quality monitoring (Open-Meteo CAMS model — US AQI,
-      PM2.5, PM10, NO2, Ozone, UV Index across 24 global regions)
-      and active wildfire tracking (NASA EONET satellite events).
+      Environmental score from 4 factors across 24 global regions:
+      Air Quality (US AQI, PM2.5, PM10), Extreme Heat (heat index),
+      UV Exposure, and Dust/Wildfire activity. Composite uses
+      regional average (not worst-case) for global picture.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: Open-Meteo Air Quality (Copernicus CAMS) &middot; NASA EONET<br>
+      Sources: Open-Meteo (CAMS + GFS) &middot; NASA EONET &middot; FIRMS<br>
       Refreshes every 5 min via OVIX API.
     </div>
   </div>
@@ -91,9 +92,10 @@
   <div class="banner">
     <div class="banner-title">ENVIRONMENTAL MONITOR</div>
     <div class="banner-stats">
-      <div class="stat-box"><div class="stat-value" id="fire-count">--</div><div class="stat-label">Active Fires</div></div>
       <div class="stat-box"><div class="stat-value" id="aq-count">--</div><div class="stat-label">Air Quality</div></div>
-      <div class="stat-box"><div class="stat-value" id="max-sev">--</div><div class="stat-label">Max Severity</div></div>
+      <div class="stat-box"><div class="stat-value" id="heat-count">--</div><div class="stat-label">Heat</div></div>
+      <div class="stat-box"><div class="stat-value" id="uv-count">--</div><div class="stat-label">UV / Dust</div></div>
+      <div class="stat-box"><div class="stat-value" id="fire-count">--</div><div class="stat-label">Fires</div></div>
     </div>
     <div class="level-badge" id="env-badge">--</div>
     <div class="transport">
@@ -104,25 +106,37 @@
   </div>
 
   <div class="data-area">
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Active Wildfires</span>
-          <span class="panel-count" id="fire-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="fire-list"><div class="empty-state">Loading wildfire data...</div></div>
-        <div class="source-footer">NASA EONET &middot; Active wildfire events &middot; FIRMS (VIIRS) when available</div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Air Quality</span>
+        <span class="panel-count" id="aq-panel-count">--</span>
       </div>
+      <div class="panel-body" id="aq-list"><div class="empty-state">Loading air quality...</div></div>
+      <div class="source-footer">Open-Meteo CAMS &middot; US AQI, PM2.5, PM10</div>
     </div>
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Air Quality Alerts</span>
-          <span class="panel-count" id="aq-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="aq-list"><div class="empty-state">Loading air quality data...</div></div>
-        <div class="source-footer">Open-Meteo (Copernicus CAMS) &middot; US AQI &middot; PM2.5, PM10, UV Index</div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Extreme Heat</span>
+        <span class="panel-count" id="heat-panel-count">--</span>
       </div>
+      <div class="panel-body" id="heat-list"><div class="empty-state">Loading heat data...</div></div>
+      <div class="source-footer">Open-Meteo GFS &middot; Heat index / apparent temperature</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">UV &amp; Dust</span>
+        <span class="panel-count" id="uvdust-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="uvdust-list"><div class="empty-state">Loading UV/dust data...</div></div>
+      <div class="source-footer">Open-Meteo CAMS &middot; UV Index, Saharan dust concentration</div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Wildfires</span>
+        <span class="panel-count" id="fire-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="fire-list"><div class="empty-state">Loading wildfire data...</div></div>
+      <div class="source-footer">NASA EONET &middot; FIRMS VIIRS satellite</div>
     </div>
   </div>
 </div>
@@ -165,27 +179,52 @@
   }
 
   function render(events) {
+    // Categorize events
+    var aq = events.filter(function(e) { return e.event_type === 'air_quality' || (e.source === 'open_meteo_aq' && !e.event_type); });
+    var heat = events.filter(function(e) { return e.event_type === 'extreme_heat' || e.source === 'open_meteo_heat'; });
+    var uvdust = events.filter(function(e) { return e.event_type === 'uv_index' || e.event_type === 'dust'; });
     var fires = events.filter(function(e) { return e.source === 'firms' || e.source === 'eonet' || e._isWildfire; });
-    var aq = events.filter(function(e) { return e.source === 'open_meteo_aq' || e.source === 'openaq'; });
 
-    renderList('fire-list', fires, '#f97316');
     renderList('aq-list', aq, '#8b5cf6');
+    renderList('heat-list', heat, '#ef4444');
+    renderList('uvdust-list', uvdust, '#f59e0b');
+    renderList('fire-list', fires, '#f97316');
 
-    document.getElementById('fire-count').textContent = fires.length;
     document.getElementById('aq-count').textContent = aq.length;
+    document.getElementById('heat-count').textContent = heat.length;
+    document.getElementById('uv-count').textContent = uvdust.length;
+    document.getElementById('fire-count').textContent = fires.length;
+    document.getElementById('aq-panel-count').textContent = aq.length + ' regions';
+    document.getElementById('heat-panel-count').textContent = heat.length + ' regions';
+    document.getElementById('uvdust-panel-count').textContent = uvdust.length + ' alerts';
     document.getElementById('fire-panel-count').textContent = fires.length + ' fires';
-    document.getElementById('aq-panel-count').textContent = aq.length + ' alerts';
 
-    var maxSev = events.length ? Math.max.apply(null, events.map(function(e){return parseFloat(e.severity)||0;})) : 0;
-    document.getElementById('max-sev').textContent = maxSev.toFixed(1);
+    // Composite scoring: weighted AVERAGE across events, not max
+    // This gives a global picture rather than worst-case single region
+    function avgSev(arr) {
+      if (arr.length === 0) return 0;
+      var sum = arr.reduce(function(s, e) { return s + (parseFloat(e.severity) || 0); }, 0);
+      return sum / arr.length;
+    }
+    function maxSev(arr) {
+      if (arr.length === 0) return 0;
+      return Math.max.apply(null, arr.map(function(e) { return parseFloat(e.severity) || 0; }));
+    }
 
-    var fireMax = fires.length ? Math.min(10, Math.max.apply(null, fires.map(function(e){return parseFloat(e.severity)||0;}))) : 0;
-    var aqMax = aq.length ? Math.min(10, Math.max.apply(null, aq.map(function(e){return parseFloat(e.severity)||0;}))) : 0;
-    var score = Math.min(10, Math.round((fireMax * 0.6 + aqMax * 0.4) * 10) / 10);
+    // Use blend: 70% average + 30% max — acknowledges worst case without letting it dominate
+    var aqScore = aq.length ? Math.min(10, avgSev(aq) * 0.7 + maxSev(aq) * 0.3) : 0;
+    var heatScore = heat.length ? Math.min(10, avgSev(heat) * 0.7 + maxSev(heat) * 0.3) : 0;
+    var uvdustScore = uvdust.length ? Math.min(10, avgSev(uvdust) * 0.7 + maxSev(uvdust) * 0.3) : 0;
+    var fireScore = fires.length ? Math.min(10, avgSev(fires) * 0.7 + maxSev(fires) * 0.3) : 0;
+
+    // Weighted composite: AQ 35%, Heat 30%, Fire 20%, UV/Dust 15%
+    var score = Math.min(10, Math.round((aqScore * 0.35 + heatScore * 0.30 + fireScore * 0.20 + uvdustScore * 0.15) * 10) / 10);
     drawGauge(score);
     renderFactors([
-      {label: 'Wildfires', value: fireMax, weight: '60%'},
-      {label: 'Air Quality', value: aqMax, weight: '40%'}
+      {label: 'Air Quality', value: Math.round(aqScore * 10) / 10, weight: '35%'},
+      {label: 'Extreme Heat', value: Math.round(heatScore * 10) / 10, weight: '30%'},
+      {label: 'Wildfires', value: Math.round(fireScore * 10) / 10, weight: '20%'},
+      {label: 'UV / Dust', value: Math.round(uvdustScore * 10) / 10, weight: '15%'}
     ], score);
 
     var level, bg, color;
