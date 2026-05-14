@@ -78,12 +78,12 @@
     </div>
     <div id="factor-bars" style="padding:8px 0 4px;width:100%"></div>
     <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
-      Environmental score from active wildfires (NASA FIRMS satellite detection)
-      and air quality monitoring (OpenAQ PM2.5 readings). Fire radiative power
-      and EPA AQI breakpoints drive severity.
+      Environmental score from air quality monitoring (Open-Meteo CAMS model — US AQI,
+      PM2.5, PM10, NO2, Ozone, UV Index across 24 global regions)
+      and active wildfire tracking (NASA EONET satellite events).
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: NASA FIRMS (VIIRS satellite) &middot; OpenAQ (PM2.5)<br>
+      Sources: Open-Meteo Air Quality (Copernicus CAMS) &middot; NASA EONET<br>
       Refreshes every 5 min via OVIX API.
     </div>
   </div>
@@ -110,8 +110,8 @@
           <span class="panel-title">Active Wildfires</span>
           <span class="panel-count" id="fire-panel-count">--</span>
         </div>
-        <div class="panel-body" id="fire-list"><div class="empty-state">Loading NASA FIRMS data...</div></div>
-        <div class="source-footer">NASA FIRMS &middot; VIIRS SNPP satellite &middot; FRP = Fire Radiative Power (MW)</div>
+        <div class="panel-body" id="fire-list"><div class="empty-state">Loading wildfire data...</div></div>
+        <div class="source-footer">NASA EONET &middot; Active wildfire events &middot; FIRMS (VIIRS) when available</div>
       </div>
     </div>
     <div class="column">
@@ -120,8 +120,8 @@
           <span class="panel-title">Air Quality Alerts</span>
           <span class="panel-count" id="aq-panel-count">--</span>
         </div>
-        <div class="panel-body" id="aq-list"><div class="empty-state">Loading OpenAQ data...</div></div>
-        <div class="source-footer">OpenAQ &middot; PM2.5 (µg/m³) &middot; EPA AQI breakpoints</div>
+        <div class="panel-body" id="aq-list"><div class="empty-state">Loading air quality data...</div></div>
+        <div class="source-footer">Open-Meteo (Copernicus CAMS) &middot; US AQI &middot; PM2.5, PM10, UV Index</div>
       </div>
     </div>
   </div>
@@ -134,24 +134,39 @@
 
   function fetchAll() {
     Promise.all([
+      // Environmental events from all regions (includes open_meteo_aq, firms, eonet wildfires)
       fetch(API + '/api/ovix/region-events?region=north-america&hours=48&domain=environmental&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
       fetch(API + '/api/ovix/region-events?region=emea&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      fetch(API + '/api/ovix/region-events?region=apac&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};})
+      fetch(API + '/api/ovix/region-events?region=apac&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      fetch(API + '/api/ovix/region-events?region=south-america&hours=48&domain=environmental&limit=30', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Also grab disaster domain for wildfires (EONET fires are categorized as disaster)
+      fetch(API + '/api/events?domain=disaster&hours=48&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[], rows:[]};}).catch(function(){return{events:[], rows:[]};})
     ]).then(function(results) {
       var all = [], seen = {};
-      results.forEach(function(d) {
+      // Environmental events
+      results.slice(0, 4).forEach(function(d) {
         (d.events || []).forEach(function(e) {
           var key = e.id || e.title;
           if (!seen[key]) { seen[key] = true; all.push(e); }
         });
+      });
+      // Disaster events — only grab wildfires/fires
+      var disasterData = results[4];
+      var disasters = disasterData.events || disasterData.rows || [];
+      disasters.forEach(function(e) {
+        var title = (e.title || '').toLowerCase();
+        if (title.indexOf('fire') >= 0 || title.indexOf('wildfire') >= 0 || title.indexOf('burn') >= 0 || title.indexOf('blaze') >= 0) {
+          var key = e.id || e.title;
+          if (!seen[key]) { seen[key] = true; e._isWildfire = true; all.push(e); }
+        }
       });
       render(all);
     });
   }
 
   function render(events) {
-    var fires = events.filter(function(e) { return e.source === 'firms'; });
-    var aq = events.filter(function(e) { return e.source === 'openaq'; });
+    var fires = events.filter(function(e) { return e.source === 'firms' || e.source === 'eonet' || e._isWildfire; });
+    var aq = events.filter(function(e) { return e.source === 'open_meteo_aq' || e.source === 'openaq'; });
 
     renderList('fire-list', fires, '#f97316');
     renderList('aq-list', aq, '#8b5cf6');
