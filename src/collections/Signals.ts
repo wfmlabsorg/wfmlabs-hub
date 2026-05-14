@@ -76,6 +76,7 @@ export const Signals: CollectionConfig = {
         { label: 'Health', value: 'health' },
         { label: 'Financial', value: 'financial' },
         { label: 'Environmental', value: 'environmental' },
+        { label: 'Geopolitical', value: 'geopolitical' },
         { label: 'General', value: 'general' },
       ],
       admin: { description: 'OVIX category this signal relates to' },

@@ -26,6 +26,7 @@ const domainColors: Record<string, string> = {
   health: '#ec4899',
   financial: '#f59e0b',
   environmental: '#14b8a6',
+  geopolitical: '#dc2626',
   general: '#64748b',
   events: '#64748b',
 }
@@ -39,6 +40,7 @@ const domainLabels: Record<string, string> = {
   health: 'Health',
   financial: 'Financial',
   environmental: 'Environmental',
+  geopolitical: 'Geopolitical',
   general: 'General',
   events: 'Events',
 }
@@ -72,6 +74,7 @@ const filterCategories = [
   'health',
   'financial',
   'environmental',
+  'geopolitical',
   'general',
 ]
 

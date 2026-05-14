@@ -46,6 +46,7 @@ export const Briefs: CollectionConfig = {
         { label: 'Infrastructure', value: 'infrastructure' },
         { label: 'Financial', value: 'financial' },
         { label: 'Environmental', value: 'environmental' },
+        { label: 'Geopolitical', value: 'geopolitical' },
         { label: 'Summary', value: 'summary' },
         { label: 'General', value: 'general' },
       ],

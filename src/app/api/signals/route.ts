@@ -80,7 +80,7 @@ export async function POST(req: Request) {
         : sig.severity && sig.severity >= 4 ? 'moderate'
         : 'info'
       )) as 'info' | 'moderate' | 'severe' | 'extreme'
-      const category = (['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'general'].includes(sig.category || '') ? sig.category : 'general') as 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'general'
+      const category = (['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'geopolitical', 'general'].includes(sig.category || '') ? sig.category : 'general') as 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'geopolitical' | 'general'
 
       const created = await payload.create({
         collection: 'signals',
@@ -110,7 +110,8 @@ export async function POST(req: Request) {
 
 const VALID_CATEGORIES = [
   'weather', 'seismic', 'disaster', 'events', 'cyber',
-  'infrastructure', 'health', 'financial', 'environmental', 'general',
+  'infrastructure', 'health', 'financial', 'environmental',
+  'geopolitical', 'general',
 ]
 
 export async function GET(req: Request) {

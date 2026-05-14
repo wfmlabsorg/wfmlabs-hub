@@ -39,15 +39,15 @@ interface SentinelPayload {
 }
 
 /** Map Sentinel category to valid Signals category (signals don't have 'summary') */
-function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'general' {
-  const valid = ['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'general'] as const
+function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'geopolitical' | 'general' {
+  const valid = ['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'geopolitical', 'general'] as const
   if (cat && (valid as readonly string[]).includes(cat)) return cat as typeof valid[number]
   return 'general'
 }
 
 /** Map Sentinel category to valid Briefs category (briefs have 'summary' but not 'events') */
-function toBriefCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'cyber' | 'health' | 'infrastructure' | 'financial' | 'environmental' | 'summary' | 'general' {
-  const valid = ['weather', 'seismic', 'disaster', 'cyber', 'health', 'infrastructure', 'financial', 'environmental', 'summary', 'general'] as const
+function toBriefCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'cyber' | 'health' | 'infrastructure' | 'financial' | 'environmental' | 'geopolitical' | 'summary' | 'general' {
+  const valid = ['weather', 'seismic', 'disaster', 'cyber', 'health', 'infrastructure', 'financial', 'environmental', 'geopolitical', 'summary', 'general'] as const
   if (cat && (valid as readonly string[]).includes(cat)) return cat as typeof valid[number]
   if (cat === 'events') return 'general'
   return 'general'
