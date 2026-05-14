@@ -148,17 +148,24 @@
 
   function fetchAll() {
     Promise.all([
-      // Environmental events from all regions (includes open_meteo_aq, firms, eonet wildfires)
-      fetch(API + '/api/ovix/region-events?region=north-america&hours=48&domain=environmental&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Direct events table query — always has data regardless of spatial mapping
+      fetch(API + '/api/events?domain=environmental&hours=24&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[], rows:[]};}).catch(function(){return{events:[], rows:[]};}),
+      // Spatial region events (may have additional spatially-matched events)
+      fetch(API + '/api/ovix/region-events?region=north-america&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
       fetch(API + '/api/ovix/region-events?region=emea&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
       fetch(API + '/api/ovix/region-events?region=apac&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      fetch(API + '/api/ovix/region-events?region=south-america&hours=48&domain=environmental&limit=30', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      // Also grab disaster domain for wildfires (EONET fires are categorized as disaster)
+      // Disaster domain — grab wildfires/fires
       fetch(API + '/api/events?domain=disaster&hours=48&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[], rows:[]};}).catch(function(){return{events:[], rows:[]};})
     ]).then(function(results) {
       var all = [], seen = {};
-      // Environmental events
-      results.slice(0, 4).forEach(function(d) {
+      // Direct environmental events (primary source)
+      var directData = results[0];
+      (directData.events || directData.rows || []).forEach(function(e) {
+        var key = e.id || e.source_id || e.title;
+        if (!seen[key]) { seen[key] = true; all.push(e); }
+      });
+      // Spatial region events (supplement)
+      results.slice(1, 4).forEach(function(d) {
         (d.events || []).forEach(function(e) {
           var key = e.id || e.title;
           if (!seen[key]) { seen[key] = true; all.push(e); }
@@ -166,8 +173,7 @@
       });
       // Disaster events — only grab wildfires/fires
       var disasterData = results[4];
-      var disasters = disasterData.events || disasterData.rows || [];
-      disasters.forEach(function(e) {
+      (disasterData.events || disasterData.rows || []).forEach(function(e) {
         var title = (e.title || '').toLowerCase();
         if (title.indexOf('fire') >= 0 || title.indexOf('wildfire') >= 0 || title.indexOf('burn') >= 0 || title.indexOf('blaze') >= 0) {
           var key = e.id || e.title;
