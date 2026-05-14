@@ -614,12 +614,13 @@
       var sevColor = sev >= 8 ? 'var(--accent-red)' : sev >= 6 ? 'var(--accent-orange)' : sev >= 4 ? 'var(--accent-yellow)' : 'var(--accent-green)';
       var traj = TRAJ_STYLE[s.trajectory] || TRAJ_STYLE.steady;
       var regions = s.affected_regions || '';
-      if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}]/g, '').replace(/"/g,'');
+      if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}"]/g, '');
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
       var hCount = s.headline_count || 0;
       var sCount = s.source_count || 0;
+      var velocity = parseFloat(s.velocity) || 0;
 
-      return '<div class="card">' +
+      return '<div class="card" onclick="this.classList.toggle(\'expanded\')">' +
         '<div class="card-row">' +
           '<span class="severity-dot" style="background:' + accentColor + '"></span>' +
           '<span class="card-title">' + esc(s.title) + '</span>' +
@@ -627,14 +628,26 @@
         '</div>' +
         '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
           '<span style="font-size:10px;font-weight:700;color:' + traj.color + ';letter-spacing:0.5px;">' + traj.icon + ' ' + traj.label + '</span>' +
-          (parseFloat(s.velocity) > 1 ? '<span style="font-size:9px;color:var(--accent-red);">FAST-MOVING</span>' : '') +
+          (velocity > 1 ? '<span style="font-size:9px;color:var(--accent-red);font-weight:600;">FAST-MOVING</span>' : '') +
         '</div>' +
-        '<div class="card-desc">' + esc(s.summary || '') + '</div>' +
         '<div class="card-meta">' +
-          '<span>' + hCount + ' headlines</span>' +
-          '<span>&middot; ' + sCount + ' sources</span>' +
+          '<span>' + hCount + ' headlines &middot; ' + sCount + ' sources</span>' +
           (regions ? '<span>&middot; ' + esc(regions) + '</span>' : '') +
           '<span>&middot; ' + timeSince(s.first_seen) + '</span>' +
+          '<span class="card-expand" onclick="event.stopPropagation()">Details</span>' +
+        '</div>' +
+        '<div class="card-details">' +
+          '<div style="font-size:11px;line-height:1.5;margin-bottom:8px;">' + esc(s.summary || '') + '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:9px;color:var(--text-dim);">' +
+            '<span>Severity: <strong style="color:' + sevColor + '">' + sev + '/10</strong></span>' +
+            '<span>Trajectory: <strong style="color:' + traj.color + '">' + (s.trajectory || 'steady') + '</strong></span>' +
+            '<span>Velocity: ' + velocity.toFixed(1) + ' headlines/hr</span>' +
+            '<span>Headlines: ' + hCount + '</span>' +
+            '<span>Sources: ' + sCount + '</span>' +
+            (regions ? '<span>Regions: ' + esc(regions) + '</span>' : '') +
+            (s.first_seen ? '<span>First seen: ' + timeSince(s.first_seen) + '</span>' : '') +
+            (s.last_updated ? '<span>Last update: ' + timeSince(s.last_updated) + '</span>' : '') +
+          '</div>' +
         '</div>' +
       '</div>';
     }).join('');
