@@ -88,8 +88,8 @@ export function GlobalNav() {
               <a
                 key={link.href}
                 href={link.href}
-                target={link.newTab ? '_blank' : undefined}
-                rel={link.newTab ? 'noopener' : undefined}
+                target={link.href === '/roc' ? '_blank' : undefined}
+                rel={link.href === '/roc' ? 'noopener' : undefined}
                 style={{
                   padding: '0.375rem 0.75rem',
                   fontSize: '0.875rem',
@@ -170,8 +170,8 @@ export function GlobalNav() {
               <a
                 key={link.href}
                 href={link.href}
-                target={link.newTab ? '_blank' : undefined}
-                rel={link.newTab ? 'noopener' : undefined}
+                target={link.href === '/roc' ? '_blank' : undefined}
+                rel={link.href === '/roc' ? 'noopener' : undefined}
                 style={{
                   display: 'block',
                   padding: '0.5rem 0',
