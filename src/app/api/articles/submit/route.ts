@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       data: {
         title: data.title.trim(),
         slug,
-        category: data.category,
+        category: data.category as 'think-tank' | 'topic-surface' | 'wiki-highlight' | 'research-finding' | 'opinion' | 'tutorial' | 'industry-analysis',
         excerpt: data.excerpt?.trim() || undefined,
         body: markdownToLexical(data.body),
         primaryContributor: member.id,
