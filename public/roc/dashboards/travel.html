@@ -380,7 +380,7 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?hours=24&severity=5&limit=200';
+  var API = 'https://ovix-api.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -691,54 +691,37 @@
 
   // --- Fetch & Process ---
   function fetchData() {
-    fetch(API_URL)
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
+    Promise.all([
+      // Severe weather (NWS, MeteoAlarm — severity >= 7 = actual warnings)
+      fetch(API + '/api/events?domain=weather&hours=24&severity=7&limit=30').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Infrastructure disruptions (power outages, internet)
+      fetch(API + '/api/events?domain=infrastructure&hours=24&severity=5&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Active disasters
+      fetch(API + '/api/events?domain=disaster&hours=48&severity=5&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Health travel advisories
+      fetch(API + '/api/events?domain=health&hours=48&severity=7&limit=10').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+    ]).then(function(results) {
+      var weatherEvents = results[0].events || [];
+      var infraEvents = results[1].events || [];
+      var disasterEvents = results[2].events || [];
+      var healthEvents = results[3].events || [];
 
-        // Classify all events
-        var weatherEvents = [];
-        var infraEvents = [];
-        var disasterEvents = [];
-        var healthEvents = [];
+      // Non-weather events go to column 2
+      var travelAlerts = infraEvents.concat(disasterEvents).concat(healthEvents);
+      var allEvents = weatherEvents.concat(travelAlerts);
 
-        events.forEach(function(e) {
-          var cls = classifyEvent(e);
-          switch (cls) {
-            case 'weather': weatherEvents.push(e); break;
-            case 'infrastructure': infraEvents.push(e); break;
-            case 'disaster': disasterEvents.push(e); break;
-            case 'health': healthEvents.push(e); break;
-          }
-        });
+      var score = computeTravelIndex(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents);
 
-        // Non-weather events go to column 2
-        var travelAlerts = infraEvents.concat(disasterEvents).concat(healthEvents);
-
-        var score = computeTravelIndex(weatherEvents, infraEvents, disasterEvents, healthEvents, events);
-
-        renderWeatherDisruptions(weatherEvents);
-        renderTravelAlerts(travelAlerts);
-        drawGauge(score);
-        updateBanner(weatherEvents, infraEvents, disasterEvents, healthEvents, events, score);
-      })
-      .catch(function(err) {
-        console.error('Travel fetch error:', err);
-        ['weather-list', 'alerts-list'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el.querySelector('.status-msg')) {
-            el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
-          }
-        });
-        drawGauge(10);
-        var label = document.getElementById('gauge-label');
-        label.textContent = 'NORMAL';
-        label.style.color = 'var(--accent-green)';
-      });
+      renderWeatherDisruptions(weatherEvents);
+      renderTravelAlerts(travelAlerts);
+      drawGauge(score);
+      updateBanner(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents, score);
+    }).catch(function(err) {
+      console.error('Travel fetch error:', err);
+      drawGauge(10);
+      var label = document.getElementById('gauge-label');
+      if (label) { label.textContent = 'NORMAL'; label.style.color = 'var(--accent-green)'; }
+    });
   }
 
   // Initial draw (baseline gauge at 10 = OVIX 1.0)
