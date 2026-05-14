@@ -82,6 +82,7 @@ export interface Config {
     'asset-contributions': AssetContribution;
     reactions: Reaction;
     signals: Signal;
+    docs: Doc;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -104,6 +105,7 @@ export interface Config {
     'asset-contributions': AssetContributionsSelect<false> | AssetContributionsSelect<true>;
     reactions: ReactionsSelect<false> | ReactionsSelect<true>;
     signals: SignalsSelect<false> | SignalsSelect<true>;
+    docs: DocsSelect<false> | DocsSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
@@ -1367,6 +1369,57 @@ export interface Signal {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "docs".
+ */
+export interface Doc {
+  id: number;
+  type: 'architecture' | 'section' | 'stream' | 'decision' | 'agent';
+  /**
+   * Parent section doc (for type=stream or type=decision)
+   */
+  section?: (number | null) | Doc;
+  status: 'draft' | 'active' | 'completed' | 'archived';
+  /**
+   * Matches stream spec ID (for type=stream)
+   */
+  streamId?: string | null;
+  title: string;
+  body?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Other docs this depends on
+   */
+  dependencies?: (number | Doc)[] | null;
+  /**
+   * CONDUCTOR tmux session working this stream (for type=stream, in-flight)
+   */
+  conductorSession?: string | null;
+  /**
+   * Last heartbeat from build child or FOREMAN sync
+   */
+  lastSyncedAt?: string | null;
+  /**
+   * Who created this — Ted, a build child, or an agent
+   */
+  createdBy?: (number | null) | Member;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
@@ -1448,6 +1501,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'signals';
         value: number | Signal;
+      } | null)
+    | ({
+        relationTo: 'docs';
+        value: number | Doc;
       } | null);
   globalSlug?: string | null;
   user: {
@@ -1938,6 +1995,24 @@ export interface SignalsSelect<T extends boolean = true> {
   author?: T;
   sourceUrl?: T;
   metadata?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "docs_select".
+ */
+export interface DocsSelect<T extends boolean = true> {
+  type?: T;
+  section?: T;
+  status?: T;
+  streamId?: T;
+  title?: T;
+  body?: T;
+  dependencies?: T;
+  conductorSession?: T;
+  lastSyncedAt?: T;
+  createdBy?: T;
   updatedAt?: T;
   createdAt?: T;
 }
