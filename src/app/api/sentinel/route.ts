@@ -29,6 +29,7 @@ interface SentinelPayload {
     | 'health'
     | 'financial'
     | 'environmental'
+    | 'geopolitical'
     | 'summary'
     | 'general'
   regionId?: string
