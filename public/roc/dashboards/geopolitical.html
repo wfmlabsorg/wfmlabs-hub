@@ -380,7 +380,7 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?hours=168&limit=200';
+  var API = 'https://ovix-api.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -673,44 +673,51 @@
 
   // --- Fetch & Process ---
   function fetchData() {
-    fetch(API_URL)
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
-
-        // Filter for geopolitically relevant events
-        var allRelevant = events.filter(isGeopoliticalRelevant);
-
-        // Split into columns
-        var govtEvents = allRelevant.filter(isGovernmentAction);
-        var highSevEvents = allRelevant.filter(function(e) {
-          return (parseFloat(e.severity) || 0) >= 8 && !isGovernmentAction(e) && e.domain !== 'weather' && e.domain !== 'seismic';
+    // Targeted queries for geopolitically relevant sources
+    Promise.all([
+      // Internet outages (IODA) — often politically motivated
+      fetch(API + '/api/events?source=ioda&hours=168&limit=50').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // Internet shutdowns (Cloudflare) — government censorship
+      fetch(API + '/api/events?source=cloudflare&hours=168&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // High-severity cyber events (state-sponsored, critical CVEs)
+      fetch(API + '/api/events?domain=cyber&hours=168&severity=7&limit=30').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // High-severity health events (pandemics, outbreaks affecting regions)
+      fetch(API + '/api/events?domain=health&hours=168&severity=7&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // High-severity disaster events (humanitarian crises)
+      fetch(API + '/api/events?domain=disaster&hours=168&severity=7&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+      // GDELT news events (geopolitical tone)
+      fetch(API + '/api/events?source=gdelt&hours=168&limit=30').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
+    ]).then(function(results) {
+      var all = [], seen = {};
+      results.forEach(function(d) {
+        (d.events || []).forEach(function(e) {
+          var key = e.id || e.source_id || e.title;
+          if (!seen[key]) { seen[key] = true; all.push(e); }
         });
-
-        var score = computeGeopoliticalIndex(govtEvents, highSevEvents, allRelevant);
-
-        renderGovernmentActions(govtEvents);
-        renderHighSeverity(highSevEvents);
-        drawGauge(score);
-        updateBanner(govtEvents, highSevEvents, allRelevant, score);
-      })
-      .catch(function(err) {
-        console.error('Geopolitical fetch error:', err);
-        ['govt-list', 'severity-list'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el.querySelector('.status-msg')) {
-            el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
-          }
-        });
-        drawGauge(10);
-        var label = document.getElementById('gauge-label');
-        label.textContent = 'NORMAL';
-        label.style.color = 'var(--accent-green)';
       });
+
+      // Filter for geopolitically relevant events
+      var allRelevant = all.filter(isGeopoliticalRelevant);
+
+      // Split into columns
+      var govtEvents = allRelevant.filter(isGovernmentAction);
+      var highSevEvents = allRelevant.filter(function(e) {
+        return (parseFloat(e.severity) || 0) >= 7 && !isGovernmentAction(e);
+      });
+
+      var score = computeGeopoliticalIndex(govtEvents, highSevEvents, allRelevant);
+
+      renderGovernmentActions(govtEvents);
+      renderHighSeverity(highSevEvents);
+      drawGauge(score);
+      updateBanner(govtEvents, highSevEvents, allRelevant, score);
+    }).catch(function(err) {
+      console.error('Geopolitical fetch error:', err);
+      drawGauge(10);
+      var label = document.getElementById('gauge-label');
+      label.textContent = 'NORMAL';
+      label.style.color = 'var(--accent-green)';
+    });
   }
 
   // Initial draw (baseline gauge at 10 = OVIX 1.0)
