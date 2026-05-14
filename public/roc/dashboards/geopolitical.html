@@ -453,17 +453,18 @@
       else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(s);
     });
 
-    // Score per group: weighted by severity + trajectory escalation bonus
+    // Score per group: max severity × trajectory bonus, scaled to 0-100
+    // In a high-risk environment with sev 8-9 stories, this should produce 70-90
     function groupScore(arr) {
       if (!arr.length) return 0;
-      var total = 0;
-      arr.forEach(function(s) {
-        var sev = parseInt(s.severity) || 0;
-        var trajBonus = s.trajectory === 'escalating' ? 1.3 : s.trajectory === 'peak' ? 1.2 : s.trajectory === 'emerging' ? 1.1 : 1.0;
-        total += sev * trajBonus;
-      });
-      // Average severity × trajectory, scaled to 0-100
-      return Math.min(100, (total / arr.length) * 10);
+      // Use max severity in the group (the worst story drives the score)
+      var maxSev = Math.max.apply(null, arr.map(function(s) { return parseInt(s.severity) || 0; }));
+      // Trajectory bonus from the highest-severity story
+      var topStory = arr.reduce(function(best, s) { return (parseInt(s.severity)||0) > (parseInt(best.severity)||0) ? s : best; });
+      var trajBonus = topStory.trajectory === 'escalating' ? 1.15 : topStory.trajectory === 'peak' ? 1.1 : 1.0;
+      // Volume factor: more stories = higher risk (capped)
+      var volumeFactor = Math.min(1.3, 1 + (arr.length - 1) * 0.05);
+      return Math.min(100, maxSev * 10 * trajBonus * volumeFactor);
     }
 
     var conflictScore = groupScore(groups.conflict);
@@ -484,18 +485,18 @@
     score = Math.min(score, 100);
 
     // Baseline when no data
-    if (allEvents.length === 0) {
+    if (!stories.length) {
       score = 10;
       factors = [
-        { name: 'Govt Shutdowns', value: 0, weight: 40 },
-        { name: 'Internet Disruptions', value: 0, weight: 25 },
-        { name: 'High-Sev Events', value: 0, weight: 20 },
-        { name: 'Country Spread', value: 0, weight: 15 }
+        { name: 'Conflict', value: 0, weight: 35 },
+        { name: 'Trade & Econ', value: 0, weight: 25 },
+        { name: 'Labor', value: 0, weight: 20 },
+        { name: 'Reg & Sanctions', value: 0, weight: 20 }
       ];
     }
 
     renderFactors(factors, score);
-    return score;
+    return { score: score, factors: factors };
   }
 
   function renderFactors(factors, totalScore) {
@@ -611,43 +612,41 @@
       return (parseInt(b.severity)||0) - (parseInt(a.severity)||0);
     }).map(function(s) {
       var sev = parseInt(s.severity) || 0;
-      var sevColor = sev >= 8 ? 'var(--accent-red)' : sev >= 6 ? 'var(--accent-orange)' : sev >= 4 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      var sevColor = sev >= 8 ? '#ef4444' : sev >= 6 ? '#f97316' : sev >= 4 ? '#eab308' : '#22c55e';
       var traj = TRAJ_STYLE[s.trajectory] || TRAJ_STYLE.steady;
       var regions = s.affected_regions || '';
       if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}"]/g, '');
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
       var hCount = s.headline_count || 0;
       var sCount = s.source_count || 0;
-      var velocity = parseFloat(s.velocity) || 0;
 
       return '<div class="card" onclick="this.classList.toggle(\'expanded\')">' +
+        // Row 1: Title + severity badge
         '<div class="card-row">' +
-          '<span class="severity-dot" style="background:' + accentColor + '"></span>' +
+          '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
           '<span class="card-title">' + esc(s.title) + '</span>' +
           '<span class="severity-badge" style="background:' + sevColor + ';">' + sev + '</span>' +
         '</div>' +
-        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">' +
-          '<span style="font-size:10px;font-weight:700;color:' + traj.color + ';letter-spacing:0.5px;">' + traj.icon + ' ' + traj.label + '</span>' +
-          (velocity > 1 ? '<span style="font-size:9px;color:var(--accent-red);font-weight:600;">FAST-MOVING</span>' : '') +
-        '</div>' +
+        // Row 2: Trajectory + meta
         '<div class="card-meta">' +
-          '<span>' + hCount + ' headlines &middot; ' + sCount + ' sources</span>' +
-          (regions ? '<span>&middot; ' + esc(regions) + '</span>' : '') +
-          '<span>&middot; ' + timeSince(s.first_seen) + '</span>' +
+          '<span style="font-weight:700;color:' + traj.color + ';">' + traj.icon + ' ' + traj.label + '</span>' +
+          (regions ? '<span>' + esc(regions) + '</span>' : '') +
+          '<span>' + hCount + ' sources</span>' +
+          '<span>' + timeSince(s.first_seen) + '</span>' +
           '<span class="card-expand" onclick="event.stopPropagation()">Details</span>' +
         '</div>' +
+        // Expandable details
         '<div class="card-details">' +
-          '<div style="font-size:11px;line-height:1.5;margin-bottom:8px;">' + esc(s.summary || '') + '</div>' +
-          '<div style="display:flex;flex-wrap:wrap;gap:8px;font-size:9px;color:var(--text-dim);">' +
-            '<span>Severity: <strong style="color:' + sevColor + '">' + sev + '/10</strong></span>' +
-            '<span>Trajectory: <strong style="color:' + traj.color + '">' + (s.trajectory || 'steady') + '</strong></span>' +
-            '<span>Velocity: ' + velocity.toFixed(1) + ' headlines/hr</span>' +
-            '<span>Headlines: ' + hCount + '</span>' +
-            '<span>Sources: ' + sCount + '</span>' +
-            (regions ? '<span>Regions: ' + esc(regions) + '</span>' : '') +
-            (s.first_seen ? '<span>First seen: ' + timeSince(s.first_seen) + '</span>' : '') +
-            (s.last_updated ? '<span>Last update: ' + timeSince(s.last_updated) + '</span>' : '') +
+          '<div style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin-bottom:8px;">' + esc(s.summary || '') + '</div>' +
+          '<div style="font-size:9px;color:var(--text-dim);line-height:1.8;">' +
+            'Severity <strong style="color:' + sevColor + '">' + sev + '/10</strong>' +
+            ' &middot; Trajectory <strong style="color:' + traj.color + '">' + (s.trajectory || 'steady') + '</strong>' +
+            ' &middot; ' + hCount + ' headlines from ' + sCount + ' sources' +
+            (regions ? ' &middot; Regions: ' + esc(regions) : '') +
+            (s.first_seen ? ' &middot; First: ' + timeSince(s.first_seen) : '') +
+            (s.last_updated ? ' &middot; Updated: ' + timeSince(s.last_updated) : '') +
           '</div>' +
+          '<div style="margin-top:6px;font-size:9px;"><span class="card-link" style="color:var(--accent-cyan);cursor:pointer;" onclick="event.stopPropagation()">Source: Google News Intelligence</span></div>' +
         '</div>' +
       '</div>';
     }).join('');
