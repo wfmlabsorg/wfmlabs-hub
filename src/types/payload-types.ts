@@ -71,6 +71,7 @@ export interface Config {
     topics: Topic;
     papers: Paper;
     articles: Article;
+    briefs: Brief;
     tools: Tool;
     'newsletter-issues': NewsletterIssue;
     'wiki-entries': WikiEntry;
@@ -92,6 +93,7 @@ export interface Config {
     topics: TopicsSelect<false> | TopicsSelect<true>;
     papers: PapersSelect<false> | PapersSelect<true>;
     articles: ArticlesSelect<false> | ArticlesSelect<true>;
+    briefs: BriefsSelect<false> | BriefsSelect<true>;
     tools: ToolsSelect<false> | ToolsSelect<true>;
     'newsletter-issues': NewsletterIssuesSelect<false> | NewsletterIssuesSelect<true>;
     'wiki-entries': WikiEntriesSelect<false> | WikiEntriesSelect<true>;
@@ -158,6 +160,18 @@ export interface Member {
    */
   role: 'admin' | 'moderator' | 'member';
   /**
+   * Membership tier — determines content access and features available
+   */
+  membershipTier?: ('free' | 'trial' | 'practitioner' | 'practitioner-plus') | null;
+  /**
+   * When trial period ends (only relevant for trial tier)
+   */
+  trialExpiresAt?: string | null;
+  /**
+   * When they became a paid member
+   */
+  memberSince?: string | null;
+  /**
    * Primary industry you work in
    */
   industry?:
@@ -218,16 +232,63 @@ export interface Member {
    */
   expertise?: (number | Topic)[] | null;
   /**
-   * Agent-specific configuration
+   * Agent profile and configuration — agents can self-update these fields via API
    */
   agentMetadata?: {
+    /**
+     * One-line description shown on profile card
+     */
     tagline?: string | null;
     /**
-     * e.g., Research Librarian
+     * e.g., Community Knowledge Agent, Incident Analyst
      */
     agentRole?: string | null;
+    specialization?:
+      | (
+          | 'knowledge-scout'
+          | 'incident-analyst'
+          | 'tool-builder'
+          | 'content-curator'
+          | 'research-assistant'
+          | 'operations-monitor'
+          | 'other'
+        )
+      | null;
+    /**
+     * How often this agent runs (e.g., 3x daily, hourly, on-demand)
+     */
+    cadence?: string | null;
+    capabilities?: ('post' | 'comment' | 'edit-own' | 'signal' | 'read-wiki' | 'write-wiki')[] | null;
+    /**
+     * AI model used (e.g., claude-sonnet-4-20250514)
+     */
+    model?: string | null;
+    /**
+     * What data sources this agent reads from
+     */
+    dataSources?: string | null;
+    /**
+     * Agent personality description — how it communicates
+     */
+    personality?: string | null;
+    /**
+     * Last time this agent ran
+     */
+    lastRunAt?: string | null;
+    totalPosts?: number | null;
+    totalComments?: number | null;
+    /**
+     * MCP server URL (if applicable)
+     */
     mcpEndpoint?: string | null;
+    /**
+     * Agent-to-Agent card URL
+     */
     a2aCardUrl?: string | null;
+    /**
+     * Cloudflare Worker URL for this agent
+     */
+    workerUrl?: string | null;
   };
   /**
    * OVIX Contributor Network — optional workforce and geography data for incident correlation
@@ -298,6 +359,16 @@ export interface Member {
                 | 'field-service'
                 | 'other'
               )
+            | null;
+          /**
+           * In-Office, Hybrid, or Virtual/Remote
+           */
+          workModel?: ('in-office' | 'hybrid' | 'virtual') | null;
+          /**
+           * How geographically spread is this virtual workforce?
+           */
+          geoSpread?:
+            | ('single-city' | 'single-state' | 'regional-us' | 'national-us' | 'multi-country' | 'global')
             | null;
           id?: string | null;
         }[]
@@ -515,7 +586,20 @@ export interface Paper {
    * Publication name (e.g., "Harvard Business Review", "Operations Research")
    */
   sourceName?: string | null;
-  category?: ('queuing-theory' | 'ai-machine-learning' | 'operations-management' | 'workforce-management' | 'customer-experience' | 'analytics-forecasting' | 'process-optimization' | 'technology' | 'economics-finance' | 'other') | null;
+  category?:
+    | (
+        | 'queuing-theory'
+        | 'ai-machine-learning'
+        | 'operations-management'
+        | 'workforce-management'
+        | 'customer-experience'
+        | 'analytics-forecasting'
+        | 'process-optimization'
+        | 'technology'
+        | 'economics-finance'
+        | 'other'
+      )
+    | null;
   authors?:
     | {
         name: string;
@@ -584,6 +668,17 @@ export interface Paper {
 export interface Article {
   id: number;
   title: string;
+  category?:
+    | (
+        | 'think-tank'
+        | 'topic-surface'
+        | 'wiki-highlight'
+        | 'research-finding'
+        | 'opinion'
+        | 'tutorial'
+        | 'industry-analysis'
+      )
+    | null;
   /**
    * URL-safe identifier (auto-generated or manual)
    */
@@ -632,6 +727,94 @@ export interface Article {
     [k: string]: unknown;
   };
   excerpt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "briefs".
+ */
+export interface Brief {
+  id: number;
+  title: string;
+  slug: string;
+  /**
+   * OVIX domain this brief relates to
+   */
+  category:
+    | 'weather'
+    | 'seismic'
+    | 'disaster'
+    | 'cyber'
+    | 'health'
+    | 'infrastructure'
+    | 'financial'
+    | 'environmental'
+    | 'geopolitical'
+    | 'summary'
+    | 'general';
+  briefType: 'incident' | 'summary' | 'analysis';
+  /**
+   * OVIX severity score that triggered this brief
+   */
+  severity?: number | null;
+  severityLabel?: ('info' | 'moderate' | 'severe' | 'extreme') | null;
+  body: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  };
+  /**
+   * Short summary for cards and previews
+   */
+  excerpt?: string | null;
+  /**
+   * OVIX region ID
+   */
+  regionId?: string | null;
+  /**
+   * Human-readable region name
+   */
+  regionName?: string | null;
+  /**
+   * Agent that generated this brief
+   */
+  agent: number | Member;
+  /**
+   * Hub signal ID that triggered this brief
+   */
+  relatedSignal?: number | null;
+  sourceUrl?: string | null;
+  status?: ('published' | 'archived') | null;
+  publishedAt?: string | null;
+  topics?: (number | Topic)[] | null;
+  /**
+   * Additional event data (coordinates, source details)
+   */
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    viewCount?: number | null;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -836,6 +1019,10 @@ export interface WikiEntry {
             value: number | Article;
           }
         | {
+            relationTo: 'briefs';
+            value: number | Brief;
+          }
+        | {
             relationTo: 'tools';
             value: number | Tool;
           }
@@ -866,6 +1053,10 @@ export interface Discussion {
     | {
         relationTo: 'articles';
         value: number | Article;
+      }
+    | {
+        relationTo: 'briefs';
+        value: number | Brief;
       }
     | {
         relationTo: 'tools';
@@ -917,6 +1108,10 @@ export interface AssetVersion {
         value: number | Article;
       }
     | {
+        relationTo: 'briefs';
+        value: number | Brief;
+      }
+    | {
         relationTo: 'tools';
         value: number | Tool;
       }
@@ -960,6 +1155,10 @@ export interface AssetRelationship {
         value: number | Article;
       }
     | {
+        relationTo: 'briefs';
+        value: number | Brief;
+      }
+    | {
         relationTo: 'tools';
         value: number | Tool;
       }
@@ -979,6 +1178,10 @@ export interface AssetRelationship {
     | {
         relationTo: 'articles';
         value: number | Article;
+      }
+    | {
+        relationTo: 'briefs';
+        value: number | Brief;
       }
     | {
         relationTo: 'tools';
@@ -1024,6 +1227,10 @@ export interface AssetContribution {
         value: number | Article;
       }
     | {
+        relationTo: 'briefs';
+        value: number | Brief;
+      }
+    | {
         relationTo: 'tools';
         value: number | Tool;
       }
@@ -1056,6 +1263,10 @@ export interface Reaction {
     | {
         relationTo: 'articles';
         value: number | Article;
+      }
+    | {
+        relationTo: 'briefs';
+        value: number | Brief;
       }
     | {
         relationTo: 'tools';
@@ -1109,7 +1320,19 @@ export interface Signal {
    * OVIX category this signal relates to
    */
   category?:
-    | ('weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'general')
+    | (
+        | 'weather'
+        | 'seismic'
+        | 'disaster'
+        | 'events'
+        | 'cyber'
+        | 'infrastructure'
+        | 'health'
+        | 'financial'
+        | 'environmental'
+        | 'geopolitical'
+        | 'general'
+      )
     | null;
   /**
    * OVIX region ID (e.g., us-southeast, philippines)
@@ -1181,6 +1404,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'articles';
         value: number | Article;
+      } | null)
+    | ({
+        relationTo: 'briefs';
+        value: number | Brief;
       } | null)
     | ({
         relationTo: 'tools';
@@ -1273,6 +1500,9 @@ export interface MembersSelect<T extends boolean = true> {
   username?: T;
   type?: T;
   role?: T;
+  membershipTier?: T;
+  trialExpiresAt?: T;
+  memberSince?: T;
   industry?: T;
   workforceTypes?: T;
   bio?: T;
@@ -1293,8 +1523,18 @@ export interface MembersSelect<T extends boolean = true> {
     | {
         tagline?: T;
         agentRole?: T;
+        specialization?: T;
+        cadence?: T;
+        capabilities?: T;
+        model?: T;
+        dataSources?: T;
+        personality?: T;
+        lastRunAt?: T;
+        totalPosts?: T;
+        totalComments?: T;
         mcpEndpoint?: T;
         a2aCardUrl?: T;
+        workerUrl?: T;
       };
   ovixProfile?:
     | T
@@ -1311,6 +1551,8 @@ export interface MembersSelect<T extends boolean = true> {
               headcount?: T;
               sourcing?: T;
               workforceType?: T;
+              workModel?: T;
+              geoSpread?: T;
               id?: T;
             };
         customerGeography?:
@@ -1419,6 +1661,7 @@ export interface PapersSelect<T extends boolean = true> {
  */
 export interface ArticlesSelect<T extends boolean = true> {
   title?: T;
+  category?: T;
   slug?: T;
   primaryContributor?: T;
   description?: T;
@@ -1443,6 +1686,38 @@ export interface ArticlesSelect<T extends boolean = true> {
   publishDate?: T;
   body?: T;
   excerpt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "briefs_select".
+ */
+export interface BriefsSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  category?: T;
+  briefType?: T;
+  severity?: T;
+  severityLabel?: T;
+  body?: T;
+  excerpt?: T;
+  regionId?: T;
+  regionName?: T;
+  agent?: T;
+  relatedSignal?: T;
+  sourceUrl?: T;
+  status?: T;
+  publishedAt?: T;
+  topics?: T;
+  metadata?: T;
+  stats?:
+    | T
+    | {
+        discussionCount?: T;
+        reactionCount?: T;
+        viewCount?: T;
+      };
   updatedAt?: T;
   createdAt?: T;
 }
