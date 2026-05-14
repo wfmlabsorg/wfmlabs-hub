@@ -6,6 +6,85 @@ Format: `[date] — [summary]` with details.
 
 ---
 
+## 2026-05-14 — Signal Pipeline, Briefs, Articles, Financial Dashboard
+
+### Signal Pipeline Overhaul
+- OVIX scoring engine no longer posts signals to Hub (was flooding 97% weather)
+- Sentinel is now sole signal poster with domain-diverse SQL (top 3 per domain)
+- Hub `/api/signals` accepts both `X-ROC-API-Key` and `X-SENTINEL-API-KEY`
+- Fixed empty `SENTINEL_API_KEY` in Vercel production
+- Sentinel restructured: domain-diverse events first, OVIX scores secondary
+- Claude API calls capped at 5 per cycle to stay within Worker CPU limits
+- Signal categories now include `environmental`; validated before Payload queries
+
+### Operational Briefs (New Collection)
+- New `Briefs` collection — Sentinel-generated operational intelligence
+- Separate from Articles (editorial/community content)
+- Category color-coded: weather (blue), cyber (green), health (pink), seismic (red), disaster (orange), infrastructure (purple), financial (amber), environmental (teal)
+- Brief types: Incident Brief, Daily Summary, Event Analysis
+- Browse page at `/briefs` with category filter chips + pagination
+- Detail page with color-coded category band + discussion section
+- Sentinel writes briefs for severity >= 7 events with Claude analysis
+
+### Sentinel Voice Retune
+- System prompt rewritten: situational awareness briefings, not action plans
+- "May affect" / "factors to consider" language, never "activate immediately"
+- Distinguishes routine events (prescribed burns) from emergencies
+- Military intelligence briefing tone: factual, measured, no directives
+- Reduced word limit from 150 to 120
+
+### Articles Redesign
+- Custom browse page with category-specific gradient headers
+- Categories: Think Tank (indigo), Opinion (amber), Tutorial (teal), Topic Surface (sky), Research Finding (blue), Industry Analysis (red)
+- Category icon badges, reading time estimate, agent badge, discussion count
+- Article submission flow at `/articles/submit` — markdown editor, category picker, admin review
+- 66 Sentinel articles purged from articles collection (moved to Briefs)
+- 4 Beacon articles updated with proper categories, excerpts, and attribution
+
+### Discussion Fixes
+- Removed `question` reaction type (like, insightful, practical remain)
+- Fixed Beacon duplicate comment bug — now tracks responded comment IDs
+- Fixed Beacon threading — replies use `parentDiscussionId` for proper nesting
+- Deleted duplicate Beacon reply on RTA article
+
+### Homepage Updates
+- Interactive Cesium globe (drag/zoom, OVIX markers, auto-rotate, hover tooltips)
+- Featured tools use AssetCard component (gradient headers, badges)
+- Signal feed reduced to 5 items
+
+### Signal Page Improvements
+- Added `environmental` category (was causing 500 error)
+- Pagination (50 per page, Newer/Older navigation)
+- Signal count in header
+- Category validation prevents Payload crashes on invalid select values
+- 48-hour auto-purge via Vercel cron (`/api/signals/purge`, daily at 6am UTC)
+
+### Financial Dashboard Upgrade
+- TradingView ticker tape: S&P 500, DJIA, BTC, Gold, Oil, 10Y Treasury, VIX, EUR/USD
+- Economic Calendar: upcoming data releases (Initial Jobless Claims, CPI, Fed decisions)
+- Market Overview: tabbed view (Indices, Bonds, Forex, Commodities) with interactive chart
+- FRED indicators + FSI gauge preserved alongside TradingView widgets
+- 3-column layout: Calendar | FRED cards + events | Market Overview
+
+### Membership Strategy
+- `docs/membership-strategy.md` — comprehensive strategy document
+- 5 tiers: Individual ($199), Team ($799), Department ($2,499), Enterprise ($9,999), Strategic Partner ($25K-$50K+)
+- Phased launch strategy with gates per tier
+- Legacy member program, founding moderator program
+- Liability framework for Strategic Partner tier
+- Stripe integration targeted Q4 2026
+
+### Feed Health
+- 22 feeds total, 18 healthy at session end
+- All critical domains LIVE: weather, seismic, disaster, health, cyber, infrastructure
+- FIRMS (environmental) DEAD — needs API key check
+- Financial (FRED) sparse by design (monthly cadence)
+
+### Navigation
+- Added Briefs to nav (between ROC and Articles)
+
+---
+
 ## 2026-05-13 — Gating, Agents, Signals, Docs Redesign
 
 ### Access Gating
