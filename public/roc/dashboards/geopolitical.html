@@ -316,23 +316,25 @@
     </div>
     <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
     <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
-      OVIX Geopolitical Risk Index computed from weighted factors: government shutdowns (40%),
-      internet disruptions (25%), high-severity events (20%),
-      and country spread (15%).
-      Score maps to OVIX 0-10 scale for cross-domain comparison.
+      Geopolitical Risk Index from AI-classified news headlines.
+      Categories: Conflict &amp; Instability (35%), Trade &amp; Economics (25%),
+      Labor &amp; Workforce (20%), Regulation &amp; Sanctions (20%).
+      Relevance scored 0&ndash;10 for workforce operations impact.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: IODA &middot; Cloudflare &middot; GDACS &middot; OVIX Events<br>
-      Refreshes every 5 min via OVIX API.
+      Sources: Google News (World, Business, Geopolitical) &middot; Claude Haiku classification<br>
+      RSS every 15 min &middot; Classification 3x daily.
     </div>
   </div>
 
   <div class="banner">
     <div class="banner-title">GEOPOLITICAL RISK</div>
     <div class="banner-stats">
-      <div class="stat-box"><div class="stat-value" id="govt-count">--</div><div class="stat-label">GOVT ACTIONS</div></div>
-      <div class="stat-box"><div class="stat-value" id="disruption-count">--</div><div class="stat-label">DISRUPTIONS</div></div>
-      <div class="stat-box"><div class="stat-value" id="countries-count">--</div><div class="stat-label">COUNTRIES</div></div>
+      <div class="stat-box"><div class="stat-value" id="conflict-count">--</div><div class="stat-label">CONFLICT</div></div>
+      <div class="stat-box"><div class="stat-value" id="trade-count">--</div><div class="stat-label">TRADE / ECON</div></div>
+      <div class="stat-box"><div class="stat-value" id="labor-count">--</div><div class="stat-label">LABOR</div></div>
+      <div class="stat-box"><div class="stat-value" id="reg-count">--</div><div class="stat-label">REG / SANCTION</div></div>
+      <div class="stat-box"><div class="stat-value" id="total-count">--</div><div class="stat-label">TOTAL</div></div>
     </div>
     <div class="level-badge" id="geo-level-badge">--</div>
     <div class="transport">
@@ -343,33 +345,43 @@
   </div>
 
 
-  <!-- DATA AREA (bottom-right) -->
-  <div class="data-area">
+  <!-- DATA AREA — 2x2 grid by geopolitical category -->
+  <div class="data-area" style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;padding:10px;overflow:hidden;">
 
-    <!-- COL 1: Government Actions -->
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Government Actions</span>
-          <span class="panel-count" id="govt-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="govt-list">
-          <div class="status-msg">Loading geopolitical data...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#ef4444;">Conflict &amp; Instability</span>
+        <span class="panel-count" id="conflict-panel-count">--</span>
       </div>
+      <div class="panel-body" id="conflict-list"><div class="status-msg">Loading...</div></div>
+      <div class="source-footer">Wars, protests, political crises, civil unrest</div>
     </div>
 
-    <!-- COL 2: High-Severity Global Events -->
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">High-Severity Global Events</span>
-          <span class="panel-count" id="severity-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="severity-list">
-          <div class="status-msg">Loading high-severity events...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#f59e0b;">Trade &amp; Economics</span>
+        <span class="panel-count" id="trade-panel-count">--</span>
       </div>
+      <div class="panel-body" id="trade-list"><div class="status-msg">Loading...</div></div>
+      <div class="source-footer">Tariffs, trade wars, currency crises, economic policy</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#22c55e;">Labor &amp; Workforce</span>
+        <span class="panel-count" id="labor-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="labor-list"><div class="status-msg">Loading...</div></div>
+      <div class="source-footer">Strikes, minimum wage, union activity, immigration</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#a855f7;">Regulation &amp; Sanctions</span>
+        <span class="panel-count" id="reg-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="reg-list"><div class="status-msg">Loading...</div></div>
+      <div class="source-footer">Labor law, data privacy, sanctions, compliance</div>
     </div>
 
   </div>
@@ -380,7 +392,7 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?hours=168&limit=200';
+  var NEWS_API = 'https://news-intel.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -418,67 +430,50 @@
     return 'LOW';
   }
 
-  // --- Geopolitical keywords for filtering ---
-  var GOVT_KEYWORDS = ['government', 'military', 'shutdown', 'censorship', 'political',
-    'sanction', 'coup', 'protest', 'election', 'regime', 'martial', 'blockade',
-    'embargo', 'diplomatic', 'war', 'conflict', 'invasion', 'territorial'];
+  // --- Category grouping for headlines ---
+  var CATEGORY_GROUPS = {
+    conflict: { panel: 'conflict-list', count: 'conflict-panel-count', banner: 'conflict-count', color: '#ef4444', cats: ['conflict'] },
+    trade: { panel: 'trade-list', count: 'trade-panel-count', banner: 'trade-count', color: '#f59e0b', cats: ['trade_policy', 'economics'] },
+    labor: { panel: 'labor-list', count: 'labor-panel-count', banner: 'labor-count', color: '#22c55e', cats: ['labor', 'immigration'] },
+    regulation: { panel: 'reg-list', count: 'reg-panel-count', banner: 'reg-count', color: '#a855f7', cats: ['regulation', 'sanctions'] },
+  };
 
-  function isGovernmentAction(event) {
-    // IODA events are internet outages — often politically motivated
-    if (event.source === 'ioda') return true;
-    // Cloudflare events mentioning government/military
-    if (event.source === 'cloudflare' || event.source === 'cf-radar') {
-      var text = ((event.title || '') + ' ' + (event.description || '')).toLowerCase();
-      for (var i = 0; i < GOVT_KEYWORDS.length; i++) {
-        if (text.indexOf(GOVT_KEYWORDS[i]) !== -1) return true;
-      }
-    }
-    return false;
-  }
+  // --- Geopolitical Risk Index (from classified headlines) ---
+  function computeGeopoliticalIndex(headlines) {
+    if (!headlines.length) return { score: 10, factors: [] };
 
-  function isGeopoliticalRelevant(event) {
-    var text = ((event.title || '') + ' ' + (event.description || '')).toLowerCase();
-    for (var i = 0; i < GOVT_KEYWORDS.length; i++) {
-      if (text.indexOf(GOVT_KEYWORDS[i]) !== -1) return true;
-    }
-    // IODA events (internet outages are often politically motivated)
-    if (event.source === 'ioda') return true;
-    // Cloudflare outages
-    if (event.source === 'cloudflare') return true;
-    // Only non-weather, non-seismic high severity events
-    if ((parseFloat(event.severity) || 0) >= 8 && event.domain !== 'weather' && event.domain !== 'seismic' && event.domain !== 'environmental') return true;
-    return false;
-  }
-
-  // --- Geopolitical Risk Index ---
-  function computeGeopoliticalIndex(govtEvents, highSevEvents, allEvents) {
-    var govtCount = govtEvents.length;
-    var iodaCount = allEvents.filter(function(e) { return e.source === 'ioda'; }).length;
-    var highSevCount = highSevEvents.length;
-
-    // Country spread: unique area_desc / country values
-    var countries = {};
-    allEvents.forEach(function(e) {
-      var area = e.area_desc || e.country || '';
-      if (area) countries[area] = true;
+    // Group by category
+    var groups = { conflict: [], trade: [], labor: [], regulation: [] };
+    headlines.forEach(function(h) {
+      var cat = h.category;
+      if (cat === 'conflict') groups.conflict.push(h);
+      else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(h);
+      else if (cat === 'labor' || cat === 'immigration') groups.labor.push(h);
+      else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(h);
     });
-    var uniqueCountries = Object.keys(countries).length;
 
-    // Factor scores (0-100 each)
-    var govtScore = Math.min(100, govtCount * 10);
-    var iodaScore = Math.min(100, iodaCount * 8);
-    var sevScore = Math.min(100, highSevCount * 6);
-    var spreadScore = Math.min(100, uniqueCountries * 5);
+    function groupScore(arr) {
+      if (!arr.length) return 0;
+      var avg = arr.reduce(function(s,h){ return s + (parseInt(h.relevance_score)||0); }, 0) / arr.length;
+      var max = Math.max.apply(null, arr.map(function(h){ return parseInt(h.relevance_score)||0; }));
+      // Blend: volume × avg relevance, capped at 100
+      return Math.min(100, arr.length * avg * 1.5);
+    }
+
+    var conflictScore = groupScore(groups.conflict);
+    var tradeScore = groupScore(groups.trade);
+    var laborScore = groupScore(groups.labor);
+    var regScore = groupScore(groups.regulation);
 
     var factors = [
-      { name: 'Govt Shutdowns', value: Math.round(govtScore), weight: 40 },
-      { name: 'Internet Disruptions', value: Math.round(iodaScore), weight: 25 },
-      { name: 'High-Sev Events', value: Math.round(sevScore), weight: 20 },
-      { name: 'Country Spread', value: Math.round(spreadScore), weight: 15 }
+      { name: 'Conflict', value: Math.round(conflictScore), weight: 35 },
+      { name: 'Trade & Econ', value: Math.round(tradeScore), weight: 25 },
+      { name: 'Labor', value: Math.round(laborScore), weight: 20 },
+      { name: 'Reg & Sanctions', value: Math.round(regScore), weight: 20 }
     ];
 
     var score = Math.round(
-      govtScore * 0.40 + iodaScore * 0.25 + sevScore * 0.20 + spreadScore * 0.15
+      conflictScore * 0.35 + tradeScore * 0.25 + laborScore * 0.20 + regScore * 0.20
     );
     score = Math.min(score, 100);
 
@@ -585,131 +580,96 @@
   }
 
   // --- Render ---
-  function renderGovernmentActions(events) {
-    var el = document.getElementById('govt-list');
-    document.getElementById('govt-panel-count').textContent = events.length;
-    if (!events.length) {
-      el.innerHTML = '<div class="empty-state">No government actions or internet shutdowns detected in last 7 days.<br>Monitoring IODA outages, Cloudflare disruptions, and geopolitical signals.</div>';
+  // --- Render headlines into a panel ---
+  function renderPanel(panelId, countId, headlines, accentColor, emptyMsg) {
+    var el = document.getElementById(panelId);
+    var countEl = document.getElementById(countId);
+    countEl.textContent = headlines.length;
+
+    if (!headlines.length) {
+      el.innerHTML = '<div class="empty-state">' + emptyMsg + '</div>';
       return;
     }
 
-    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
+    el.innerHTML = headlines.sort(function(a,b) {
+      return (parseInt(b.relevance_score)||0) - (parseInt(a.relevance_score)||0);
+    }).map(function(h) {
+      var rel = parseInt(h.relevance_score) || 0;
+      var relColor = rel >= 7 ? 'var(--accent-red)' : rel >= 5 ? 'var(--accent-orange)' : 'var(--accent-yellow)';
+      var regions = h.affected_regions || '';
+      if (Array.isArray(regions)) regions = regions.join(', ');
+      else if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}]/g, '');
+      var url = h.url || '';
 
-    el.innerHTML = events.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var badgeColor = sev >= 7 ? 'var(--accent-red)' : sev >= 5 ? 'var(--accent-orange)' : sev >= 3 ? 'var(--accent-yellow)' : 'var(--accent-green)';
-      var sourceLabel = (e.source || 'unknown').toUpperCase();
-      var typeLabel = e.source === 'ioda' ? 'INTERNET SHUTDOWN' : 'GOVT ACTION';
-
-      return '<div class="card">' +
+      return '<div class="card"' + (url ? ' onclick="window.open(\'' + esc(url) + '\',\'_blank\')"' : '') + '>' +
         '<div class="card-row">' +
-          '<span class="card-title">' + esc(e.title || typeLabel) + '</span>' +
-          '<span class="severity-badge" style="background:' + badgeColor + ';">' + severityLabel(sev) + '</span>' +
+          '<span class="severity-dot" style="background:' + accentColor + '"></span>' +
+          '<span class="card-title">' + esc(h.title) + '</span>' +
+          '<span class="severity-badge" style="background:' + relColor + ';">' + rel + '/10</span>' +
         '</div>' +
-        '<div class="card-row" style="margin-bottom:0;">' +
-          '<span class="source-tag">' + esc(sourceLabel) + '</span>' +
-          '<span style="font-size:9px;color:var(--text-dim);">' + esc(typeLabel) + '</span>' +
-        '</div>' +
-        (e.area_desc ? '<div class="card-area">' + esc(e.area_desc) + '</div>' : '') +
-        (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
-        '<div class="card-date">' +
-          '<span class="severity-dot" style="background:' + severityColor(sev) + '"></span>' +
-          'Severity ' + esc(e.severity) + ' &middot; ' + timeSince(e.occurred_at) +
+        (h.summary ? '<div class="card-desc">' + esc(h.summary) + '</div>' : '') +
+        '<div class="card-meta">' +
+          '<span>' + esc(h.source || '') + '</span>' +
+          (regions ? ' <span>&middot; ' + esc(regions) + '</span>' : '') +
+          ' <span>&middot; ' + timeSince(h.published_at) + '</span>' +
         '</div>' +
       '</div>';
     }).join('');
   }
 
-  function renderHighSeverity(events) {
-    var el = document.getElementById('severity-list');
-    document.getElementById('severity-panel-count').textContent = events.length;
-    if (!events.length) {
-      el.innerHTML = '<div class="empty-state">No events with severity &ge; 8 in last 7 days.<br>Monitoring all domains for critical-level events.</div>';
-      return;
-    }
-
-    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
-
-    el.innerHTML = events.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var badgeColor = sev >= 9 ? 'var(--accent-red)' : sev >= 8 ? 'var(--accent-orange)' : 'var(--accent-yellow)';
-      var sourceLabel = (e.source || 'unknown').toUpperCase();
-      var domainLabel = (e.domain || e.source || 'unknown').toUpperCase();
-
-      return '<div class="card">' +
-        '<div class="card-row">' +
-          '<span class="card-title">' + esc(e.title || 'High-Severity Event') + '</span>' +
-          '<span class="severity-badge" style="background:' + badgeColor + ';">' + sev.toFixed(1) + '</span>' +
-        '</div>' +
-        '<div class="card-row" style="margin-bottom:0;">' +
-          '<span class="source-tag">' + esc(sourceLabel) + '</span>' +
-          '<span style="font-size:9px;color:var(--text-dim);">' + esc(domainLabel) + '</span>' +
-        '</div>' +
-        (e.area_desc ? '<div class="card-area">' + esc(e.area_desc) + '</div>' : '') +
-        (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
-        '<div class="card-date">' +
-          '<span class="severity-dot" style="background:' + severityColor(sev) + '"></span>' +
-          'Severity ' + esc(e.severity) + ' &middot; ' + timeSince(e.occurred_at) +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  function updateBanner(govtEvents, highSevEvents, allEvents, score) {
-    document.getElementById('govt-count').textContent = govtEvents.length;
-    document.getElementById('disruption-count').textContent = allEvents.filter(function(e) { return e.source === 'ioda'; }).length;
-    var countries = {};
-    allEvents.forEach(function(e) {
-      var area = e.area_desc || e.country || '';
-      if (area) countries[area] = true;
-    });
-    document.getElementById('countries-count').textContent = Object.keys(countries).length;
-    var totalEl = document.getElementById('total-count');
-    if (totalEl) totalEl.textContent = allEvents.length;
-    var lvl = indexLevel(score);
-    var lb = document.getElementById('geo-level-badge');
-    if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
-  }
-
-  // --- Fetch & Process ---
+  // --- Fetch from NewsIntel & render ---
   function fetchData() {
-    fetch(API_URL)
+    fetch(NEWS_API + '/headlines?relevance=3&hours=48&limit=100')
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
+        var headlines = data.headlines || [];
 
-        // Filter for geopolitically relevant events
-        var allRelevant = events.filter(isGeopoliticalRelevant);
-
-        // Split into columns
-        var govtEvents = allRelevant.filter(isGovernmentAction);
-        var highSevEvents = allRelevant.filter(function(e) {
-          return (parseFloat(e.severity) || 0) >= 8 && !isGovernmentAction(e) && e.domain !== 'weather' && e.domain !== 'seismic';
+        // Group by category
+        var groups = { conflict: [], trade: [], labor: [], regulation: [] };
+        headlines.forEach(function(h) {
+          var cat = h.category;
+          if (cat === 'conflict') groups.conflict.push(h);
+          else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(h);
+          else if (cat === 'labor' || cat === 'immigration') groups.labor.push(h);
+          else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(h);
         });
 
-        var score = computeGeopoliticalIndex(govtEvents, highSevEvents, allRelevant);
+        // Render panels
+        renderPanel('conflict-list', 'conflict-panel-count', groups.conflict, '#ef4444', 'No active conflict or instability events detected.');
+        renderPanel('trade-list', 'trade-panel-count', groups.trade, '#f59e0b', 'No trade policy or economic events detected.');
+        renderPanel('labor-list', 'labor-panel-count', groups.labor, '#22c55e', 'No labor or workforce disruption events detected.');
+        renderPanel('reg-list', 'reg-panel-count', groups.regulation, '#a855f7', 'No regulatory or sanctions events detected.');
 
-        renderGovernmentActions(govtEvents);
-        renderHighSeverity(highSevEvents);
-        drawGauge(score);
-        updateBanner(govtEvents, highSevEvents, allRelevant, score);
+        // Banner counts
+        document.getElementById('conflict-count').textContent = groups.conflict.length;
+        document.getElementById('trade-count').textContent = groups.trade.length;
+        document.getElementById('labor-count').textContent = groups.labor.length;
+        document.getElementById('reg-count').textContent = groups.regulation.length;
+        document.getElementById('total-count').textContent = headlines.length;
+
+        // Compute and render risk index
+        var result = computeGeopoliticalIndex(headlines);
+        drawGauge(result.score);
+        renderFactors(result.factors, result.score);
+
+        var lvl = indexLevel(result.score);
+        var lb = document.getElementById('geo-level-badge');
+        if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
+        var gl = document.getElementById('gauge-label');
+        if (gl) { gl.textContent = lvl.label; gl.style.color = lvl.color; }
       })
       .catch(function(err) {
         console.error('Geopolitical fetch error:', err);
-        ['govt-list', 'severity-list'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el.querySelector('.status-msg')) {
+        Object.values(CATEGORY_GROUPS).forEach(function(g) {
+          var el = document.getElementById(g.panel);
+          if (el && el.querySelector('.status-msg')) {
             el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
           }
         });
         drawGauge(10);
-        var label = document.getElementById('gauge-label');
-        label.textContent = 'NORMAL';
-        label.style.color = 'var(--accent-green)';
       });
   }
 
