@@ -65,7 +65,20 @@
 
 Full ADRs in `MEMORY/decisions/`.
 
-## Session Protocol
+## FOREMAN Override
+If environment variable `FOREMAN_STREAM_ID` is set, this session is managed by FOREMAN (the WFM Labs fleet orchestrator). Skip the standard session protocol below and follow these rules instead:
+- Do NOT read/write `MEMORY/current-state.md`
+- Do NOT write session notes to `MEMORY/sessions/`
+- Do NOT update this file
+- Do NOT modify `payload.config.ts` — if you create a new collection, report it in your stream completion. FOREMAN handles config registration.
+- DO follow your stream spec and section context pack
+- DO write heartbeats via the stream heartbeat hook
+- DO commit frequently with conventional format (`type(scope): description`)
+- DO validate with `tsc --noEmit` before marking your stream complete
+
+## Session Protocol (standalone sessions only)
+Skip this section if `FOREMAN_STREAM_ID` is set (see FOREMAN Override above).
+
 1. Read this file (auto-loaded)
 2. Read `MEMORY/current-state.md`
 3. Read most recent session notes in `MEMORY/sessions/`

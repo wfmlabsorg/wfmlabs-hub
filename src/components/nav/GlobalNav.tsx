@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { UserMenu } from './UserMenu'
 
 const navLinks = [
-  { href: '/roc', label: 'ROC', newTab: true },
+  { href: '/roc', label: 'ROC' },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
   { href: '/briefs', label: 'Briefs' },

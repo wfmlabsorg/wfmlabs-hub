@@ -24,6 +24,7 @@ import { AssetRelationships } from '@/collections/AssetRelationships'
 import { AssetContributions } from '@/collections/AssetContributions'
 import { Reactions } from '@/collections/Reactions'
 import { Signals } from '@/collections/Signals'
+import { Docs } from '@/collections/Docs'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -86,6 +87,7 @@ export default buildConfig({
     AssetContributions,
     Reactions,
     Signals,
+    Docs,
   ],
 
   secret: process.env.PAYLOAD_SECRET || 'CHANGE-ME-IN-PRODUCTION',
