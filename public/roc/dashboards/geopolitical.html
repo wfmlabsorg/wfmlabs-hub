@@ -324,6 +324,7 @@
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
       Sources: Google News (World, Business, Geopolitical) &middot; Claude Haiku classification<br>
       RSS every 15 min &middot; Classification 3x daily.
+      <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
 
@@ -682,6 +683,15 @@
         if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
         var gl = document.getElementById('gauge-label');
         if (gl) { gl.textContent = lvl.label; gl.style.color = lvl.color; }
+
+        // Show last updated timestamp
+        var luEl = document.getElementById('last-updated');
+        if (luEl) {
+          var clustered = data.lastClustered ? timeSince(data.lastClustered) : 'never';
+          var ingested = data.lastIngested ? timeSince(data.lastIngested) : 'never';
+          var recent = data.recentHeadlines || 0;
+          luEl.textContent = 'Stories clustered: ' + clustered + ' | RSS ingested: ' + ingested + ' | ' + recent + ' headlines (6h)';
+        }
       })
       .catch(function(err) {
         console.error('Geopolitical fetch error:', err);
