@@ -188,7 +188,7 @@ export const FEED_DESCRIPTIONS: Record<string, FeedDescription> = {
   },
   'firms': {
     summary:
-      'NASA FIRMS (Fire Information for Resource Management System) provides satellite-detected active fire and thermal anomaly data from VIIRS and MODIS instruments. Fire detections are available within 3 hours of satellite overpass, with global coverage updated multiple times daily. FIRMS is widely used by fire agencies, land managers, and insurance companies worldwide.',
+      'NASA FIRMS — satellite wildfire detection via VIIRS SNPP. Currently non-operational: MAP_KEY requires annual renewal at firms.modaps.eosdis.nasa.gov. Wildfires tracked via EONET as fallback.',
     operator: 'NASA LANCE / EOSDIS',
     license: 'Open',
     registration: 'Required',
@@ -196,11 +196,19 @@ export const FEED_DESCRIPTIONS: Record<string, FeedDescription> = {
   },
   'openaq': {
     summary:
-      'OpenAQ is the largest open-access aggregator of real-time and historical air quality data, collecting measurements from government monitoring stations and low-cost sensors in 100+ countries. The API provides access to PM2.5, PM10, ozone, NO2, SO2, and CO concentrations. OpenAQ is a non-profit organization focused on fighting air inequality through open data.',
+      'OpenAQ v3 API — global air quality from ground monitoring stations. Currently non-operational: v3 API requires authenticated API key; key may need renewal at openaq.org. Being supplemented by Open-Meteo Air Quality.',
     operator: 'OpenAQ (501(c)(3) non-profit)',
     license: 'Open',
     registration: 'Required',
     cost: 'Free — requires a free API key; rate-limited',
+  },
+  'open_meteo_aq': {
+    summary:
+      'Open-Meteo Air Quality API — global AQ data from Copernicus CAMS atmospheric model. Provides US AQI, PM2.5, PM10, NO2, Ozone, and UV Index for any coordinate. Free, no API key required. Covers all 38 OVIX sub-regions.',
+    operator: 'Open-Meteo',
+    license: 'Open',
+    registration: 'None',
+    cost: 'Free — no API key required; fair-use rate limits',
   },
   'tsunami': {
     summary:
