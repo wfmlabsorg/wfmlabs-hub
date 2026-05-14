@@ -55,6 +55,12 @@
     align-items: center;
   }
 
+  /* CARD EXPAND/COLLAPSE */
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+
   /* BANNER */
   .banner {
     display: flex;
