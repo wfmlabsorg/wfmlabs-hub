@@ -86,7 +86,7 @@ var TOMTOM_KEY='uJptvcBgfQCcumeYWk5wYwWPly3qn1J0';
 var REFRESH=300000;
 var map,markers=[],infoWin;
 
-var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories','News-Intel':'#'};
+var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories',MTA:'https://new.mta.info/alerts',SEPTA:'https://www.septa.org/service-alerts',TTC:'https://www.ttc.ca/service-advisories',NWS:'https://www.weather.gov/marine/','IMF PortWatch':'https://portwatch.imf.org/','News-Intel':'https://news-intel.tedlango.workers.dev/stories',maritime:'https://www.weather.gov/marine/'};
 
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
 function ts(iso){if(!iso)return'';var ms=Date.now()-new Date(iso).getTime(),m=Math.floor(ms/60000);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago'}
@@ -135,7 +135,7 @@ function renderCol(pid,cid,evts,empty){
   ce.textContent=evts.length;
   if(!evts.length){el.innerHTML='<div class="es">'+empty+'</div>';return}
   el.innerHTML=evts.sort(function(a,b){return b.severity-a.severity}).map(function(e){
-    var c=sc(e.severity),srcUrl=SRCS[e.source]||SRCS[e.domain]||'#';
+    var c=sc(e.severity),srcUrl=e.url||SRCS[e.source]||SRCS[e.domain]||'#';
     return'<div class="cd" onclick="this.classList.toggle(\'exp\')">'+
       '<div style="display:flex;align-items:center;gap:5px">'+
         '<span class="sd" style="background:'+c+'"></span>'+
