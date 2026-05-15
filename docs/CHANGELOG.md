@@ -6,6 +6,58 @@ Format: `[date] — [summary]` with details.
 
 ---
 
+## 2026-05-15 — Geopolitical Intelligence Agent, Dashboard Upgrades (cont.)
+
+### NewsIntel Agent (New)
+- New Cloudflare Worker: `news-intel.tedlango.workers.dev`
+- Google News RSS ingestion (4 feeds, 8 rotating search queries, every 15 min)
+- Claude Haiku classification with BPO-country weighting (18 priority countries)
+- Claude Haiku story clustering: 60+ headlines → 10-12 synthesized stories
+- Trajectory tracking: emerging → escalating → peak → steady → declining
+- Neon tables: `news_headlines`, `geopolitical_stories`
+- Calibration: 11 examples, strict not_relevant filters, archival article filtering (>7 days)
+- Time-aware: headline ages in prompts, published_at filtering, velocity tracking
+- Incremental clustering: existing stories used as trajectory context
+- Cost: ~$0.05/day (Haiku for both classification and clustering)
+
+### Geopolitical Dashboard (Complete Rebuild)
+- 2x2 panel layout: Conflict | Trade & Economics | Labor & Workforce | Regulation & Sanctions
+- Compact cards matching cyber dashboard pattern (title + trajectory + expand)
+- Expandable details on click
+- Risk index calibrated to current environment (OVIX 8.1 = CRITICAL)
+- Factor bars: Conflict 35%, Trade & Econ 25%, Labor 20%, Reg & Sanctions 20%
+- Last-updated timestamps with freshness metadata
+- `geopolitical` added as category across Signals, Briefs, and Sentinel
+
+### Sentinel → Geopolitical Integration
+- Sentinel reads geopolitical_stories table (severity >= 7, escalating/peak)
+- Posts geopolitical signals and briefs to Hub
+- Category properly tagged as `geopolitical` (not `general`)
+
+### Environmental Dashboard Expansion
+- Added extreme heat events (Open-Meteo Weather API, feels-like >= 100°F)
+- Added dust concentration events (>= 50 µg/m³)
+- Added UV index events (>= 8, Very High)
+- 4-panel layout: Air Quality | Extreme Heat | UV & Dust | Wildfires
+- Composite scoring: weighted average (AQ 35%, Heat 30%, Fire 20%, UV/Dust 15%)
+
+### Travel Dashboard
+- Fixed weather-dominated generic query
+- Targeted parallel fetches: weather >= 7, infrastructure >= 5, disaster, health >= 7
+
+### Feed Health Updates
+- Data sources page: OpenAQ marked non-operational, FIRMS status updated, Open-Meteo AQ added
+- Total feeds: 23+, 19+ healthy
+- FIRMS recovered after deploy cycle
+
+### Model Optimization
+- Sentinel: Sonnet → Haiku (~$2/day savings)
+- NewsIntel: Haiku for both classify + cluster
+- Beacon: stays Sonnet (editorial quality)
+- Total agent cost: ~$0.45/day (down from ~$2.50)
+
+---
+
 ## 2026-05-14 — Signal Pipeline, Briefs, Articles, Financial Dashboard
 
 ### Signal Pipeline Overhaul
