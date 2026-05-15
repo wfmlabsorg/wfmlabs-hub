@@ -20,9 +20,11 @@ body{background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px
 .lb{padding:2px 8px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:1px}
 .tp{display:flex;align-items:center;gap:4px;flex-shrink:0}
 .tp button{background:rgba(24,188,156,.08);border:1px solid rgba(24,188,156,.25);color:#18BC9C;font-size:11px;width:24px;height:20px;border-radius:3px;cursor:pointer;padding:0}
+.btn-flow{background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.25);color:var(--cyan);font-size:8px;padding:2px 6px;border-radius:3px;cursor:pointer;font-family:var(--mono);font-weight:700;letter-spacing:.5px}
+.btn-flow.off{opacity:.4}
 .da{display:grid;grid-template-rows:1fr 1fr;gap:0;min-height:0;overflow:hidden}
-#map-area{border-bottom:1px solid var(--bdr);min-height:0}
-.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:0;min-height:0;overflow:hidden}
+#map-area{border-bottom:1px solid var(--bdr);min-height:0;position:relative}
+.cols{display:grid;grid-template-columns:repeat(5,1fr);gap:0;min-height:0;overflow:hidden}
 .col{display:flex;flex-direction:column;min-height:0;overflow:hidden;border-right:1px solid var(--bdr)}.col:last-child{border-right:none}
 .ch{padding:8px 10px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .ct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px}
@@ -38,7 +40,10 @@ body{background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px
 .cx{cursor:pointer;color:var(--dim);font-size:8px}.cd.exp .cx{color:var(--cyan)}
 .sl-a{color:var(--cyan);text-decoration:none;font-size:8px}.sl-a:hover{text-decoration:underline}
 .es{color:var(--dim);font-size:10px;text-align:center;padding:16px;line-height:1.6}
+@keyframes pulse-ring{0%{transform:scale(1);opacity:.4}100%{transform:scale(2.5);opacity:0}}
+.pulse-marker{position:absolute;border-radius:50%;animation:pulse-ring 2s ease-out infinite;pointer-events:none}
 @media(max-width:900px){.pg{grid-template-columns:1fr;grid-template-rows:auto auto auto 1fr;height:auto;overflow-y:auto}.gp{grid-row:auto;border-right:none;border-bottom:1px solid var(--bdr)}.cols{grid-template-columns:1fr 1fr}.col{max-height:300px}}
+@media(max-width:600px){.cols{grid-template-columns:1fr}}
 body.in-iframe .tp{display:none!important}
 </style>
 </head>
@@ -49,7 +54,7 @@ body.in-iframe .tp{display:none!important}
   <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--cyan);margin-bottom:6px">Travel Disruption Index</div>
   <div class="gc"><svg id="gauge" width="210" height="125" viewBox="0 0 210 125"></svg><div class="gl" id="g-label" style="color:var(--dim)">--</div></div>
   <div id="bars" style="padding:6px 0;width:100%"></div>
-  <div style="padding:4px 0 8px;font-size:8px;color:var(--dim);line-height:1.5">Composite: Aviation 30%, Roads 20%, Transit 20%, Maritime 15%, Intel 15%. Scored 0-10 from FAA, TomTom, TfL, MBTA, CTA, BART, News-Intel.</div>
+  <div style="padding:4px 0 8px;font-size:8px;color:var(--dim);line-height:1.5">Composite: Aviation 30%, Roads 20%, Transit 20%, Maritime 15%, Intel 15%. Sources: FAA, TomTom, TfL, MBTA, CTA, BART, MTA, SEPTA, TTC, NWS, PortWatch, News-Intel.</div>
   <div style="width:100%;margin-top:auto;padding-top:8px;border-top:1px solid var(--bdr);font-size:8px;color:var(--dim)" id="lu">Updated: --</div>
 </div>
 <div class="bn">
@@ -58,13 +63,17 @@ body.in-iframe .tp{display:none!important}
     <div class="sb"><div class="sv" id="c-av">--</div><div class="sl">Aviation</div></div>
     <div class="sb"><div class="sv" id="c-rd">--</div><div class="sl">Roads</div></div>
     <div class="sb"><div class="sv" id="c-tr">--</div><div class="sl">Transit</div></div>
+    <div class="sb"><div class="sv" id="c-mi">--</div><div class="sl">Maritime</div></div>
     <div class="sb"><div class="sv" id="c-tot">--</div><div class="sl">Total</div></div>
   </div>
   <div class="lb" id="lbdg">--</div>
-  <div class="tp">
-    <button onclick="rocNav('prev')">&#9198;</button>
-    <button id="bnr-play" onclick="rocNav('toggle')">&#9654;</button>
-    <button onclick="rocNav('next')">&#9197;</button>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button class="btn-flow" id="btn-flow" title="Toggle traffic overlay">FLOW</button>
+    <div class="tp">
+      <button onclick="rocNav('prev')">&#9198;</button>
+      <button id="bnr-play" onclick="rocNav('toggle')">&#9654;</button>
+      <button onclick="rocNav('next')">&#9197;</button>
+    </div>
   </div>
 </div>
 <div class="da">
@@ -74,6 +83,7 @@ body.in-iframe .tp{display:none!important}
     <div class="col"><div class="ch"><span class="ct" style="color:var(--blue)">&#128663; Roads</span><span class="cc" id="n-rd">0</span></div><div class="cb" id="p-rd"></div></div>
     <div class="col"><div class="ch"><span class="ct" style="color:var(--green)">&#128647; Transit</span><span class="cc" id="n-tr">0</span></div><div class="cb" id="p-tr"></div></div>
     <div class="col"><div class="ch"><span class="ct" style="color:var(--purple)">&#9875; Maritime</span><span class="cc" id="n-mi">0</span></div><div class="cb" id="p-mi"></div></div>
+    <div class="col"><div class="ch"><span class="ct" style="color:var(--orange)">&#128240; Intel</span><span class="cc" id="n-in">0</span></div><div class="cb" id="p-in"></div></div>
   </div>
 </div>
 </div>
@@ -84,9 +94,9 @@ body.in-iframe .tp{display:none!important}
 var API='https://travel-intel.tedlango.workers.dev';
 var TOMTOM_KEY='uJptvcBgfQCcumeYWk5wYwWPly3qn1J0';
 var REFRESH=300000;
-var map,markers=[],infoWin;
+var map,markers=[],infoWin,ttLayer,ttVisible=true,mapFitted=false;
 
-var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories',MTA:'https://new.mta.info/alerts',SEPTA:'https://www.septa.org/service-alerts',TTC:'https://www.ttc.ca/service-advisories',NWS:'https://www.weather.gov/marine/','IMF PortWatch':'https://portwatch.imf.org/','News-Intel':'https://news-intel.tedlango.workers.dev/stories',maritime:'https://www.weather.gov/marine/'};
+var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories',MTA:'https://new.mta.info/alerts',SEPTA:'https://www.septa.org/service-alerts',TTC:'https://www.ttc.ca/service-advisories',NWS:'https://www.weather.gov/marine/','IMF PortWatch':'https://portwatch.imf.org/',MARAD:'https://www.maritime.dot.gov/msci-advisories','News-Intel':'https://news-intel.tedlango.workers.dev/stories',maritime:'https://www.weather.gov/marine/'};
 
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
 function ts(iso){if(!iso)return'';var ms=Date.now()-new Date(iso).getTime(),m=Math.floor(ms/60000);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago'}
@@ -148,6 +158,13 @@ function renderCol(pid,cid,evts,empty){
   }).join('')
 }
 
+function setLoading(on){
+  ['p-av','p-rd','p-tr','p-mi','p-in'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(on&&!el.dataset.loaded)el.innerHTML='<div class="es" style="opacity:.5">Loading feeds...</div>';
+  });
+}
+
 // Map
 var darkStyle=[
   {elementType:'geometry',stylers:[{color:'#0a0e1a'}]},
@@ -164,67 +181,163 @@ var darkStyle=[
 
 window.initMap=function(){
   map=new google.maps.Map(document.getElementById('map-area'),{
-    center:{lat:38,lng:-40},zoom:3,
+    center:{lat:30,lng:0},zoom:3,
     styles:darkStyle,
     disableDefaultUI:true,
     zoomControl:true,
     zoomControlOptions:{position:google.maps.ControlPosition.RIGHT_CENTER},
     backgroundColor:'#0a0e1a'
   });
-  // TomTom traffic overlay
-  var ttLayer=new google.maps.ImageMapType({
+  // TomTom traffic overlay — reduced opacity
+  ttLayer=new google.maps.ImageMapType({
     getTileUrl:function(c,z){return'https://a.api.tomtom.com/traffic/map/4/tile/flow/relative/'+z+'/'+c.x+'/'+c.y+'.png?key='+TOMTOM_KEY+'&tileSize=256'},
-    tileSize:new google.maps.Size(256,256),maxZoom:18,opacity:0.6,name:'Traffic'
+    tileSize:new google.maps.Size(256,256),maxZoom:18,opacity:0.3,name:'Traffic'
   });
   map.overlayMapTypes.push(ttLayer);
+  // Flow toggle
+  document.getElementById('btn-flow').onclick=function(){
+    ttVisible=!ttVisible;
+    ttLayer.setOpacity(ttVisible?0.3:0);
+    this.textContent=ttVisible?'FLOW':'FLOW OFF';
+    this.classList.toggle('off',!ttVisible);
+  };
   infoWin=new google.maps.InfoWindow();
   fetchData();
   setInterval(fetchData,REFRESH);
 };
 
+// Spatial clustering — group nearby events, show highest severity
+function clusterEvents(events){
+  var mapped=events.filter(function(e){return e.lat&&e.lon});
+  var clusters=[],used={};
+  mapped.forEach(function(e,i){
+    if(used[i])return;
+    var group=[e];
+    mapped.forEach(function(e2,j){
+      if(i===j||used[j])return;
+      if(Math.abs(e.lat-e2.lat)<0.5&&Math.abs(e.lon-e2.lon)<0.5){
+        group.push(e2);used[j]=true;
+      }
+    });
+    used[i]=true;
+    // Sort group by severity, keep highest as representative
+    group.sort(function(a,b){return b.severity-a.severity});
+    clusters.push(group);
+  });
+  return clusters;
+}
+
 function updateMarkers(events){
   markers.forEach(function(m){m.setMap(null)});
   markers=[];
-  events.forEach(function(e){
-    if(!e.lat||!e.lon)return;
+  var clusters=clusterEvents(events);
+
+  clusters.forEach(function(group){
+    var e=group[0]; // highest severity in cluster
     var color=scHex(e.severity);
-    var sz=Math.max(3,Math.min(6,e.severity*0.5));
+    // Marker size scales with severity: 4px (sev 0) to 12px (sev 10)
+    var sz=4+(e.severity/10)*8;
     var icon;
-    if(e.domain==='aviation'){icon={path:'M21,16v-2l-8-5V3.5A1.5,1.5,0,0,0,11.5,2,1.5,1.5,0,0,0,10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1,3.5,1V20.5L13,19V13.5Z',fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:0.6,anchor:new google.maps.Point(11,12)};}
-    else if(e.domain==='transit'){icon={path:google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
-    else if(e.domain==='maritime'||e.domain==='intel'){icon={path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
-    else{icon={path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.85,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
-    var mk=new google.maps.Marker({position:{lat:e.lat,lng:e.lon},map:map,icon:icon,title:e.title});
+    if(e.domain==='aviation'){icon={path:'M21,16v-2l-8-5V3.5A1.5,1.5,0,0,0,11.5,2,1.5,1.5,0,0,0,10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1,3.5,1V20.5L13,19V13.5Z',fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:0.5+e.severity*0.06,anchor:new google.maps.Point(11,12)};}
+    else if(e.domain==='transit'){icon={path:google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz*0.7};}
+    else if(e.domain==='maritime'){icon={path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz*0.7};}
+    else if(e.domain==='roads'){
+      // Caution triangle for incidents, circle for congestion
+      var isIncident=/accident|closure|closed|flood/i.test(e.title);
+      icon=isIncident?
+        {path:'M10.5 1.5L20 19H1L10.5 1.5Z',fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz*0.08,anchor:new google.maps.Point(10,19)}:
+        {path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.85,strokeColor:'#fff',strokeWeight:0.5,scale:sz*0.6};
+    }
+    else{icon={path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.85,strokeColor:'#fff',strokeWeight:0.5,scale:sz*0.6};}
+
+    var mk=new google.maps.Marker({position:{lat:e.lat,lng:e.lon},map:map,icon:icon,title:e.title,zIndex:Math.round(e.severity*10)});
+
+    // InfoWindow content — show all events in cluster
+    var content='<div style="font-family:monospace;font-size:11px;max-width:280px;color:#0a0e1a">';
+    group.forEach(function(ev,idx){
+      if(idx>0)content+='<div style="border-top:1px solid #e2e8f0;margin:4px 0;padding-top:4px"></div>';
+      var srcUrl=ev.url||SRCS[ev.source]||SRCS[ev.domain]||'#';
+      content+='<b>'+esc(ev.title)+'</b><br><span style="color:#64748b">'+esc(ev.location)+' \u00b7 '+esc(ev.source)+' \u00b7 '+ev.severity+'/10</span>';
+      if(ev.detail)content+='<br><span style="font-size:10px">'+esc(ev.detail).substring(0,120)+'</span>';
+      if(srcUrl!=='#')content+='<br><a href="'+srcUrl+'" target="_blank" rel="noopener" style="color:#0284c7;font-size:9px">View source \u2197</a>';
+    });
+    if(group.length>3)content+='<div style="color:#64748b;font-size:9px;margin-top:4px">+'+(group.length-3)+' more events</div>';
+    content+='</div>';
+
     mk.addListener('click',function(){
-      infoWin.setContent('<div style="font-family:monospace;font-size:11px;max-width:250px;color:#0a0e1a"><b>'+esc(e.title)+'</b><br><span style="color:#64748b">'+esc(e.location)+' \u00b7 '+esc(e.source)+' \u00b7 '+e.severity+'/10</span><br><span style="font-size:10px">'+esc(e.detail)+'</span></div>');
+      infoWin.setContent(content);
       infoWin.open(map,mk);
     });
     markers.push(mk);
+
+    // Pulsing ring for severity >= 8
+    if(e.severity>=8){
+      var pulse=new google.maps.Marker({
+        position:{lat:e.lat,lng:e.lon},map:map,
+        icon:{path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.12,strokeColor:color,strokeOpacity:0.4,strokeWeight:1,scale:sz*2.5},
+        clickable:false,zIndex:0
+      });
+      markers.push(pulse);
+    }
   });
+
+  // Fit bounds on first load only
+  if(!mapFitted&&clusters.length>0){
+    mapFitted=true;
+    if(clusters.length===1){
+      map.setCenter({lat:clusters[0][0].lat,lng:clusters[0][0].lon});
+      map.setZoom(6);
+    }else{
+      var bounds=new google.maps.LatLngBounds();
+      clusters.forEach(function(g){bounds.extend({lat:g[0].lat,lng:g[0].lon})});
+      map.fitBounds(bounds,{top:20,right:20,bottom:20,left:20});
+      // Don't zoom in too tight
+      google.maps.event.addListenerOnce(map,'idle',function(){
+        if(map.getZoom()>8)map.setZoom(8);
+      });
+    }
+  }
 }
 
 function fetchData(){
+  setLoading(true);
   fetch(API+'/api/travel/scores').then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
     drawGauge(d.composite,d.level);
     renderBars(d.domains||[]);
-    var av=[],rd=[],tr=[],mi=[];
-    (d.events||[]).forEach(function(e){if(e.domain==='aviation')av.push(e);else if(e.domain==='roads')rd.push(e);else if(e.domain==='transit')tr.push(e);else mi.push(e)});
+    var av=[],rd=[],tr=[],mi=[],il=[];
+    (d.events||[]).forEach(function(e){
+      if(e.domain==='aviation')av.push(e);
+      else if(e.domain==='roads')rd.push(e);
+      else if(e.domain==='transit')tr.push(e);
+      else if(e.domain==='maritime')mi.push(e);
+      else il.push(e);
+    });
     renderCol('p-av','n-av',av,'No aviation disruptions.');
     renderCol('p-rd','n-rd',rd,'Normal traffic flow.');
     renderCol('p-tr','n-tr',tr,'Normal transit service.');
-    renderCol('p-mi','n-mi',mi,'No maritime/intel stories.');
+    renderCol('p-mi','n-mi',mi,'No maritime disruptions.');
+    renderCol('p-in','n-in',il,'No intel stories.');
+    ['p-av','p-rd','p-tr','p-mi','p-in'].forEach(function(id){document.getElementById(id).dataset.loaded='1'});
     document.getElementById('c-av').textContent=av.length;
     document.getElementById('c-rd').textContent=rd.length;
     document.getElementById('c-tr').textContent=tr.length;
+    document.getElementById('c-mi').textContent=mi.length;
     document.getElementById('c-tot').textContent=(d.events||[]).length;
     var lb=document.getElementById('lbdg'),lc=ls(d.level);
     lb.textContent=d.level;lb.style.color=lc;lb.style.border='1px solid '+lc;
     document.getElementById('lu').textContent='Updated: '+ts(d.updatedAt)+' | '+(d.domains||[]).map(function(x){return x.domain+':'+x.eventCount}).join(' ');
     if(map)updateMarkers(d.events||[]);
-  }).catch(function(err){console.error('Travel:',err);drawGauge(0,'NOMINAL')});
+  }).catch(function(err){
+    console.error('Travel:',err);drawGauge(0,'NOMINAL');
+    ['p-av','p-rd','p-tr','p-mi','p-in'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el.dataset.loaded)el.innerHTML='<div class="es" style="color:var(--red)">Feed error \u2014 retrying in 5m</div>';
+    });
+  });
 }
 
 drawGauge(0,'NOMINAL');
+setLoading(true);
 
 // Load Google Maps
 RocConfig.get().then(function(cfg){
