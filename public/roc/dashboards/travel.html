@@ -188,8 +188,12 @@ function updateMarkers(events){
   events.forEach(function(e){
     if(!e.lat||!e.lon)return;
     var color=scHex(e.severity);
-    var icon={path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.85,strokeColor:'#fff',strokeWeight:1,scale:Math.max(5,Math.min(12,e.severity*1.2))};
-    if(e.domain==='aviation')icon.path='M21,16v-2l-8-5V3.5A1.5,1.5,0,0,0,11.5,2,1.5,1.5,0,0,0,10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1,3.5,1V20.5L13,19V13.5Z';
+    var sz=Math.max(3,Math.min(6,e.severity*0.5));
+    var icon;
+    if(e.domain==='aviation'){icon={path:'M21,16v-2l-8-5V3.5A1.5,1.5,0,0,0,11.5,2,1.5,1.5,0,0,0,10,3.5V9l-8,5v2l8-2.5V19l-2,1.5V22l3.5-1,3.5,1V20.5L13,19V13.5Z',fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:0.6,anchor:new google.maps.Point(11,12)};}
+    else if(e.domain==='transit'){icon={path:google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
+    else if(e.domain==='maritime'||e.domain==='intel'){icon={path:google.maps.SymbolPath.FORWARD_CLOSED_ARROW,fillColor:color,fillOpacity:0.9,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
+    else{icon={path:google.maps.SymbolPath.CIRCLE,fillColor:color,fillOpacity:0.85,strokeColor:'#fff',strokeWeight:0.5,scale:sz};}
     var mk=new google.maps.Marker({position:{lat:e.lat,lng:e.lon},map:map,icon:icon,title:e.title});
     mk.addListener('click',function(){
       infoWin.setContent('<div style="font-family:monospace;font-size:11px;max-width:250px;color:#0a0e1a"><b>'+esc(e.title)+'</b><br><span style="color:#64748b">'+esc(e.location)+' \u00b7 '+esc(e.source)+' \u00b7 '+e.severity+'/10</span><br><span style="font-size:10px">'+esc(e.detail)+'</span></div>');
