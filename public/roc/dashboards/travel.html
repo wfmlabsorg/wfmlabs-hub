@@ -3,338 +3,100 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Travel &amp; Aviation Intelligence — ROC</title>
+<title>Travel Disruption Index — ROC</title>
 <style>
   :root {
-    --bg-primary: #0a0e1a;
-    --bg-panel: #141b2d;
-    --bg-card: #1e293b;
-    --border: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #94a3b8;
-    --text-dim: #64748b;
-    --accent-cyan: #06b6d4;
-    --accent-red: #ef4444;
-    --accent-orange: #f97316;
-    --accent-yellow: #eab308;
-    --accent-green: #22c55e;
+    --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-yellow: #eab308; --accent-green: #22c55e; --accent-purple: #a855f7;
     --accent-blue: #3b82f6;
     --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
   }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg-primary); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; line-height:1.5; overflow:hidden; height:100vh; margin:0; }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  .page-grid { display:grid; grid-template-columns:280px 1fr; grid-template-rows:auto 1fr; height:100vh; }
 
-  body {
-    background: var(--bg-primary);
-    color: var(--text-primary);
-    font-family: var(--font-mono);
-    font-size: 13px;
-    line-height: 1.5;
-    overflow: hidden;
-    height: 100vh;
-    margin: 0;
+  .gauge-panel { grid-row:1/-1; background:var(--bg-panel); border-right:1px solid var(--border); padding:16px; overflow-y:auto; display:flex; flex-direction:column; align-items:center; }
+  .gauge-panel::-webkit-scrollbar { width:6px; }
+  .gauge-panel::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .gauge-container { display:flex; flex-direction:column; align-items:center; padding:8px 0; }
+  .gauge-label { font-size:12px; font-weight:700; letter-spacing:1.5px; margin-top:4px; }
+
+  .banner { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:var(--bg-panel); border-bottom:1px solid var(--border); gap:12px; flex-shrink:0; }
+  .banner-title { font-size:12px; font-weight:700; color:var(--accent-cyan); letter-spacing:1.5px; white-space:nowrap; text-transform:uppercase; }
+  .banner-stats { display:flex; gap:12px; }
+  .stat-box { text-align:center; }
+  .stat-value { font-size:14px; font-weight:700; }
+  .stat-label { font-size:8px; color:var(--text-dim); letter-spacing:.5px; text-transform:uppercase; }
+  .level-badge { padding:3px 10px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; }
+  .transport { display:flex; align-items:center; gap:4px; flex-shrink:0; }
+  .transport button { background:rgba(24,188,156,.08); border:1px solid rgba(24,188,156,.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
+  .transport button:hover { background:rgba(24,188,156,.2); }
+
+  .data-area { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:10px; padding:10px; overflow:hidden; }
+  .panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+  .panel-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .panel-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; }
+  .panel-count { font-size:11px; color:var(--text-dim); background:var(--bg-card); padding:2px 8px; border-radius:10px; }
+  .panel-body { flex:1; overflow-y:auto; padding:10px; }
+  .panel-body::-webkit-scrollbar { width:4px; }
+  .panel-body::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+  .card { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:8px; transition:border-color .2s; cursor:pointer; }
+  .card:hover { border-color:var(--accent-cyan); }
+  .card:last-child { margin-bottom:0; }
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .severity-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; flex-shrink:0; }
+  .severity-badge { font-size:10px; font-weight:700; color:#fff; padding:1px 6px; border-radius:3px; text-transform:uppercase; letter-spacing:.5px; flex-shrink:0; }
+  .card-meta { font-size:9px; color:var(--text-dim); margin-top:3px; display:flex; justify-content:space-between; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
+  .empty-state { color:var(--text-dim); font-size:11px; text-align:center; padding:20px; line-height:1.6; }
+  .status-msg { display:flex; align-items:center; justify-content:center; height:100%; color:var(--text-dim); font-size:12px; }
+
+  @media (max-width:900px) {
+    .page-grid { grid-template-columns:1fr; grid-template-rows:auto auto 1fr; height:auto; overflow-y:auto; }
+    .gauge-panel { grid-row:auto; border-right:none; border-bottom:1px solid var(--border); }
+    .data-area { grid-template-columns:1fr; overflow-y:auto; }
+    .panel { max-height:400px; }
   }
-
-  /* PAGE GRID */
-  .page-grid {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    grid-template-rows: auto 1fr;
-    height: 100vh;
-  }
-
-  /* LEFT GAUGE PANEL */
-  .gauge-panel {
-    grid-row: 1 / -1;
-    background: var(--bg-panel);
-    border-right: 1px solid var(--border);
-    padding: 16px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  /* BANNER */
-  .banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border);
-    gap: 12px;
-    flex-shrink: 0;
-  }
-  .banner-title { font-size: 12px; font-weight: 700; color: var(--accent-cyan); letter-spacing: 1.5px; white-space: nowrap; text-transform: uppercase; }
-  .banner-stats { display: flex; gap: 12px; }
-  .stat-box { text-align: center; }
-  .stat-value { font-size: 14px; font-weight: 700; }
-  .stat-label { font-size: 8px; color: var(--text-dim); letter-spacing: 0.5px; text-transform: uppercase; }
-  .level-badge { padding: 3px 10px; border-radius: 3px; font-size: 10px; font-weight: 700; letter-spacing: 1px; }
-  .transport { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
-  .transport button:hover { background:rgba(24,188,156,0.2); }
-
-
-  /* DATA AREA */
-  .data-area {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .column {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .panel {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .panel.grow { flex: 1; }
-
-  .panel-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .panel-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: var(--accent-cyan);
-  }
-  .panel-count {
-    font-size: 11px;
-    color: var(--text-dim);
-    background: var(--bg-card);
-    padding: 2px 8px;
-    border-radius: 10px;
-  }
-
-  .panel-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-  }
-
-  /* SCROLLBAR */
-  .panel-body::-webkit-scrollbar { width: 6px; }
-  .panel-body::-webkit-scrollbar-track { background: transparent; }
-  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .panel-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
-  /* CARDS */
-  .card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin-bottom: 8px;
-    transition: border-color 0.2s;
-  }
-  .card:hover { border-color: var(--accent-cyan); }
-  .card:last-child { margin-bottom: 0; }
-
-  .card-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-
-  .severity-badge {
-    font-size: 10px;
-    font-weight: 700;
-    color: #fff;
-    padding: 1px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    flex-shrink: 0;
-  }
-
-  .severity-dot {
-    display: inline-block;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    margin-right: 4px;
-    flex-shrink: 0;
-  }
-
-  .impact-tag {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--accent-blue);
-    background: rgba(59,130,246,0.12);
-    padding: 1px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    flex-shrink: 0;
-  }
-
-  .card-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-
-  .card-desc {
-    font-size: 11px;
-    color: var(--text-secondary);
-    line-height: 1.4;
-    margin-top: 4px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .card-date {
-    font-size: 10px;
-    color: var(--text-dim);
-    margin-top: 4px;
-  }
-
-  .card-area {
-    font-size: 10px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-
-  .card-metric {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-  }
-  .card-metric strong {
-    color: var(--text-primary);
-    font-weight: 700;
-  }
-
-  /* GAUGE */
-  .gauge-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 0;
-  }
-  .gauge-label {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    margin-top: 4px;
-  }
-
-  /* GAUGE PANEL SCROLLBAR */
-  .gauge-panel::-webkit-scrollbar { width: 6px; }
-  .gauge-panel::-webkit-scrollbar-track { background: transparent; }
-  .gauge-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .gauge-panel::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
-
-  /* LOADING / ERROR */
-  .status-msg {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-dim);
-    font-size: 12px;
-    text-align: center;
-    padding: 20px;
-  }
-  .error-msg { color: var(--accent-red); }
-
-  /* EMPTY STATE */
-  .empty-state {
-    color: var(--text-dim);
-    font-size: 11px;
-    text-align: center;
-    padding: 20px;
-    line-height: 1.6;
-  }
-
-  @media (max-width: 900px) {
-    .page-grid {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto auto 1fr;
-      height: auto;
-      overflow-y: auto;
-    }
-    .gauge-panel {
-      grid-row: auto;
-      border-right: none;
-      border-bottom: 1px solid var(--border);
-    }
-    .data-area {
-      grid-template-columns: 1fr;
-      overflow-y: auto;
-    }
-    .column { overflow: visible; }
-    .panel.grow { flex: none; max-height: 400px; }
-  }
-
-/* Hide transport controls when embedded in iframe */
-@media all {
-  body.in-iframe .transport,
-  body.in-iframe #rotation-indicator { display:none !important; }
-}
+  body.in-iframe .transport, body.in-iframe #rotation-indicator { display:none !important; }
 </style>
 </head>
 <body>
-<script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
+<script>try{if(window!==window.top&&window.top.location.pathname.indexOf('/dashboards/scores')!==-1)document.body.classList.add('in-iframe');}catch(e){}</script>
 
 <div class="page-grid">
 
-  <!-- LEFT: GAUGE PANEL -->
   <div class="gauge-panel">
     <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-cyan);margin-bottom:8px;">Travel Disruption Index</div>
     <div class="gauge-container" id="gauge-container">
       <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
       <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
     </div>
-    <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
+    <div id="domain-bars" style="padding:8px 0 4px;width:100%;"></div>
     <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
-      OVIX Travel Disruption Index computed from weighted factors: severe weather (35%),
-      infrastructure outages (25%), active disasters (25%),
-      and health warnings (15%).
-      Score maps to OVIX 0-10 scale for cross-domain comparison.
+      Composite travel disruption score from aviation delays, road congestion, transit alerts, maritime events, and news intelligence. Aviation 30%, Roads 20%, Transit 20%, Maritime 15%, Intel 15%.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: NWS &middot; GDACS &middot; WHO &middot; IODA &middot; OVIX Events<br>
-      Refreshes every 5 min via OVIX API.
+      Feeds: FAA NASSTATUS &middot; TomTom Traffic &middot; TfL &middot; MBTA &middot; CTA &middot; BART &middot; News-Intel<br>
+      Scoring cycle: every 5 minutes.
+      <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
 
   <div class="banner">
-    <div class="banner-title">TRAVEL & AVIATION</div>
+    <div class="banner-title">TRAVEL DISRUPTION</div>
     <div class="banner-stats">
-      <div class="stat-box"><div class="stat-value" id="weather-count">--</div><div class="stat-label">WEATHER DELAYS</div></div>
-      <div class="stat-box"><div class="stat-value" id="infra-count">--</div><div class="stat-label">INFRASTRUCTURE</div></div>
-      <div class="stat-box"><div class="stat-value" id="disaster-count">--</div><div class="stat-label">DISASTERS</div></div>
+      <div class="stat-box"><div class="stat-value" id="aviation-count">--</div><div class="stat-label">AVIATION</div></div>
+      <div class="stat-box"><div class="stat-value" id="roads-count">--</div><div class="stat-label">ROADS</div></div>
+      <div class="stat-box"><div class="stat-value" id="transit-count">--</div><div class="stat-label">TRANSIT</div></div>
+      <div class="stat-box"><div class="stat-value" id="total-count">--</div><div class="stat-label">TOTAL</div></div>
     </div>
-    <div class="level-badge" id="trav-level-badge">--</div>
+    <div class="level-badge" id="level-badge">--</div>
     <div class="transport">
       <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
       <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
@@ -342,467 +104,165 @@
     </div>
   </div>
 
-
-  <!-- DATA AREA (bottom-right) -->
   <div class="data-area">
-
-    <!-- COL 1: Weather Disruptions -->
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Weather Disruptions</span>
-          <span class="panel-count" id="weather-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="weather-list">
-          <div class="status-msg">Loading weather disruption data...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#ef4444;">&#9992; Aviation</span>
+        <span class="panel-count" id="aviation-panel-count">--</span>
       </div>
+      <div class="panel-body" id="aviation-list"><div class="status-msg">Loading...</div></div>
     </div>
-
-    <!-- COL 2: Global Travel Alerts -->
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Global Travel Alerts</span>
-          <span class="panel-count" id="alerts-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="alerts-list">
-          <div class="status-msg">Loading travel alerts...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:var(--accent-blue);">&#128663; Roads &amp; Traffic</span>
+        <span class="panel-count" id="roads-panel-count">--</span>
       </div>
+      <div class="panel-body" id="roads-list"><div class="status-msg">Loading...</div></div>
     </div>
-
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#22c55e;">&#128647; Transit</span>
+        <span class="panel-count" id="transit-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="transit-list"><div class="status-msg">Loading...</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:var(--accent-purple);">&#128674; Maritime &amp; Intel</span>
+        <span class="panel-count" id="intel-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="intel-list"><div class="status-msg">Loading...</div></div>
+    </div>
   </div>
-
 </div>
 
 <script>
 (function() {
   'use strict';
-
-  var API = 'https://ovix-api.tedlango.workers.dev';
+  var API = 'https://travel-intel.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
-  // --- Utility ---
-  function esc(str) {
-    if (!str) return '';
-    var d = document.createElement('div');
-    d.textContent = String(str);
-    return d.innerHTML;
-  }
-
-  function timeSince(iso) {
-    if (!iso) return '';
-    var ms = Date.now() - new Date(iso).getTime();
-    var m = Math.floor(ms / 60000);
-    if (m < 60) return m + 'm ago';
-    var h = Math.floor(m / 60);
-    if (h < 24) return h + 'h ago';
-    return Math.floor(h / 24) + 'd ago';
-  }
-
-  function severityColor(sev) {
-    var s = parseFloat(sev) || 0;
-    if (s >= 7) return 'var(--accent-red)';
-    if (s >= 5) return 'var(--accent-orange)';
-    if (s >= 3) return 'var(--accent-yellow)';
-    return 'var(--accent-green)';
-  }
-
-  function severityLabel(sev) {
-    var s = parseFloat(sev) || 0;
-    if (s >= 8) return 'CRITICAL';
-    if (s >= 6) return 'SEVERE';
-    if (s >= 4) return 'MODERATE';
-    if (s >= 2) return 'MINOR';
-    return 'LOW';
-  }
-
-  // --- Travel impact classification ---
-  var WEATHER_DOMAINS = ['weather', 'nws'];
-  var WEATHER_SOURCES = ['nws', 'openweathermap', 'weatherapi'];
-  var WEATHER_KEYWORDS = ['storm', 'tornado', 'hurricane', 'typhoon', 'blizzard', 'ice',
-    'fog', 'wind', 'thunder', 'lightning', 'hail', 'freeze', 'snow', 'flood',
-    'cyclone', 'visibility', 'turbulence', 'convective'];
-
-  var INFRA_DOMAINS = ['infrastructure', 'cyber'];
-  var INFRA_SOURCES = ['ioda', 'cloudflare', 'cf-radar'];
-
-  var DISASTER_DOMAINS = ['disaster', 'seismic'];
-  var DISASTER_SOURCES = ['gdacs', 'usgs', 'reliefweb'];
-
-  var HEALTH_DOMAINS = ['health'];
-  var HEALTH_SOURCES = ['who', 'who-dons'];
-
-  function classifyEvent(event) {
-    var domain = (event.domain || '').toLowerCase();
-    var source = (event.source || '').toLowerCase();
-    var text = ((event.title || '') + ' ' + (event.description || '')).toLowerCase();
-
-    // Weather
-    if (WEATHER_DOMAINS.indexOf(domain) !== -1 || WEATHER_SOURCES.indexOf(source) !== -1) return 'weather';
-    for (var i = 0; i < WEATHER_KEYWORDS.length; i++) {
-      if (text.indexOf(WEATHER_KEYWORDS[i]) !== -1) return 'weather';
-    }
-
-    // Infrastructure
-    if (INFRA_DOMAINS.indexOf(domain) !== -1 || INFRA_SOURCES.indexOf(source) !== -1) return 'infrastructure';
-
-    // Disaster
-    if (DISASTER_DOMAINS.indexOf(domain) !== -1 || DISASTER_SOURCES.indexOf(source) !== -1) return 'disaster';
-
-    // Health
-    if (HEALTH_DOMAINS.indexOf(domain) !== -1 || HEALTH_SOURCES.indexOf(source) !== -1) return 'health';
-
-    // Default: classify by severity
-    return (parseFloat(event.severity) || 0) >= 7 ? 'disaster' : 'infrastructure';
-  }
-
-  function travelImpactLabel(classification) {
-    switch (classification) {
-      case 'weather': return 'FLIGHT DELAYS';
-      case 'infrastructure': return 'CONNECTIVITY';
-      case 'disaster': return 'AREA IMPACT';
-      case 'health': return 'TRAVEL ADVISORY';
-      default: return 'DISRUPTION';
+  function esc(str) { if(!str)return''; var d=document.createElement('div'); d.textContent=String(str); return d.innerHTML; }
+  function timeSince(iso) { if(!iso)return''; var ms=Date.now()-new Date(iso).getTime(); var m=Math.floor(ms/60000); if(m<60)return m+'m ago'; var h=Math.floor(m/60); if(h<24)return h+'h ago'; return Math.floor(h/24)+'d ago'; }
+  function sevColor(s) { s=parseFloat(s)||0; if(s>=7)return'var(--accent-red)'; if(s>=5)return'var(--accent-orange)'; if(s>=3)return'var(--accent-yellow)'; return'var(--accent-green)'; }
+  function levelStyle(level) {
+    switch(level) {
+      case 'CRITICAL': return {color:'var(--accent-red)'};
+      case 'SEVERE': return {color:'var(--accent-orange)'};
+      case 'SIGNIFICANT': return {color:'var(--accent-yellow)'};
+      case 'ELEVATED': return {color:'var(--accent-cyan)'};
+      default: return {color:'var(--accent-green)'};
     }
   }
 
-  // --- Travel Disruption Index ---
-  function computeTravelIndex(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents) {
-    var weatherCount = weatherEvents.length;
-    var infraCount = infraEvents.length;
-    var disasterCount = disasterEvents.length;
-    var healthCount = healthEvents.length;
-
-    // Factor scores (0-100 each)
-    var weatherScore = Math.min(100, weatherCount * 8);
-    var infraScore = Math.min(100, infraCount * 10);
-    var disasterScore = Math.min(100, disasterCount * 12);
-    var healthScore = Math.min(100, healthCount * 10);
-
-    // Boost scores based on max severity within category
-    function maxSev(events) {
-      var m = 0;
-      events.forEach(function(e) {
-        var s = parseFloat(e.severity) || 0;
-        if (s > m) m = s;
-      });
-      return m;
-    }
-    if (maxSev(weatherEvents) >= 8) weatherScore = Math.min(100, weatherScore + 20);
-    if (maxSev(disasterEvents) >= 8) disasterScore = Math.min(100, disasterScore + 20);
-
-    var factors = [
-      { name: 'Severe Weather', value: Math.round(weatherScore), weight: 35 },
-      { name: 'Infrastructure', value: Math.round(infraScore), weight: 25 },
-      { name: 'Active Disasters', value: Math.round(disasterScore), weight: 25 },
-      { name: 'Health Warnings', value: Math.round(healthScore), weight: 15 }
-    ];
-
-    var score = Math.round(
-      weatherScore * 0.35 + infraScore * 0.25 + disasterScore * 0.25 + healthScore * 0.15
-    );
-    score = Math.min(score, 100);
-
-    // Baseline when no data
-    if (allEvents.length === 0) {
-      score = 10;
-      factors = [
-        { name: 'Severe Weather', value: 0, weight: 35 },
-        { name: 'Infrastructure', value: 0, weight: 25 },
-        { name: 'Active Disasters', value: 0, weight: 25 },
-        { name: 'Health Warnings', value: 0, weight: 15 }
-      ];
-    }
-
-    renderFactors(factors, score);
-    return score;
+  function drawGauge(score, level) {
+    var svg=document.getElementById('gauge-svg');
+    var cx=110,cy=110,r=90,sa=Math.PI,ea=2*Math.PI;
+    var segs=[{s:0,e:.3,c:'#22c55e'},{s:.3,e:.5,c:'#eab308'},{s:.5,e:.7,c:'#f97316'},{s:.7,e:1,c:'#ef4444'}];
+    var h='<path d="'+arc(cx,cy,r,sa,ea)+'" fill="none" stroke="#1e293b" stroke-width="18"/>';
+    segs.forEach(function(g){h+='<path d="'+arc(cx,cy,r,sa+(ea-sa)*g.s,sa+(ea-sa)*g.e)+'" fill="none" stroke="'+g.c+'" stroke-width="18" opacity="0.3"/>';});
+    var frac=Math.max(0,Math.min(score/10,1)), ls=levelStyle(level);
+    if(frac>.005)h+='<path d="'+arc(cx,cy,r,sa,sa+(ea-sa)*frac)+'" fill="none" stroke="'+ls.color+'" stroke-width="18" stroke-linecap="round"/>';
+    var na=sa+(ea-sa)*frac, nx=cx+(r-30)*Math.cos(na), ny=cy+(r-30)*Math.sin(na);
+    h+='<line x1="'+cx+'" y1="'+cy+'" x2="'+nx+'" y2="'+ny+'" stroke="'+ls.color+'" stroke-width="2.5" stroke-linecap="round"/>';
+    h+='<circle cx="'+cx+'" cy="'+cy+'" r="5" fill="'+ls.color+'"/>';
+    var f=getComputedStyle(document.body).fontFamily;
+    h+='<text x="'+cx+'" y="'+(cy-15)+'" text-anchor="middle" fill="'+ls.color+'" font-family="'+f+'" font-size="28" font-weight="700">'+score.toFixed(1)+'</text>';
+    h+='<text x="'+cx+'" y="'+(cy+2)+'" text-anchor="middle" fill="#94a3b8" font-family="'+f+'" font-size="10" letter-spacing="1">TRAVEL</text>';
+    h+='<text x="15" y="'+(cy+5)+'" fill="#64748b" font-family="'+f+'" font-size="10">0</text>';
+    h+='<text x="202" y="'+(cy+5)+'" fill="#64748b" font-family="'+f+'" font-size="10">10</text>';
+    svg.innerHTML=h;
+    var lbl=document.getElementById('gauge-label'); lbl.textContent=level; lbl.style.color=ls.color;
   }
+  function arc(cx,cy,r,sa,ea){var x1=cx+r*Math.cos(sa),y1=cy+r*Math.sin(sa),x2=cx+r*Math.cos(ea),y2=cy+r*Math.sin(ea);return'M '+x1+' '+y1+' A '+r+' '+r+' 0 '+((ea-sa>Math.PI)?1:0)+' 1 '+x2+' '+y2;}
 
-  function renderFactors(factors, totalScore) {
-    var el = document.getElementById('factor-bars');
-    if (!el) return;
-    var ovix = (totalScore / 10).toFixed(1);
-    var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-orange)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
-
-    var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">OVIX Score: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
-    factors.forEach(function(f) {
-      var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-orange)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
-      html += '<div style="display:grid;grid-template-columns:90px 1fr 30px 25px;align-items:center;gap:6px;font-size:9px;margin-bottom:3px;">' +
-        '<span style="text-align:right;color:var(--text-secondary);">' + f.name + '</span>' +
-        '<div style="height:8px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +
-          '<div style="height:100%;width:' + f.value + '%;background:' + barColor + ';border-radius:2px;transition:width 0.5s;"></div>' +
-        '</div>' +
-        '<span style="text-align:right;color:var(--text-dim);">' + f.value + '</span>' +
-        '<span style="text-align:right;color:var(--text-dim);">' + f.weight + '%</span>' +
+  function renderDomainBars(domains) {
+    var el=document.getElementById('domain-bars'); if(!el)return;
+    var icons={aviation:'\u2708',roads:'\uD83D\uDE97',transit:'\uD83D\uDE87',maritime:'\u2693',intel:'\uD83D\uDCF0'};
+    var labels={aviation:'Aviation',roads:'Roads',transit:'Transit',maritime:'Maritime',intel:'Intel'};
+    var html='';
+    domains.forEach(function(d){
+      var pct=Math.max(0,Math.min(d.score/10*100,100)), c=sevColor(d.score);
+      html+='<div style="display:grid;grid-template-columns:80px 1fr 35px;align-items:center;gap:6px;font-size:9px;margin-bottom:4px;">'+
+        '<span style="text-align:right;color:var(--text-secondary);">'+(icons[d.domain]||'')+' '+(labels[d.domain]||d.domain)+'</span>'+
+        '<div style="height:8px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">'+
+          '<div style="height:100%;width:'+pct+'%;background:'+c+';border-radius:2px;transition:width .5s;"></div>'+
+        '</div>'+
+        '<span style="text-align:right;font-weight:700;color:'+c+';">'+d.score.toFixed(1)+'</span>'+
       '</div>';
     });
-    el.innerHTML = html;
+    el.innerHTML=html;
   }
 
-  function indexLevel(score) {
-    if (score >= 75) return { label: 'CRITICAL', color: 'var(--accent-red)' };
-    if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-orange)' };
-    if (score >= 25) return { label: 'GUARDED', color: 'var(--accent-yellow)' };
-    return { label: 'NORMAL', color: 'var(--accent-green)' };
-  }
-
-  // --- Gauge SVG ---
-  function drawGauge(score) {
-    var svg = document.getElementById('gauge-svg');
-    var cx = 110, cy = 110, r = 90;
-    var startAngle = Math.PI;
-    var endAngle = 2 * Math.PI;
-
-    var segments = [
-      { start: 0, end: 0.25, color: '#22c55e' },
-      { start: 0.25, end: 0.50, color: '#eab308' },
-      { start: 0.50, end: 0.75, color: '#f97316' },
-      { start: 0.75, end: 1.0, color: '#ef4444' }
-    ];
-
-    var html = '';
-    html += '<path d="' + arcPath(cx, cy, r, startAngle, endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
-
-    segments.forEach(function(seg) {
-      var a1 = startAngle + (endAngle - startAngle) * seg.start;
-      var a2 = startAngle + (endAngle - startAngle) * seg.end;
-      html += '<path d="' + arcPath(cx, cy, r, a1, a2) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>';
-    });
-
-    var scoreFrac = Math.max(0, Math.min(score / 100, 1));
-    if (scoreFrac > 0.005) {
-      var scoreAngle = startAngle + (endAngle - startAngle) * scoreFrac;
-      var level = indexLevel(score);
-      html += '<path d="' + arcPath(cx, cy, r, startAngle, scoreAngle) + '" fill="none" stroke="' + level.color + '" stroke-width="18" stroke-linecap="round"/>';
-    }
-
-    var needleAngle = startAngle + (endAngle - startAngle) * scoreFrac;
-    var nx = cx + (r - 30) * Math.cos(needleAngle);
-    var ny = cy + (r - 30) * Math.sin(needleAngle);
-    html += '<line x1="' + cx + '" y1="' + cy + '" x2="' + nx + '" y2="' + ny + '" stroke="' + indexLevel(score).color + '" stroke-width="2.5" stroke-linecap="round"/>';
-    html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + indexLevel(score).color + '"/>';
-
-    html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + indexLevel(score).color + '" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="28" font-weight="700">' + score + '</text>';
-    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">TRAVEL</text>';
-
-    html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">0</text>';
-    html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">100</text>';
-
-    svg.innerHTML = html;
-
-    var label = document.getElementById('gauge-label');
-    var lvl = indexLevel(score);
-    label.textContent = lvl.label;
-    label.style.color = lvl.color;
-  }
-
-  function arcPath(cx, cy, r, startAngle, endAngle) {
-    var x1 = cx + r * Math.cos(startAngle);
-    var y1 = cy + r * Math.sin(startAngle);
-    var x2 = cx + r * Math.cos(endAngle);
-    var y2 = cy + r * Math.sin(endAngle);
-    var largeArc = (endAngle - startAngle > Math.PI) ? 1 : 0;
-    return 'M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x2 + ' ' + y2;
-  }
-
-  // --- Render ---
-  function renderWeatherDisruptions(events) {
-    var el = document.getElementById('weather-list');
-    document.getElementById('weather-panel-count').textContent = events.length;
-    if (!events.length) {
-      el.innerHTML = '<div class="empty-state">No severe weather disruptions in last 24h.<br>Monitoring NWS alerts, storms, and conditions affecting airports and travel corridors.</div>';
-      return;
-    }
-
-    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
-
-    el.innerHTML = events.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var badgeColor = sev >= 7 ? 'var(--accent-red)' : sev >= 5 ? 'var(--accent-orange)' : sev >= 3 ? 'var(--accent-yellow)' : 'var(--accent-green)';
-
-      return '<div class="card">' +
-        '<div class="card-row">' +
-          '<span class="card-title">' + esc(e.title || 'Weather Alert') + '</span>' +
-          '<span class="severity-badge" style="background:' + badgeColor + ';">' + severityLabel(sev) + '</span>' +
-        '</div>' +
-        '<div class="card-row" style="margin-bottom:0;">' +
-          '<span class="impact-tag">FLIGHT DELAYS</span>' +
-          '<span style="font-size:9px;color:var(--text-dim);">' + esc((e.source || '').toUpperCase()) + '</span>' +
-        '</div>' +
-        (e.area_desc ? '<div class="card-area">' + esc(e.area_desc) + '</div>' : '') +
-        (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
-        '<div class="card-date">' +
-          '<span class="severity-dot" style="background:' + severityColor(sev) + '"></span>' +
-          'Severity ' + esc(e.severity) + ' &middot; ' + timeSince(e.occurred_at) +
-        '</div>' +
+  function renderPanel(pid, cid, events, empty) {
+    var el=document.getElementById(pid), ce=document.getElementById(cid);
+    ce.textContent=events.length;
+    if(!events.length){el.innerHTML='<div class="empty-state">'+empty+'</div>';return;}
+    el.innerHTML=events.sort(function(a,b){return b.severity-a.severity;}).map(function(e){
+      var sc=sevColor(e.severity);
+      return'<div class="card" onclick="this.classList.toggle(\'expanded\')">'+
+        '<div style="display:flex;align-items:center;gap:6px;">'+
+          '<span class="severity-dot" style="background:'+sc+'"></span>'+
+          '<span style="font-size:11px;font-weight:600;flex:1;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">'+esc(e.title)+'</span>'+
+          '<span class="severity-badge" style="background:'+sc+'">'+e.severity+'/10</span>'+
+        '</div>'+
+        '<div class="card-meta"><span>'+esc(e.location)+' \u00b7 '+esc(e.source)+'</span><span class="card-expand">\u25b8 details</span></div>'+
+        '<div class="card-details">'+esc(e.detail)+'</div>'+
       '</div>';
     }).join('');
   }
 
-  function renderTravelAlerts(events) {
-    var el = document.getElementById('alerts-list');
-    document.getElementById('alerts-panel-count').textContent = events.length;
-    if (!events.length) {
-      el.innerHTML = '<div class="empty-state">No global travel alerts in last 24h.<br>Monitoring health outbreaks, disasters, and infrastructure outages affecting travel.</div>';
-      return;
-    }
-
-    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
-
-    el.innerHTML = events.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var badgeColor = sev >= 7 ? 'var(--accent-red)' : sev >= 5 ? 'var(--accent-orange)' : sev >= 3 ? 'var(--accent-yellow)' : 'var(--accent-green)';
-      var cls = classifyEvent(e);
-      var impactLabel = travelImpactLabel(cls);
-
-      return '<div class="card">' +
-        '<div class="card-row">' +
-          '<span class="card-title">' + esc(e.title || 'Travel Alert') + '</span>' +
-          '<span class="severity-badge" style="background:' + badgeColor + ';">' + severityLabel(sev) + '</span>' +
-        '</div>' +
-        '<div class="card-row" style="margin-bottom:0;">' +
-          '<span class="impact-tag">' + esc(impactLabel) + '</span>' +
-          '<span style="font-size:9px;color:var(--text-dim);">' + esc((e.source || '').toUpperCase()) + '</span>' +
-        '</div>' +
-        (e.area_desc ? '<div class="card-area">' + esc(e.area_desc) + '</div>' : '') +
-        (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
-        '<div class="card-date">' +
-          '<span class="severity-dot" style="background:' + severityColor(sev) + '"></span>' +
-          'Severity ' + esc(e.severity) + ' &middot; ' + timeSince(e.occurred_at) +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  function updateBanner(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents, score) {
-    document.getElementById('weather-count').textContent = weatherEvents.length;
-    document.getElementById('infra-count').textContent = infraEvents.length;
-    document.getElementById('disaster-count').textContent = disasterEvents.length;
-    var healthEl = document.getElementById('health-count');
-    if (healthEl) healthEl.textContent = healthEvents.length;
-    var totalEl = document.getElementById('total-count');
-    if (totalEl) totalEl.textContent = allEvents.length;
-    var lvl = indexLevel(score);
-    var lb = document.getElementById('trav-level-badge');
-    if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
-  }
-
-  // --- Fetch & Process ---
   function fetchData() {
-    Promise.all([
-      // Severe weather (NWS, MeteoAlarm — severity >= 7 = actual warnings)
-      fetch(API + '/api/events?domain=weather&hours=24&severity=7&limit=30').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      // Infrastructure disruptions (power outages, internet)
-      fetch(API + '/api/events?domain=infrastructure&hours=24&severity=5&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      // Active disasters
-      fetch(API + '/api/events?domain=disaster&hours=48&severity=5&limit=20').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      // Health travel advisories
-      fetch(API + '/api/events?domain=health&hours=48&severity=7&limit=10').then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-    ]).then(function(results) {
-      var weatherEvents = results[0].events || [];
-      var infraEvents = results[1].events || [];
-      var disasterEvents = results[2].events || [];
-      var healthEvents = results[3].events || [];
-
-      // Non-weather events go to column 2
-      var travelAlerts = infraEvents.concat(disasterEvents).concat(healthEvents);
-      var allEvents = weatherEvents.concat(travelAlerts);
-
-      var score = computeTravelIndex(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents);
-
-      renderWeatherDisruptions(weatherEvents);
-      renderTravelAlerts(travelAlerts);
-      drawGauge(score);
-      updateBanner(weatherEvents, infraEvents, disasterEvents, healthEvents, allEvents, score);
-    }).catch(function(err) {
-      console.error('Travel fetch error:', err);
-      drawGauge(10);
-      var label = document.getElementById('gauge-label');
-      if (label) { label.textContent = 'NORMAL'; label.style.color = 'var(--accent-green)'; }
-    });
+    fetch(API+'/api/travel/scores').then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(data){
+      drawGauge(data.composite, data.level);
+      renderDomainBars(data.domains||[]);
+      var av=[],rd=[],tr=[],mi=[];
+      (data.events||[]).forEach(function(e){if(e.domain==='aviation')av.push(e);else if(e.domain==='roads')rd.push(e);else if(e.domain==='transit')tr.push(e);else mi.push(e);});
+      renderPanel('aviation-list','aviation-panel-count',av,'No aviation disruptions detected.');
+      renderPanel('roads-list','roads-panel-count',rd,'Normal traffic flow across monitored metros.');
+      renderPanel('transit-list','transit-panel-count',tr,'Normal service across monitored systems.');
+      renderPanel('intel-list','intel-panel-count',mi,'No maritime or transport intelligence stories.');
+      document.getElementById('aviation-count').textContent=av.length;
+      document.getElementById('roads-count').textContent=rd.length;
+      document.getElementById('transit-count').textContent=tr.length;
+      document.getElementById('total-count').textContent=(data.events||[]).length;
+      var lb=document.getElementById('level-badge'),ls=levelStyle(data.level);
+      lb.textContent=data.level;lb.style.color=ls.color;lb.style.border='1px solid '+ls.color;
+      var lu=document.getElementById('last-updated');
+      if(lu)lu.textContent='Updated: '+timeSince(data.updatedAt)+' | '+(data.domains||[]).map(function(d){return d.domain+':'+d.eventCount;}).join(' ');
+    }).catch(function(err){console.error('Travel fetch error:',err);drawGauge(0,'NOMINAL');});
   }
 
-  // Initial draw (baseline gauge at 10 = OVIX 1.0)
-  drawGauge(10);
-
-  // Fetch immediately, then every 5 min
+  drawGauge(0,'NOMINAL');
   fetchData();
-  setInterval(fetchData, REFRESH_MS);
+  setInterval(fetchData,REFRESH_MS);
 })();
 </script>
 
 <script>
-window.rocNav = function(action) {
-  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
-  var ROT_KEY = 'roc-rotation';
-  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
-  function getState() { try { return JSON.parse(localStorage.getItem(ROT_KEY)) || {}; } catch(e) { return {}; } }
-  function setState(s) { try { localStorage.setItem(ROT_KEY, JSON.stringify(s)); } catch(e) {} }
-  function getEnabled() { var s = getState(); return s.enabledSlides || ORDER.slice(); }
-  function getCurrentPage() {
-    var path = window.location.pathname;
-    for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) return k; }
-    return 'globe';
-  }
-  var enabled = getEnabled();
-  var current = getCurrentPage();
-  var idx = enabled.indexOf(current);
-  if (idx === -1) idx = 0;
-  if (action === 'prev') {
-    var prev = enabled[(idx - 1 + enabled.length) % enabled.length];
-    window.location = ROUTES[prev];
-  } else if (action === 'next') {
-    var next = enabled[(idx + 1) % enabled.length];
-    window.location = ROUTES[next];
-  } else if (action === 'toggle') {
-    var s = getState();
-    s.active = !s.active;
-    if (!s.interval) s.interval = 30;
-    setState(s);
-    updateTransportUI();
-    if (s.active) {
-      var next2 = enabled[(idx + 1) % enabled.length];
-      setTimeout(function() {
-        var c = getState();
-        if (!c.active) return;
-        try { window.location = ROUTES[next2]; } catch(e2) { window.location = ROUTES[next2]; }
-      }, s.interval * 1000);
-    }
-  } else if (action === 'speed') {
-    var s2 = getState();
-    s2.interval = parseInt(document.getElementById('bnr-speed').value) || 30;
-    setState(s2);
-  }
+window.rocNav=function(action){
+  ROUTES={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var ORDER=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var ROT_KEY='roc-rotation';
+  function gs(){try{return JSON.parse(localStorage.getItem(ROT_KEY))||{};}catch(e){return{};}}
+  function ss(s){try{localStorage.setItem(ROT_KEY,JSON.stringify(s));}catch(e){}}
+  var enabled=gs().enabledSlides||ORDER.slice();
+  var path=window.location.pathname,cur='travel';
+  for(var k in ROUTES){if(path.indexOf(ROUTES[k])!==-1){cur=k;break;}}
+  var idx=enabled.indexOf(cur);if(idx===-1)idx=0;
+  if(action==='prev')window.location=ROUTES[enabled[(idx-1+enabled.length)%enabled.length]];
+  else if(action==='next')window.location=ROUTES[enabled[(idx+1)%enabled.length]];
+  else if(action==='toggle'){var s=gs();s.active=!s.active;if(!s.interval)s.interval=30;ss(s);utu();if(s.active){var n=enabled[(idx+1)%enabled.length];setTimeout(function(){if(!gs().active)return;window.location=ROUTES[n];},(s.interval||30)*1000);}}
 };
-function updateTransportUI() {
-  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation')) || {}; } catch(e) { s = {}; }
-  var btn = document.getElementById('bnr-play');
-  var ind = document.getElementById('rotation-indicator');
-  if (btn) { btn.innerHTML = s.active ? '&#9208;' : '&#9654;'; btn.style.background = s.active ? 'rgba(24,188,156,0.25)' : 'rgba(24,188,156,0.08)'; }
-  if (ind) ind.style.display = s.active ? 'block' : 'none';
-  var speedEl = document.getElementById('bnr-speed');
-  if (speedEl && s.interval) speedEl.value = String(s.interval);
-}
-updateTransportUI();
-// Auto-advance if rotation is active
-(function(){
-  var s; try { s = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
-  if (!s.active) return;
-  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
-  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
-  var enabled = s.enabledSlides || ORDER.slice();
-  var path = window.location.pathname;
-  var cur = 'travel';
-  for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) { cur = k; break; } }
-  var idx = enabled.indexOf(cur); if (idx === -1) idx = 0;
-  var next = enabled[(idx + 1) % enabled.length];
-  setTimeout(function() {
-    var c; try { c = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
-    if (!c.active) return;
-    window.location = ROUTES[next];
-  }, (s.interval || 30) * 1000);
+function utu(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation'))||{};}catch(e){s={};}var b=document.getElementById('bnr-play');if(b){b.innerHTML=s.active?'&#9208;':'&#9654;';b.style.background=s.active?'rgba(24,188,156,0.25)':'rgba(24,188,156,0.08)';}}
+utu();
+(function(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;
+  var R={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  var O=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var en=s.enabledSlides||O.slice(),p=window.location.pathname,c='travel';
+  for(var k in R){if(p.indexOf(R[k])!==-1){c=k;break;}}
+  var i=en.indexOf(c);if(i===-1)i=0;var n=en[(i+1)%en.length];
+  setTimeout(function(){var x;try{x=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!x.active)return;window.location=R[n];},(s.interval||30)*1000);
 })();
 </script>
 </body>
