@@ -218,7 +218,7 @@ export default async function MemberProfilePage({
             )}
             {member.foundingMember && (
               <span className="badge" style={{ background: '#3d2e00', color: '#ff9d00' }}>
-                Founding Member
+                Early member
               </span>
             )}
             {showProfessional && profile.location && (
