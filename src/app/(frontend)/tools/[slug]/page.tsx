@@ -400,6 +400,7 @@ export default async function ToolDetailPage({
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function ToolSections({ tool }: { tool: any }) {
   const catLabel = categoryLabels[tool.category || ''] || tool.category || 'Tool'
+  const domainLabel = domainLabels[(tool as any).domain || ''] || ''
 
   return (
     <div>
@@ -408,41 +409,53 @@ function ToolSections({ tool }: { tool: any }) {
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>
           About this {catLabel.toLowerCase()}
         </h2>
+        {tool.description ? (
+          <div style={{
+            fontSize: '0.9375rem',
+            color: 'var(--fg)',
+            lineHeight: 1.8,
+            marginBottom: '1rem',
+          }}>
+            <p style={{ margin: '0 0 1rem 0' }}>{tool.description}</p>
+          </div>
+        ) : (
+          <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', fontStyle: 'italic' }}>
+            Description coming soon.
+          </p>
+        )}
+
+        {/* Quick facts strip */}
         <div style={{
-          padding: '1.25rem',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '0.75rem',
+          padding: '1rem',
           background: 'var(--bg-secondary)',
           borderRadius: 'var(--radius-lg)',
           borderLeft: `3px solid ${categoryColors[tool.category || ''] || 'var(--accent)'}`,
         }}>
-          {tool.description ? (
-            <p style={{ fontSize: '0.9375rem', color: 'var(--fg)', lineHeight: 1.7, margin: 0 }}>
-              {tool.description}
-            </p>
-          ) : (
-            <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', fontStyle: 'italic', margin: 0 }}>
-              Description coming soon.
-            </p>
-          )}
-        </div>
-
-        {/* Quick facts grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(12rem, 1fr))', gap: '0.75rem', marginTop: '1rem' }}>
           {tool.category && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Type</div>
-              <div style={{ fontWeight: 600 }}>{catLabel}</div>
+            <div style={{ fontSize: '0.8125rem' }}>
+              <span style={{ color: 'var(--fg-faint)' }}>Type: </span>
+              <span style={{ fontWeight: 600 }}>{catLabel}</span>
+            </div>
+          )}
+          {domainLabel && (
+            <div style={{ fontSize: '0.8125rem' }}>
+              <span style={{ color: 'var(--fg-faint)' }}>Domain: </span>
+              <span style={{ fontWeight: 600 }}>{domainLabel}</span>
             </div>
           )}
           {tool.embedUrl && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Access</div>
-              <div style={{ fontWeight: 600 }}>Free &amp; interactive</div>
+            <div style={{ fontSize: '0.8125rem' }}>
+              <span style={{ color: 'var(--fg-faint)' }}>Access: </span>
+              <span style={{ fontWeight: 600 }}>Free &amp; interactive</span>
             </div>
           )}
           {tool.sourceCodeUrl && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Source</div>
-              <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: 'var(--accent)' }}>
+            <div style={{ fontSize: '0.8125rem' }}>
+              <span style={{ color: 'var(--fg-faint)' }}>Source: </span>
+              <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
                 Open source ↗
               </a>
             </div>
@@ -473,7 +486,6 @@ function ToolSections({ tool }: { tool: any }) {
 
       {/* Section 3: Discussion */}
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Discussion</h2>
         <DiscussionSection assetType="tools" assetId={tool.id} />
       </div>
     </div>
