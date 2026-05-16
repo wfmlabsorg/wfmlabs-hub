@@ -34,12 +34,13 @@ export default async function ToolsBrowsePage({
   const activeCategory = resolvedParams.category || 'all'
   const payload = await getPayload({ config })
 
-  const whereClause: Where | undefined = activeCategory !== 'all'
-    ? { category: { equals: activeCategory } }
-    : undefined
+  const baseWhere: Where = { publishedAt: { exists: true } }
+  const whereClause: Where = activeCategory !== 'all'
+    ? { and: [baseWhere, { category: { equals: activeCategory } }] }
+    : baseWhere
 
   const tools = await payload
-    .find({ collection: 'tools', limit: 50, sort: '-updatedAt', depth: 1, overrideAccess: true, ...(whereClause ? { where: whereClause } : {}) })
+    .find({ collection: 'tools', limit: 50, sort: '-updatedAt', depth: 1, overrideAccess: true, where: whereClause })
     .catch(() => ({ docs: [] }))
 
   const activeCat = categories.find(c => c.value === activeCategory)

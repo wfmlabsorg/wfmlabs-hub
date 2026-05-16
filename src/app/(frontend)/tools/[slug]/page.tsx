@@ -60,7 +60,7 @@ export default async function ToolDetailPage({
   const payload = await getPayload({ config })
   const result = await payload.find({
     collection: 'tools',
-    where: { slug: { equals: slug } },
+    where: { and: [{ slug: { equals: slug } }, { publishedAt: { exists: true } }] },
     depth: 2,
     limit: 1,
     overrideAccess: true,
