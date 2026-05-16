@@ -4,18 +4,26 @@ import config from '@payload-config'
 import React from 'react'
 import { AssetCard } from '@/components/cards/AssetCard'
 
-export const metadata = { title: 'Tools' }
+export const metadata = { title: 'Tools — WFM Labs' }
 export const dynamic = 'force-dynamic'
 
 const categories = [
-  { value: 'all', label: 'All', icon: '🔮' },
-  { value: 'capacity-planning', label: 'Capacity Planning', icon: '📊' },
-  { value: 'forecasting', label: 'Forecasting', icon: '📈' },
-  { value: 'scheduling', label: 'Scheduling', icon: '📅' },
-  { value: 'analytics', label: 'Analytics', icon: '🔍' },
-  { value: 'value-planning', label: 'Value Planning', icon: '💰' },
-  { value: 'staffing', label: 'Staffing', icon: '👥' },
+  { value: 'all', label: 'All Tools', icon: '🔮' },
+  { value: 'calculator', label: 'Calculators', icon: '🧮' },
+  { value: 'analyzer', label: 'Analyzers', icon: '📊' },
+  { value: 'simulator', label: 'Simulators', icon: '🎲' },
+  { value: 'model', label: 'Models', icon: '🏗️' },
+  { value: 'methodology', label: 'Methodology', icon: '📐' },
 ]
+
+const categoryDescriptions: Record<string, string> = {
+  all: 'Interactive tools for workforce management professionals — from quick calculations to strategic planning models.',
+  calculator: 'Plug in your numbers, get an answer. Erlang staffing, capacity planning, shrinkage, attrition — the daily tools of WFM.',
+  analyzer: 'Upload your interval data and get back insight. Forecast accuracy, variance decomposition, statistical confidence bands.',
+  simulator: 'Model scenarios before you commit. Monte Carlo distributions, campaign ROI curves, AI automation tipping points.',
+  model: 'Strategic frameworks that connect operational decisions to business outcomes. Value chains, service model comparisons.',
+  methodology: 'Sharpen your practice. Calibrated estimation, composite metrics, and measurement techniques for WFM professionals.',
+}
 
 export default async function ToolsBrowsePage({
   searchParams,
@@ -34,28 +42,18 @@ export default async function ToolsBrowsePage({
     .find({ collection: 'tools', limit: 50, sort: '-updatedAt', depth: 1, overrideAccess: true, ...(whereClause ? { where: whereClause } : {}) })
     .catch(() => ({ docs: [] }))
 
+  const activeCat = categories.find(c => c.value === activeCategory)
+
   return (
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '2rem 1rem' }}>
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-            Tools
-          </h1>
-          <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
-            Interactive calculators, planning tools, and analytical utilities for WFM practitioners.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button className="btn btn-secondary" style={{ fontSize: '0.8125rem' }}>
-            Filter
-          </button>
-          <select className="input" style={{ width: 'auto', fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}>
-            <option>Sort: Trending</option>
-            <option>Sort: Recent</option>
-            <option>Sort: Most Liked</option>
-          </select>
-        </div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+          WFM Tools
+        </h1>
+        <p style={{ color: 'var(--fg-muted)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: '48rem' }}>
+          {categoryDescriptions[activeCategory] || categoryDescriptions.all}
+        </p>
       </div>
 
       {/* Category filter chips */}
@@ -73,10 +71,10 @@ export default async function ToolsBrowsePage({
         ))}
       </div>
 
-      {/* Featured section header */}
+      {/* Section header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>
-          {activeCategory === 'all' ? '🔥 All Tools' : `${categories.find(c => c.value === activeCategory)?.icon || '🔮'} ${categories.find(c => c.value === activeCategory)?.label || 'Tools'}`}
+          {activeCat?.icon || '🔮'} {activeCat?.label || 'All Tools'}
         </h2>
         <span style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
           {tools.docs.length} {tools.docs.length === 1 ? 'Tool' : 'Tools'}
@@ -95,10 +93,10 @@ export default async function ToolsBrowsePage({
           }}
         >
           <p style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-            No tools yet
+            No tools in this category
           </p>
           <p style={{ fontSize: '0.875rem' }}>
-            Tools will appear here once published.
+            Check back soon — we&apos;re building new tools regularly.
           </p>
         </div>
       ) : (
@@ -112,6 +110,7 @@ export default async function ToolsBrowsePage({
               slug={tool.slug}
               assetType="tool"
               category={tool.category || null}
+              domain={tool.domain || null}
               status={tool.status}
               tier={tool.tier}
               stats={tool.stats}

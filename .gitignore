@@ -54,3 +54,4 @@ _node_modules_old/
 
 # OpenMCT dist (copied from node_modules at build time)
 public/roc/openmct/
+.env*.local

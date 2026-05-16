@@ -1,12 +1,35 @@
 import React from 'react'
 
 const categoryGradients: Record<string, string> = {
-  'capacity-planning': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'forecasting': 'linear-gradient(135deg, #0891b2 0%, #06b6d4 100%)',
-  'analytics': 'linear-gradient(135deg, #ec4899 0%, #f97316 100%)',
-  'value-planning': 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
-  'scheduling': 'linear-gradient(135deg, #10b981 0%, #0891b2 100%)',
-  'staffing': 'linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)',
+  // New tool type categories
+  'calculator': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+  'analyzer': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+  'simulator': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
+  'model': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+  'methodology': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+  // Legacy (keep for backwards compat during migration)
+  'capacity-planning': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+  'forecasting': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+  'analytics': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+  'value-planning': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+  'scheduling': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+  'staffing': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+}
+
+const categoryLabels: Record<string, string> = {
+  'calculator': 'Calculator',
+  'analyzer': 'Analyzer',
+  'simulator': 'Simulator',
+  'model': 'Model',
+  'methodology': 'Methodology',
+}
+
+const domainLabels: Record<string, string> = {
+  'staffing-capacity': 'Staffing & Capacity',
+  'forecasting-accuracy': 'Forecasting',
+  'workforce-economics': 'Workforce Economics',
+  'operations-routing': 'Operations',
+  'measurement-analytics': 'Measurement',
 }
 
 const assetTypeGradients: Record<string, string> = {
@@ -49,6 +72,8 @@ interface AssetCardProps {
   tier?: string | null
   topics?: Array<{ name: string; slug: string } | string | number> | null
   primaryContributor?: { displayName: string; username: string } | string | number | null
+  /** Tool-specific: WFM domain */
+  domain?: string | null
   /** Paper-specific: publication name */
   sourceName?: string | null
   /** Paper-specific: source type key */
@@ -71,6 +96,7 @@ export function AssetCard({
   description,
   assetType,
   category,
+  domain,
   status,
   primaryContributor,
   sourceName,
@@ -125,17 +151,22 @@ export function AssetCard({
           {/* Badges on gradient */}
           <div className="asset-card-badges">
             <div className="asset-card-badges-left">
-              {status === 'published' && (
-                <span className="asset-card-badge">Running</span>
+              {category && categoryLabels[category] && (
+                <span className="asset-card-badge">{categoryLabels[category]}</span>
+              )}
+              {domain && domainLabels[domain] && (
+                <span className="asset-card-badge">{domainLabels[domain]}</span>
               )}
               {isFeatured && (
                 <span className="asset-card-badge asset-card-badge-featured">Featured</span>
               )}
             </div>
             <div className="asset-card-badges-right">
-              <span className="asset-card-badge">
-                ♥ {stats?.reactionCount || 0}
-              </span>
+              {(stats?.reactionCount || 0) > 0 && (
+                <span className="asset-card-badge">
+                  ♥ {stats?.reactionCount || 0}
+                </span>
+              )}
             </div>
           </div>
         </div>

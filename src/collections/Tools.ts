@@ -37,13 +37,29 @@ export const Tools: CollectionConfig = {
       name: 'category',
       type: 'select',
       options: [
-        { label: 'Capacity Planning', value: 'capacity-planning' },
-        { label: 'Forecasting', value: 'forecasting' },
-        { label: 'Scheduling', value: 'scheduling' },
-        { label: 'Analytics', value: 'analytics' },
-        { label: 'Value Planning', value: 'value-planning' },
-        { label: 'Staffing', value: 'staffing' },
+        { label: 'Calculator', value: 'calculator' },
+        { label: 'Analyzer', value: 'analyzer' },
+        { label: 'Simulator', value: 'simulator' },
+        { label: 'Model', value: 'model' },
+        { label: 'Methodology', value: 'methodology' },
       ],
+      admin: {
+        description: 'Tool type: Calculator (input→answer), Analyzer (data→insight), Simulator (scenarios), Model (strategic framework), Methodology (practice/technique)',
+      },
+    },
+    {
+      name: 'domain',
+      type: 'select',
+      options: [
+        { label: 'Staffing & Capacity', value: 'staffing-capacity' },
+        { label: 'Forecasting & Accuracy', value: 'forecasting-accuracy' },
+        { label: 'Workforce Economics', value: 'workforce-economics' },
+        { label: 'Operations & Routing', value: 'operations-routing' },
+        { label: 'Measurement & Analytics', value: 'measurement-analytics' },
+      ],
+      admin: {
+        description: 'WFM domain this tool serves',
+      },
     },
     {
       name: 'methodology',
