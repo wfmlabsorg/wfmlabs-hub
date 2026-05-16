@@ -7,37 +7,40 @@ import { ReactionBar } from '@/components/ui/ReactionBar'
 import React from 'react'
 
 const categoryColors: Record<string, string> = {
-  'capacity-planning': '#f59e0b',
-  forecasting: '#3b82f6',
-  scheduling: '#8b5cf6',
-  analytics: '#10b981',
-  'value-planning': '#ef4444',
-  staffing: '#6366f1',
+  calculator: '#3b82f6',
+  analyzer: '#8b5cf6',
+  simulator: '#06b6d4',
+  model: '#f59e0b',
+  methodology: '#10b981',
+  // Legacy fallbacks
+  'capacity-planning': '#3b82f6',
+  forecasting: '#8b5cf6',
+  scheduling: '#10b981',
+  analytics: '#8b5cf6',
+  'value-planning': '#f59e0b',
+  staffing: '#3b82f6',
 }
 
 const categoryLabels: Record<string, string> = {
-  'capacity-planning': 'Capacity Planning',
-  forecasting: 'Forecasting',
-  scheduling: 'Scheduling',
-  analytics: 'Analytics',
-  'value-planning': 'Value Planning',
-  staffing: 'Staffing',
+  calculator: 'Calculator',
+  analyzer: 'Analyzer',
+  simulator: 'Simulator',
+  model: 'Model',
+  methodology: 'Methodology',
+  'capacity-planning': 'Calculator',
+  forecasting: 'Calculator',
+  scheduling: 'Calculator',
+  analytics: 'Analyzer',
+  'value-planning': 'Model',
+  staffing: 'Calculator',
 }
 
-const statusColors: Record<string, string> = {
-  published: '#10b981',
-  draft: '#6b7280',
-  proposed: '#f59e0b',
-  refined: '#3b82f6',
-  mature: '#8b5cf6',
-  deprecated: '#ef4444',
-}
-
-const tierColors: Record<string, string> = {
-  public: '#10b981',
-  free: '#3b82f6',
-  practitioner: '#f59e0b',
-  'practitioner-plus': '#ef4444',
+const domainLabels: Record<string, string> = {
+  'staffing-capacity': 'Staffing & Capacity',
+  'forecasting-accuracy': 'Forecasting & Accuracy',
+  'workforce-economics': 'Workforce Economics',
+  'operations-routing': 'Operations & Routing',
+  'measurement-analytics': 'Measurement & Analytics',
 }
 
 function formatDate(d: string) {
@@ -66,7 +69,6 @@ export default async function ToolDetailPage({
   const tool = result.docs[0]
   if (!tool) notFound()
 
-  // Fetch reaction counts for this tool
   const reactionTypes = ['like', 'insightful', 'practical', 'question'] as const
   const reactionCounts: Record<string, number> = { like: 0, insightful: 0, practical: 0, question: 0 }
   for (const rType of reactionTypes) {
@@ -92,8 +94,8 @@ export default async function ToolDetailPage({
 
   const catColor = categoryColors[tool.category || ''] || 'var(--accent)'
   const catLabel = categoryLabels[tool.category || ''] || tool.category || ''
-  const sColor = statusColors[tool.status || ''] || '#6b7280'
-  const tColor = tierColors[tool.tier || ''] || '#6b7280'
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const domainLabel = domainLabels[(tool as any).domain || ''] || ''
 
   return (
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
@@ -115,87 +117,74 @@ export default async function ToolDetailPage({
         <span style={{ color: 'var(--fg)' }}>{tool.title}</span>
       </nav>
 
-      {/* Header Bar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-        }}
-      >
-        {/* Category badge */}
-        {tool.category && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0.25rem 0.625rem',
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              borderRadius: '9999px',
-              background: `${catColor}20`,
-              color: catColor,
-            }}
-          >
-            {catLabel}
-          </span>
-        )}
-        {/* Status badge */}
-        {tool.status && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0.25rem 0.625rem',
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              borderRadius: '9999px',
-              background: `${sColor}20`,
-              color: sColor,
-            }}
-          >
-            {tool.status}
-          </span>
-        )}
-        {/* Tier badge */}
-        {tool.tier && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '0.25rem 0.625rem',
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em',
-              borderRadius: '9999px',
-              background: `${tColor}20`,
-              color: tColor,
-            }}
-          >
-            {tool.tier}
-          </span>
-        )}
-      </div>
-
-      {/* Title row */}
+      {/* Header: badges + title + description introduction */}
       <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1.2, marginBottom: '0.5rem' }}>
+        {/* Badges */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          {tool.category && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0.25rem 0.625rem',
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+                borderRadius: '9999px',
+                background: `${catColor}20`,
+                color: catColor,
+              }}
+            >
+              {catLabel}
+            </span>
+          )}
+          {domainLabel && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0.25rem 0.625rem',
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: '0.03em',
+                borderRadius: '9999px',
+                background: 'var(--bg-secondary)',
+                color: 'var(--fg-muted)',
+              }}
+            >
+              {domainLabel}
+            </span>
+          )}
+        </div>
+
+        {/* Title */}
+        <h1 style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1.2, marginBottom: '0.75rem' }}>
           {tool.title}
         </h1>
+
+        {/* Introduction — the description serves as the "what does this tool do" intro */}
+        {tool.description && (
+          <p style={{
+            fontSize: '1rem',
+            color: 'var(--fg-muted)',
+            lineHeight: 1.7,
+            maxWidth: '48rem',
+            marginBottom: '0.75rem',
+          }}>
+            {tool.description}
+          </p>
+        )}
+
+        {/* Meta line */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '1rem',
             fontSize: '0.8125rem',
-            color: 'var(--fg-muted)',
+            color: 'var(--fg-faint)',
             flexWrap: 'wrap',
           }}
         >
@@ -206,25 +195,29 @@ export default async function ToolDetailPage({
             >
               <div
                 style={{
-                  width: '1.5rem',
-                  height: '1.5rem',
+                  width: '1.25rem',
+                  height: '1.25rem',
                   borderRadius: '50%',
                   background: 'var(--accent-light)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.6875rem',
+                  fontSize: '0.625rem',
                   fontWeight: 600,
                   color: 'var(--accent)',
                 }}
               >
                 {(contributor as { displayName: string }).displayName.charAt(0).toUpperCase()}
               </div>
-              by {(contributor as { displayName: string }).displayName}
+              {(contributor as { displayName: string }).displayName}
             </a>
           )}
-          {tool.version && <span>v{tool.version}</span>}
           {tool.updatedAt && <span>Updated {formatDate(tool.updatedAt)}</span>}
+          {tool.sourceCodeUrl && (
+            <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', textDecoration: 'none' }}>
+              Source code ↗
+            </a>
+          )}
         </div>
       </div>
 
@@ -262,7 +255,7 @@ export default async function ToolDetailPage({
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ width: '0.5rem', height: '0.5rem', borderRadius: '50%', background: tool.embedUrl ? '#10b981' : '#6b7280' }} />
                 <span style={{ color: 'var(--fg-muted)' }}>
-                  {tool.embedUrl ? 'Live Tool' : 'No embed available'}
+                  {tool.embedUrl ? 'Live tool' : 'No embed available'}
                 </span>
               </div>
               {tool.embedUrl && (
@@ -285,21 +278,15 @@ export default async function ToolDetailPage({
                     cursor: 'pointer',
                   }}
                 >
-                  Launch in new tab ↗
+                  Open full screen ↗
                 </a>
               )}
             </div>
-            {/* Iframe or placeholder */}
             {tool.embedUrl ? (
               <iframe
                 src={tool.embedUrl}
                 title={tool.title}
-                style={{
-                  width: '100%',
-                  height: '600px',
-                  border: 'none',
-                  display: 'block',
-                }}
+                style={{ width: '100%', height: '600px', border: 'none', display: 'block' }}
                 allow="clipboard-write; clipboard-read"
                 loading="lazy"
               />
@@ -322,127 +309,59 @@ export default async function ToolDetailPage({
             )}
           </div>
 
-          {/* Tabs */}
-          <ToolTabs tool={tool} />
+          {/* Sections: About → Methodology → Discussion (reordered) */}
+          <ToolSections tool={tool} />
         </div>
 
         {/* Sidebar */}
-        <aside
-          className="tool-detail-sidebar"
-          style={{
-            width: '16rem',
-            flexShrink: 0,
-          }}
-        >
+        <aside className="tool-detail-sidebar" style={{ width: '16rem', flexShrink: 0 }}>
           <div style={{ position: 'sticky', top: '4.5rem' }}>
-            {/* Topics */}
-            {tool.topics && Array.isArray(tool.topics) && tool.topics.length > 0 && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3
-                  style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    color: 'var(--fg-muted)',
-                    marginBottom: '0.5rem',
-                  }}
-                >
-                  Topics
-                </h3>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                  {tool.topics.map((topic: unknown, i: number) => {
-                    const name =
-                      typeof topic === 'object' && topic !== null && 'name' in (topic as Record<string, unknown>)
-                        ? (topic as { name: string }).name
-                        : String(topic)
-                    return (
-                      <span key={i} className="topic-pill">
-                        {name}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
+            {/* Quick actions */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem' }}>
+              {tool.embedUrl && (
+                <a href={tool.embedUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary" style={{ textAlign: 'center' }}>
+                  Launch tool
+                </a>
+              )}
+              {tool.sourceCodeUrl && (
+                <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ textAlign: 'center' }}>
+                  Source code
+                </a>
+              )}
+            </div>
 
-            {/* Stats */}
-            {tool.stats && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h3
-                  style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    color: 'var(--fg-muted)',
-                    marginBottom: '0.5rem',
-                  }}
-                >
-                  Stats
-                </h3>
-                <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
-                  {[
-                    { label: 'Views', value: tool.stats.viewCount },
-                    { label: 'Discussions', value: tool.stats.discussionCount },
-                    { label: 'Reactions', value: tool.stats.reactionCount },
-                  ].map((s) => (
-                    <div
-                      key={s.label}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        padding: '0.25rem 0',
-                      }}
-                    >
-                      <span>{s.label}</span>
-                      <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{s.value ?? 0}</span>
-                    </div>
-                  ))}
-                </div>
+            {/* Info cards */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-muted)', marginBottom: '0.5rem' }}>
+                Details
+              </h3>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
+                {[
+                  { label: 'Type', value: catLabel },
+                  ...(domainLabel ? [{ label: 'Domain', value: domainLabel }] : []),
+                  ...(tool.version ? [{ label: 'Version', value: `v${tool.version}` }] : []),
+                  { label: 'Views', value: String(tool.stats?.viewCount ?? 0) },
+                  { label: 'Discussions', value: String(tool.stats?.discussionCount ?? 0) },
+                ].map((s) => (
+                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.25rem 0' }}>
+                    <span>{s.label}</span>
+                    <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{s.value}</span>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
 
-            {/* Contributors */}
+            {/* Contributor */}
             {contributor && (
               <div style={{ marginBottom: '1.5rem' }}>
-                <h3
-                  style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    color: 'var(--fg-muted)',
-                    marginBottom: '0.5rem',
-                  }}
-                >
-                  Contributors
+                <h3 style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-muted)', marginBottom: '0.5rem' }}>
+                  Contributor
                 </h3>
                 <a
                   href={`/member/${(contributor as { username: string }).username}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    textDecoration: 'none',
-                    color: 'var(--fg)',
-                    fontSize: '0.8125rem',
-                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none', color: 'var(--fg)', fontSize: '0.8125rem' }}
                 >
-                  <div
-                    style={{
-                      width: '1.75rem',
-                      height: '1.75rem',
-                      borderRadius: '50%',
-                      background: 'var(--accent-light)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: 'var(--accent)',
-                    }}
-                  >
+                  <div style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', background: 'var(--accent-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent)' }}>
                     {(contributor as { displayName: string }).displayName.charAt(0).toUpperCase()}
                   </div>
                   {(contributor as { displayName: string }).displayName}
@@ -450,59 +369,21 @@ export default async function ToolDetailPage({
               </div>
             )}
 
-            {/* Actions */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {tool.embedUrl && (
-                <a
-                  href={tool.embedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-primary"
-                  style={{ textAlign: 'center' }}
-                >
-                  Launch Tool
-                </a>
-              )}
-              {tool.sourceCodeUrl && (
-                <a
-                  href={tool.sourceCodeUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-secondary"
-                  style={{ textAlign: 'center' }}
-                >
-                  Source Code
-                </a>
-              )}
-            </div>
-
-            {/* Related assets placeholder */}
-            <div style={{ marginTop: '1.5rem' }}>
-              <h3
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: 'var(--fg-muted)',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                Related Assets
-              </h3>
-              <div
-                style={{
-                  padding: '1rem',
-                  border: '1px dashed var(--border)',
-                  borderRadius: 'var(--radius)',
-                  textAlign: 'center',
-                  fontSize: '0.8125rem',
-                  color: 'var(--fg-faint)',
-                }}
-              >
-                Coming soon
+            {/* Topics */}
+            {tool.topics && Array.isArray(tool.topics) && tool.topics.length > 0 && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h3 style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-muted)', marginBottom: '0.5rem' }}>
+                  Topics
+                </h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                  {tool.topics.map((topic: unknown, i: number) => {
+                    const name = typeof topic === 'object' && topic !== null && 'name' in (topic as Record<string, unknown>)
+                      ? (topic as { name: string }).name : String(topic)
+                    return <span key={i} className="topic-pill">{name}</span>
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </aside>
       </div>
@@ -517,39 +398,59 @@ export default async function ToolDetailPage({
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function ToolTabs({ tool }: { tool: any }) {
-  // Server component — render all tabs, use CSS to show/hide via :target or just show all stacked
-  // Since this is a server component, we render all content in a tabbed visual layout
+function ToolSections({ tool }: { tool: any }) {
+  const catLabel = categoryLabels[tool.category || ''] || tool.category || 'Tool'
+
   return (
     <div>
-      {/* Tab headers */}
-      <div
-        style={{
-          display: 'flex',
-          borderBottom: '2px solid var(--border)',
-          marginBottom: '1.5rem',
-          gap: '0',
-        }}
-      >
-        {['Methodology', 'About', 'Discussion'].map((tab, i) => (
-          <div
-            key={tab}
-            style={{
-              padding: '0.625rem 1.25rem',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-              color: i === 0 ? 'var(--accent)' : 'var(--fg-muted)',
-              borderBottom: i === 0 ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-2px',
-              cursor: 'default',
-            }}
-          >
-            {tab}
-          </div>
-        ))}
+      {/* Section 1: About — What does this tool do? */}
+      <div style={{ marginBottom: '2.5rem' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>
+          About this {catLabel.toLowerCase()}
+        </h2>
+        <div style={{
+          padding: '1.25rem',
+          background: 'var(--bg-secondary)',
+          borderRadius: 'var(--radius-lg)',
+          borderLeft: `3px solid ${categoryColors[tool.category || ''] || 'var(--accent)'}`,
+        }}>
+          {tool.description ? (
+            <p style={{ fontSize: '0.9375rem', color: 'var(--fg)', lineHeight: 1.7, margin: 0 }}>
+              {tool.description}
+            </p>
+          ) : (
+            <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', fontStyle: 'italic', margin: 0 }}>
+              Description coming soon.
+            </p>
+          )}
+        </div>
+
+        {/* Quick facts grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(12rem, 1fr))', gap: '0.75rem', marginTop: '1rem' }}>
+          {tool.category && (
+            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
+              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Type</div>
+              <div style={{ fontWeight: 600 }}>{catLabel}</div>
+            </div>
+          )}
+          {tool.embedUrl && (
+            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
+              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Access</div>
+              <div style={{ fontWeight: 600 }}>Free &amp; interactive</div>
+            </div>
+          )}
+          {tool.sourceCodeUrl && (
+            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
+              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem', fontSize: '0.75rem' }}>Source</div>
+              <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                Open source ↗
+              </a>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Methodology section */}
+      {/* Section 2: Methodology */}
       <div style={{ marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Methodology</h2>
         {tool.methodology ? (
@@ -565,51 +466,14 @@ function ToolTabs({ tool }: { tool: any }) {
               fontSize: '0.875rem',
             }}
           >
-            Methodology documentation will be added by the contributor.
+            Methodology documentation will be added soon. This section will cover the formulas, assumptions, and best practices behind this tool.
           </div>
         )}
       </div>
 
-      {/* About section */}
-      <div style={{ marginBottom: '2.5rem' }}>
-        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>About</h2>
-        {tool.description && (
-          <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', lineHeight: 1.7, marginBottom: '1rem' }}>
-            {tool.description}
-          </p>
-        )}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(12rem, 1fr))',
-            gap: '1rem',
-          }}
-        >
-          {tool.version && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem' }}>Version</div>
-              <div style={{ fontWeight: 600 }}>{tool.version}</div>
-            </div>
-          )}
-          {tool.category && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem' }}>Category</div>
-              <div style={{ fontWeight: 600 }}>{categoryLabels[tool.category] || tool.category}</div>
-            </div>
-          )}
-          {tool.sourceCodeUrl && (
-            <div style={{ padding: '0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.8125rem' }}>
-              <div style={{ color: 'var(--fg-faint)', marginBottom: '0.25rem' }}>Source Code</div>
-              <a href={tool.sourceCodeUrl} target="_blank" rel="noopener noreferrer" style={{ fontWeight: 600, color: 'var(--accent)' }}>
-                View Repository
-              </a>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Discussion section */}
+      {/* Section 3: Discussion */}
       <div style={{ borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
+        <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1rem' }}>Discussion</h2>
         <DiscussionSection assetType="tools" assetId={tool.id} />
       </div>
     </div>
