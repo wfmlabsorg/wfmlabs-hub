@@ -171,7 +171,33 @@ export default async function HomePage() {
           </div>
 
           {/* Panel B: Dashboard Rotator (rotating OVIX domains) */}
-          <DashboardRotator />
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #22d3ee', padding: '1rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.75rem' }}>
+              <span style={{ fontSize: '0.875rem' }}>📊</span>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>OVIX Dashboards</span>
+              <a href="/roc" target="_blank" rel="noopener" style={{ marginLeft: 'auto', fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Open ROC →</a>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+              {[
+                { icon: '⛈', label: 'Weather', path: 'weather', color: '#3b82f6' },
+                { icon: '🌋', label: 'Seismic', path: 'seismic', color: '#ef4444' },
+                { icon: '🔥', label: 'Disaster', path: 'disaster', color: '#f97316' },
+                { icon: '🛡', label: 'Cyber', path: 'cyber', color: '#22c55e' },
+                { icon: '🏥', label: 'Health', path: 'health', color: '#ec4899' },
+                { icon: '🏗', label: 'Infrastructure', path: 'infrastructure', color: '#8b5cf6' },
+                { icon: '📈', label: 'Financial', path: 'financial-markets', color: '#f59e0b' },
+                { icon: '🌿', label: 'Environmental', path: 'environmental', color: '#14b8a6' },
+                { icon: '🌐', label: 'Geopolitical', path: 'geopolitical', color: '#6366f1' },
+                { icon: '✈', label: 'Travel', path: 'travel', color: '#06b6d4' },
+              ].map(d => (
+                <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}`} target="_blank" rel="noopener"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${d.color}`, textDecoration: 'none', color: 'inherit', fontSize: '0.75rem', fontWeight: 600, transition: 'border-color 0.2s' }}>
+                  <span>{d.icon}</span>
+                  <span>{d.label}</span>
+                </a>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* ── Intelligence Panel (full width below) ── */}
