@@ -7,18 +7,18 @@ import { ReactionBar } from '@/components/ui/ReactionBar'
 import React from 'react'
 
 const categoryColors: Record<string, string> = {
-  calculator: '#3b82f6',
+  calculator: '#22d3ee',
   analyzer: '#8b5cf6',
-  simulator: '#06b6d4',
+  simulator: '#3b82f6',
   model: '#f59e0b',
   methodology: '#10b981',
   // Legacy fallbacks
-  'capacity-planning': '#3b82f6',
+  'capacity-planning': '#22d3ee',
   forecasting: '#8b5cf6',
   scheduling: '#10b981',
   analytics: '#8b5cf6',
   'value-planning': '#f59e0b',
-  staffing: '#3b82f6',
+  staffing: '#22d3ee',
 }
 
 const categoryLabels: Record<string, string> = {

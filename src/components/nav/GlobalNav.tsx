@@ -29,6 +29,7 @@ export function GlobalNav() {
         top: 0,
         zIndex: 50,
         background: 'var(--nav-bg)',
+        backdropFilter: 'blur(20px)',
         borderBottom: '1px solid var(--nav-border)',
       }}
     >
@@ -61,11 +62,12 @@ export function GlobalNav() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '1.75rem',
-            height: '1.75rem',
-            background: 'var(--accent)',
-            color: 'var(--accent-text)',
-            borderRadius: '0.375rem',
+            width: '2rem',
+            height: '2rem',
+            background: 'transparent',
+            color: 'var(--accent)',
+            border: '2px solid var(--accent)',
+            borderRadius: '6px',
             fontSize: '0.875rem',
             fontWeight: 800,
           }}>W</span>

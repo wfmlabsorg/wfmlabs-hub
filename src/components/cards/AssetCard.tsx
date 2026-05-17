@@ -1,19 +1,19 @@
 import React from 'react'
 
 const categoryGradients: Record<string, string> = {
-  // New tool type categories
-  'calculator': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-  'analyzer': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-  'simulator': 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)',
-  'model': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-  'methodology': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-  // Legacy (keep for backwards compat during migration)
-  'capacity-planning': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-  'forecasting': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-  'analytics': 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
-  'value-planning': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-  'scheduling': 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-  'staffing': 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+  // Mission Control palette — cyan-anchored gradients
+  'calculator': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
+  'analyzer': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
+  'simulator': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #3b82f6 200%)',
+  'model': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #f59e0b 200%)',
+  'methodology': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #10b981 200%)',
+  // Legacy
+  'capacity-planning': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
+  'forecasting': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
+  'analytics': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
+  'value-planning': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #f59e0b 200%)',
+  'scheduling': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #10b981 200%)',
+  'staffing': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
 }
 
 const categoryLabels: Record<string, string> = {
