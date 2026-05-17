@@ -156,14 +156,18 @@ export function AssetCard({
       <div className="asset-card">
         {/* Gradient header band */}
         <div className="asset-card-gradient" style={{ background: gradient }}>
-          {/* Category icon — small, bottom-left of gradient */}
+          {/* Category icon — top-left of gradient, same size as filter chips */}
           {assetType === 'tool' && category && categoryIcons[category] && (
             <span style={{
               position: 'absolute',
-              bottom: '0.5rem',
-              left: '0.75rem',
-              fontSize: '1.25rem',
+              top: '0.5rem',
+              left: '0.625rem',
+              fontSize: '0.875rem',
               lineHeight: 1,
+              background: 'rgba(0,0,0,0.35)',
+              backdropFilter: 'blur(4px)',
+              borderRadius: '6px',
+              padding: '0.25rem 0.375rem',
             }}>
               {categoryIcons[category]}
             </span>
