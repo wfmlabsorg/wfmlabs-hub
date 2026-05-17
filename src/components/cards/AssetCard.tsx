@@ -1,19 +1,19 @@
 import React from 'react'
 
 const categoryGradients: Record<string, string> = {
-  // Mission Control palette — cyan-anchored gradients
-  'calculator': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
-  'analyzer': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
-  'simulator': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #3b82f6 200%)',
-  'model': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #f59e0b 200%)',
-  'methodology': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #10b981 200%)',
-  // Legacy
-  'capacity-planning': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
-  'forecasting': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
-  'analytics': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #8b5cf6 200%)',
-  'value-planning': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #f59e0b 200%)',
-  'scheduling': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #10b981 200%)',
-  'staffing': 'linear-gradient(135deg, #0f1729 0%, #1e293b 50%, #22d3ee 200%)',
+  // Tool type gradients — vibrant, consistent with HF card style
+  'calculator': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
+  'analyzer': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+  'simulator': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+  'model': 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+  'methodology': 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+  // Legacy fallbacks
+  'capacity-planning': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
+  'forecasting': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+  'analytics': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
+  'value-planning': 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+  'scheduling': 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+  'staffing': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
 }
 
 const categoryLabels: Record<string, string> = {
@@ -33,13 +33,13 @@ const domainLabels: Record<string, string> = {
 }
 
 const assetTypeGradients: Record<string, string> = {
-  'tool': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  'paper': 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)',
-  'article': 'linear-gradient(135deg, #f43f5e 0%, #e11d48 100%)',
-  'wiki-entry': 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-  'newsletter-issue': 'linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)',
-  'framework': 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-  'scenario': 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)',
+  'tool': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
+  'paper': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
+  'article': 'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)',
+  'wiki-entry': 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  'newsletter-issue': 'linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)',
+  'framework': 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
+  'scenario': 'linear-gradient(135deg, #be185d 0%, #ec4899 100%)',
 }
 
 const defaultGradient = 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)'
