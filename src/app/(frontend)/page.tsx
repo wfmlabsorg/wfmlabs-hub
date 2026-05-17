@@ -1,10 +1,10 @@
 import React from 'react'
+import { headers } from 'next/headers'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
-import { DashboardRotator } from '@/components/dashboard/DashboardRotator'
 
 // ── Score → color ──
 function sevColor(s: number): string {
@@ -76,6 +76,9 @@ export default async function HomePage() {
   }
 
   // ── Authenticated → Mission Control Dashboard ──
+  const userAgent = (await headers()).get('user-agent') || ''
+  const isMobile = /iPhone|iPad|Android|Mobile|webOS|BlackBerry|Opera Mini/i.test(userAgent)
+
   const payload = await getPayload({ config })
 
   // Parallel data fetches
@@ -111,6 +114,117 @@ export default async function HomePage() {
   }
   const featuredTools = shuffled.slice(0, 6)
 
+  // ── Mobile View ──
+  if (isMobile) {
+    return (
+      <div style={{ padding: '0.75rem' }}>
+        {/* Status header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', padding: '0.5rem 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)' }}>Mission Control</span>
+            <span style={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+          </div>
+          <span style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
+            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+
+        {/* OVIX + Travel composite scores */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.5625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: healthy === totalFeeds ? '#22c55e' : '#f59e0b', marginBottom: '0.25rem' }}>OVIX Feeds</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{healthy}/{totalFeeds}</div>
+            <div style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>healthy</div>
+          </div>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.5625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: levelColor(travelLevel), marginBottom: '0.25rem' }}>Travel</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: levelColor(travelLevel) }}>{travelComposite.toFixed(1)}</div>
+            <div style={{ fontSize: '0.5625rem', color: levelColor(travelLevel) }}>{travelLevel}</div>
+          </div>
+        </div>
+
+        {/* Travel domain bars — compact */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <div style={{ fontSize: '0.6875rem', fontWeight: 700, marginBottom: '0.5rem' }}>Travel Disruption Index</div>
+          {travelDomains.map((d: { domain: string; score: number }) => (
+            <div key={d.domain} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem', fontSize: '0.6875rem' }}>
+              <span style={{ width: '4rem', color: 'var(--fg-muted)', textTransform: 'capitalize' }}>{d.domain}</span>
+              <div style={{ flex: 1, height: '0.3rem', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${Math.min(d.score * 10, 100)}%`, background: sevColor(d.score), borderRadius: '2px' }} />
+              </div>
+              <span style={{ width: '1.5rem', textAlign: 'right', fontWeight: 600, color: sevColor(d.score), fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.625rem' }}>{d.score.toFixed(1)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Signals — compact list */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span style={{ fontSize: '0.6875rem', fontWeight: 700 }}>Latest Signals</span>
+            <a href="/signals" style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All →</a>
+          </div>
+          <SignalFeed limit={4} compact />
+        </div>
+
+        {/* Intel stories — compact */}
+        {stories.length > 0 && (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 700 }}>Geopolitical Intel</span>
+              <a href="/signals" style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All →</a>
+            </div>
+            {stories.slice(0, 3).map((s: { title: string; severity: number; trajectory: string }, i: number) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.375rem 0', borderBottom: i < 2 ? '1px solid var(--border)' : 'none', fontSize: '0.6875rem' }}>
+                <span style={{ fontSize: '0.5625rem', fontWeight: 700, color: '#fff', background: sevColor(s.severity), padding: '0.0625rem 0.25rem', borderRadius: '3px', flexShrink: 0 }}>{s.severity}</span>
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                <span style={{ color: 'var(--fg-faint)', flexShrink: 0 }}>{trajectoryArrows[s.trajectory] || '→'}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* OVIX dashboards — 2-col tap grid */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
+          <div style={{ fontSize: '0.6875rem', fontWeight: 700, marginBottom: '0.5rem' }}>Dashboards</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.375rem' }}>
+            {[
+              { icon: '⛈', label: 'Weather', path: 'weather', color: '#3b82f6' },
+              { icon: '🌋', label: 'Seismic', path: 'seismic', color: '#ef4444' },
+              { icon: '🔥', label: 'Disaster', path: 'disaster', color: '#f97316' },
+              { icon: '🛡', label: 'Cyber', path: 'cyber', color: '#22c55e' },
+              { icon: '🏥', label: 'Health', path: 'health', color: '#ec4899' },
+              { icon: '📈', label: 'Financial', path: 'financial-markets', color: '#f59e0b' },
+              { icon: '🌐', label: 'Geopolitical', path: 'geopolitical', color: '#6366f1' },
+              { icon: '✈', label: 'Travel', path: 'travel', color: '#06b6d4' },
+            ].map(d => (
+              <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}`} target="_blank" rel="noopener"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `2px solid ${d.color}`, textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', fontWeight: 600 }}>
+                <span>{d.icon}</span>
+                <span>{d.label}</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick nav */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.375rem' }}>
+          {[
+            { label: 'Tools', href: '/tools', icon: '🛠' },
+            { label: 'Research', href: '/research', icon: '🔬' },
+            { label: 'Discuss', href: '/discussions', icon: '💬' },
+            { label: 'Docs', href: '/wiki', icon: '📖' },
+          ].map(l => (
+            <a key={l.href} href={l.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', padding: '0.625rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit', fontSize: '0.625rem', fontWeight: 600 }}>
+              <span style={{ fontSize: '1.25rem' }}>{l.icon}</span>
+              {l.label}
+            </a>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // ── Desktop View ──
   return (
     <div>
       {/* ── Status Bar ── */}
