@@ -156,27 +156,13 @@ export function AssetCard({
       <div className="asset-card">
         {/* Gradient header band */}
         <div className="asset-card-gradient" style={{ background: gradient }}>
-          {/* Category icon — top-left of gradient, same size as filter chips */}
-          {assetType === 'tool' && category && categoryIcons[category] && (
-            <span style={{
-              position: 'absolute',
-              top: '0.5rem',
-              left: '0.625rem',
-              fontSize: '0.875rem',
-              lineHeight: 1,
-              background: 'rgba(0,0,0,0.35)',
-              backdropFilter: 'blur(4px)',
-              borderRadius: '6px',
-              padding: '0.25rem 0.375rem',
-            }}>
-              {categoryIcons[category]}
-            </span>
-          )}
           {/* Badges on gradient */}
           <div className="asset-card-badges">
             <div className="asset-card-badges-left">
               {category && categoryLabels[category] && (
-                <span className="asset-card-badge">{categoryLabels[category]}</span>
+                <span className="asset-card-badge">
+                  {assetType === 'tool' && categoryIcons[category] ? `${categoryIcons[category]} ` : ''}{categoryLabels[category]}
+                </span>
               )}
               {domain && domainLabels[domain] && (
                 <span className="asset-card-badge">{domainLabels[domain]}</span>
