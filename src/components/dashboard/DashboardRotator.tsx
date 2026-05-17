@@ -77,7 +77,7 @@ export function DashboardRotator() {
 
   const active = DASHBOARDS[activeIndex]
   const data = feedData[active.name]
-  const score = data?.score || Math.round(Math.random() * 4 + 1) // fallback display
+  const score = data?.score || 0
   const rocUrl = `/roc#/browse/roc-dashboards:root/${active.rocPath}`
 
   return (
