@@ -5,53 +5,34 @@ import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 
-async function OvixStatusBadge() {
-  const data = await fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', {
-    next: { revalidate: 300 },
-  })
-    .then((r) => r.json())
-    .catch(() => null)
+// ── Score → color ──
+function sevColor(s: number): string {
+  if (s >= 8) return '#ef4444'
+  if (s >= 6) return '#f97316'
+  if (s >= 4) return '#eab308'
+  if (s >= 2) return '#22d3ee'
+  return '#10b981'
+}
 
-  if (!data) return null
+function levelColor(l: string): string {
+  switch (l) {
+    case 'CRITICAL': return '#ef4444'
+    case 'SEVERE': return '#f97316'
+    case 'SIGNIFICANT': return '#eab308'
+    case 'ELEVATED': return '#22d3ee'
+    default: return '#10b981'
+  }
+}
 
-  const totalFeeds = data.totalFeeds || 0
-  const healthy = data.healthy || 0
-
-  return (
-    <a
-      href="/data-sources"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.375rem',
-        fontSize: '0.6875rem',
-        color: 'var(--fg-muted)',
-        textDecoration: 'none',
-        padding: '0.25rem 0.5rem',
-        borderRadius: '999px',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border)',
-      }}
-    >
-      <span
-        style={{
-          display: 'inline-block',
-          width: '0.375rem',
-          height: '0.375rem',
-          borderRadius: '50%',
-          background: healthy === totalFeeds ? '#22c55e' : '#f59e0b',
-        }}
-      />
-      OVIX {healthy}/{totalFeeds}
-    </a>
-  )
+const trajectoryArrows: Record<string, string> = {
+  escalating: '↑', peak: '⬆', steady: '→', declining: '↓', emerging: '↗', resolved: '✓',
 }
 
 export const dynamic = 'force-dynamic'
 export default async function HomePage() {
   const session = await auth()
 
-  // Unauthenticated → landing page
+  // ── Unauthenticated → marketing landing ──
   if (!session?.user) {
     return (
       <div>
@@ -64,16 +45,10 @@ export default async function HomePage() {
             The platform where WFM practitioners and purpose-built AI agents collaborate on live operational data — creating workforce intelligence that neither could build alone.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <a href="/login" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
-              Get Started
-            </a>
-            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
-              View Pricing
-            </a>
+            <a href="/login" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Get Started</a>
+            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>View Pricing</a>
           </div>
         </section>
-
-        {/* Core pillars */}
         <section style={{ maxWidth: '72rem', margin: '0 auto', padding: '4rem 1rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '2rem' }}>
             {[
@@ -89,169 +64,190 @@ export default async function HomePage() {
             ))}
           </div>
         </section>
-
-        {/* Social proof placeholder */}
         <section style={{ textAlign: 'center', padding: '3rem 1rem 4rem', borderTop: '1px solid var(--border)' }}>
           <p style={{ fontSize: '0.875rem', color: 'var(--fg-faint)', marginBottom: '1rem' }}>
             Built for WFM practitioners managing contact centers, back offices, and knowledge worker operations worldwide.
           </p>
-          <a href="/pricing" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
-            See pricing {'\u2192'}
-          </a>
+          <a href="/pricing" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>See pricing {'\u2192'}</a>
         </section>
       </div>
     )
   }
 
-  // Authenticated → full dashboard
+  // ── Authenticated → Mission Control Dashboard ──
   const payload = await getPayload({ config })
 
-  // Fetch featured tools (4 random)
-  const toolsResult = await payload
-    .find({
-      collection: 'tools',
-      limit: 20,
-      sort: '-updatedAt',
-      depth: 1,
-      overrideAccess: true,
-    })
-    .catch(() => ({ docs: [], totalDocs: 0 }))
-
-  // Shuffle and pick 4
-  const allTools = [...toolsResult.docs]
-  for (let i = allTools.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[allTools[i], allTools[j]] = [allTools[j], allTools[i]]
-  }
-  const featuredTools = allTools.slice(0, 4)
-
-  // Get counts for stats bar
-  const collections = ['wiki-entries', 'papers', 'tools', 'articles', 'newsletter-issues'] as const
-  const counts = await Promise.all([
-    ...collections.map((slug) =>
-      payload
-        .find({ collection: slug, limit: 0, overrideAccess: true })
-        .then((r) => r.totalDocs)
-        .catch(() => 0),
-    ),
-    payload
-      .find({ collection: 'members', limit: 0, overrideAccess: true })
-      .then((r) => r.totalDocs)
-      .catch(() => 0),
-    payload
-      .find({ collection: 'topics', limit: 0, overrideAccess: true })
-      .then((r) => r.totalDocs)
-      .catch(() => 0),
+  // Parallel data fetches
+  const [feedHealth, travelScores, newsStories, signalsResult, toolsResult] = await Promise.all([
+    fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', { next: { revalidate: 300 } })
+      .then(r => r.json()).catch(() => null),
+    fetch('https://travel-intel.tedlango.workers.dev/api/travel/scores', { next: { revalidate: 300 } })
+      .then(r => r.json()).catch(() => null),
+    fetch('https://news-intel.tedlango.workers.dev/stories', { next: { revalidate: 300 } })
+      .then(r => r.json()).catch(() => null),
+    payload.find({ collection: 'signals', limit: 5, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
+    payload.find({ collection: 'tools', limit: 8, sort: '-updatedAt', depth: 1, overrideAccess: true, where: { publishedAt: { exists: true } } }).catch(() => ({ docs: [] })),
   ])
 
-  const totalAssets = counts.slice(0, 5).reduce((a, b) => a + b, 0)
-  const totalMembers = counts[5]
-  const totalTopics = counts[6]
+  // Extract data
+  const healthy = feedHealth?.healthy || 0
+  const totalFeeds = feedHealth?.totalFeeds || 0
+  const travelComposite = travelScores?.composite || 0
+  const travelLevel = travelScores?.level || 'NOMINAL'
+  const travelDomains = travelScores?.domains || []
+  const travelEvents = travelScores?.events || []
+  const stories = (newsStories?.stories || []).slice(0, 4)
+  const highSevStories = stories.filter((s: { severity: number }) => s.severity >= 7).length
+  const signals = signalsResult?.docs || []
+  const totalSignals = signalsResult?.totalDocs || 0
+  const tools = toolsResult?.docs || []
+
+  // Shuffle tools for variety
+  const shuffled = [...tools]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  const featuredTools = shuffled.slice(0, 6)
 
   return (
     <div>
-      {/* Section 1: Hero Actions */}
-      <section
-        style={{
-          padding: '2.5rem 1rem 1rem',
-          maxWidth: '80rem',
-          margin: '0 auto',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <a
-            href="/roc"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn btn-primary"
-            style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
-          >
-            Explore the ROC
-          </a>
-          <a href="/tools" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
-            Try the Tools
-          </a>
-          <a href="/signals" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>
-            Live Signals
-          </a>
+      {/* ── Status Bar ── */}
+      <div style={{
+        background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
+        padding: '0.625rem 1rem',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--accent)' }}>
+            Mission Control
+          </span>
+          <span style={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite' }} />
+          <span style={{ fontSize: '0.625rem', color: '#22c55e', fontWeight: 600 }}>LIVE</span>
         </div>
 
-        {/* Stats — subtle, below hero actions */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            gap: '2rem',
-            marginTop: '1.25rem',
-            flexWrap: 'wrap',
-          }}
-        >
-          {[
-            { label: 'Assets', value: totalAssets },
-            { label: 'Members', value: totalMembers },
-            { label: 'Topics', value: totalTopics },
-          ].map((stat) => (
-            <span key={stat.label} style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
-              <span style={{ fontWeight: 600, color: 'var(--fg)' }}>{stat.value}</span>{' '}
-              {stat.label}
-            </span>
-          ))}
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          {/* OVIX feeds */}
+          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+            <span style={{ color: healthy === totalFeeds ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>OVIX</span> {healthy}/{totalFeeds} feeds
+          </span>
+          {/* Travel */}
+          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+            <span style={{ color: levelColor(travelLevel), fontWeight: 600 }}>TRAVEL</span> {travelComposite.toFixed(1)} {travelLevel}
+          </span>
+          {/* Intel */}
+          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+            <span style={{ color: highSevStories > 0 ? '#ef4444' : 'var(--accent)', fontWeight: 600 }}>INTEL</span> {stories.length} stories {highSevStories > 0 && `| ${highSevStories} critical`}
+          </span>
+          {/* Signals */}
+          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>SIGNALS</span> {totalSignals.toLocaleString()} total
+          </span>
         </div>
-      </section>
 
-      {/* Section 2: Interactive OVIX Globe */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
-        <div
-          style={{
-            position: 'relative',
-            borderRadius: 'var(--radius-lg)',
-            overflow: 'hidden',
-            background: '#060610',
-            border: '1px solid var(--border)',
-          }}
-        >
-          <iframe
-            src="/globe-home.html"
-            title="OVIX Globe"
-            style={{
-              width: '100%',
-              height: '480px',
-              border: 'none',
-              display: 'block',
-            }}
-            allow="accelerometer"
-          />
-        </div>
-      </section>
+        <span style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
+          {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} UTC
+        </span>
+      </div>
 
-      {/* Section 3: Live Signal Feed */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '1rem' }}>{'\u25C6'}</span>
-              <h3 style={{ fontSize: '0.875rem', fontWeight: 700, margin: 0 }}>Live Signals</h3>
+      <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
+
+        {/* ── Three Live Panels ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+
+          {/* Panel A: Operations */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #ef4444', overflow: 'hidden' }}>
+            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <span style={{ fontSize: '0.875rem' }}>{'\u25C6'}</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Operational Risk</span>
+              </div>
+              <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>View all →</a>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <OvixStatusBadge />
-              <a href="/signals" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
-                View all {'\u2192'}
-              </a>
+            <div style={{ padding: '0 1rem 1rem' }}>
+              <SignalFeed limit={4} compact />
             </div>
           </div>
-          <SignalFeed limit={5} compact />
-        </div>
-      </section>
 
-      {/* Section 4: Featured Tools */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-          <h2 style={{ fontSize: '1.125rem', fontWeight: 600, margin: 0 }}>Featured Tools</h2>
-          <a href="/tools" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>
-            Browse all {'\u2192'}
-          </a>
+          {/* Panel B: Travel Disruption */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #22d3ee', overflow: 'hidden' }}>
+            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <span style={{ fontSize: '0.875rem' }}>{'\u2708'}</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Travel Disruption</span>
+              </div>
+              <a href="/roc" target="_blank" rel="noopener" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Dashboard →</a>
+            </div>
+            <div style={{ padding: '0 1rem 1rem' }}>
+              {/* Composite score */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '2rem', fontWeight: 800, color: levelColor(travelLevel) }}>{travelComposite.toFixed(1)}</span>
+                <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: levelColor(travelLevel) }}>{travelLevel}</span>
+              </div>
+              {/* Domain bars */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                {travelDomains.map((d: { domain: string; score: number; level: string }) => (
+                  <div key={d.domain} style={{ display: 'grid', gridTemplateColumns: '4.5rem 1fr 2rem', alignItems: 'center', gap: '0.375rem', fontSize: '0.6875rem' }}>
+                    <span style={{ color: 'var(--fg-muted)', textTransform: 'capitalize' }}>{d.domain}</span>
+                    <div style={{ height: '0.375rem', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(d.score * 10, 100)}%`, background: sevColor(d.score), borderRadius: '2px', transition: 'width 0.4s' }} />
+                    </div>
+                    <span style={{ textAlign: 'right', fontWeight: 600, color: sevColor(d.score), fontFamily: "'IBM Plex Mono', monospace" }}>{d.score.toFixed(1)}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Top event */}
+              {travelEvents[0] && (
+                <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.6875rem', color: 'var(--fg-muted)' }}>
+                  <span style={{ display: 'inline-block', width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: sevColor(travelEvents[0].severity), marginRight: '0.375rem' }} />
+                  {travelEvents[0].title?.substring(0, 60)}{travelEvents[0].title?.length > 60 ? '...' : ''}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Panel C: Intelligence */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #f59e0b', overflow: 'hidden' }}>
+            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <span style={{ fontSize: '0.875rem' }}>{'\uD83C\uDF10'}</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Geopolitical Intel</span>
+              </div>
+              <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All stories →</a>
+            </div>
+            <div style={{ padding: '0 1rem 1rem' }}>
+              {stories.length === 0 ? (
+                <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '1rem 0', textAlign: 'center' }}>No active stories</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {stories.map((s: { title: string; severity: number; trajectory: string; affected_regions: string | string[]; slug?: string }, i: number) => (
+                    <div key={i} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${sevColor(s.severity)}` }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
+                        <span style={{ fontSize: '0.625rem', fontWeight: 700, color: '#fff', background: sevColor(s.severity), padding: '0.0625rem 0.375rem', borderRadius: '3px' }}>{s.severity}</span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>{trajectoryArrows[s.trajectory] || '→'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
+                        {Array.isArray(s.affected_regions) ? s.affected_regions.join(', ') : s.affected_regions || 'Global'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        {featuredTools.length > 0 ? (
+
+        {/* ── Tools Strip ── */}
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.875rem' }}>{'\uD83D\uDEE0'}</span>
+              <span style={{ fontSize: '0.9375rem', fontWeight: 700 }}>WFM Tools</span>
+              <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.0625rem 0.5rem' }}>{tools.length}</span>
+            </div>
+            <a href="/tools" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Browse all →</a>
+          </div>
           <div className="tools-grid">
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {featuredTools.map((tool: any) => (
@@ -273,54 +269,34 @@ export default async function HomePage() {
               />
             ))}
           </div>
-        ) : (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '2rem',
-              border: '1px dashed var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              color: 'var(--fg-muted)',
-              fontSize: '0.875rem',
-            }}
-          >
-            Tools will appear here once created.
-          </div>
-        )}
-      </section>
+        </div>
 
-      {/* Section 5: Quick Links */}
-      <section style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem 3rem' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
-            gap: '1rem',
-          }}
-        >
+        {/* ── Quick Links ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
           {[
-            { title: 'Research', desc: 'Curated papers and industry research', href: '/research', icon: '\uD83D\uDD2C' },
-            { title: 'APIs', desc: 'Live data feeds and integrations', href: '/data-sources', icon: '\uD83D\uDCE1' },
-            { title: 'Discussions', desc: 'Community conversations and Q&A', href: '/discussions', icon: '\uD83D\uDCAC' },
-            { title: 'Docs', desc: 'Platform documentation and guides', href: '/wiki', icon: '\uD83D\uDCD6' },
+            { title: 'Research', desc: 'Curated papers and analysis', href: '/research', icon: '\uD83D\uDD2C' },
+            { title: 'APIs', desc: 'Live data feeds', href: '/data-sources', icon: '\uD83D\uDCE1' },
+            { title: 'Discussions', desc: 'Community Q&A', href: '/discussions', icon: '\uD83D\uDCAC' },
+            { title: 'Docs', desc: 'Wiki & guides', href: '/wiki', icon: '\uD83D\uDCD6' },
           ].map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="card"
-              style={{ padding: '1.25rem', textDecoration: 'none', color: 'inherit' }}
-            >
-              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>{link.icon}</div>
-              <div style={{ fontWeight: 600, fontSize: '0.9375rem', marginBottom: '0.25rem' }}>
-                {link.title}
-              </div>
-              <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.4 }}>
-                {link.desc}
+            <a key={link.href} href={link.href} className="card" style={{ padding: '1rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '1.25rem' }}>{link.icon}</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{link.title}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>{link.desc}</div>
               </div>
             </a>
           ))}
         </div>
-      </section>
+      </div>
+
+      {/* Pulse animation */}
+      <style>{`
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        @media (max-width: 768px) {
+          div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   )
 }
