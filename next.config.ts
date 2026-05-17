@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-API-Key' },
         ],
       },
-      // ROC static files — allow iframing from same origin (dashboards, globe)
+      // ROC static files + globe — allow iframing from same origin
       {
         source: '/roc/:path*',
         headers: [
@@ -47,9 +47,15 @@ const nextConfig: NextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' },
         ],
       },
-      // Global security headers (excludes /roc/ which has its own above)
       {
-        source: '/((?!roc/).*)',
+        source: '/globe-home.html',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        ],
+      },
+      // Global security headers (excludes /roc/ and globe which have their own above)
+      {
+        source: '/((?!roc/|globe-).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
