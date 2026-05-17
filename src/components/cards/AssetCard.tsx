@@ -32,6 +32,14 @@ const domainLabels: Record<string, string> = {
   'measurement-analytics': 'Measurement',
 }
 
+const categoryIcons: Record<string, string> = {
+  'calculator': '🧮',
+  'analyzer': '📊',
+  'simulator': '🎲',
+  'model': '🏗️',
+  'methodology': '📐',
+}
+
 const assetTypeGradients: Record<string, string> = {
   'tool': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',
   'paper': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
@@ -148,6 +156,20 @@ export function AssetCard({
       <div className="asset-card">
         {/* Gradient header band */}
         <div className="asset-card-gradient" style={{ background: gradient }}>
+          {/* Category icon */}
+          {assetType === 'tool' && category && categoryIcons[category] && (
+            <span style={{
+              position: 'absolute',
+              bottom: '0.5rem',
+              right: '0.75rem',
+              fontSize: '2.5rem',
+              opacity: 0.25,
+              lineHeight: 1,
+              pointerEvents: 'none',
+            }}>
+              {categoryIcons[category]}
+            </span>
+          )}
           {/* Badges on gradient */}
           <div className="asset-card-badges">
             <div className="asset-card-badges-left">
