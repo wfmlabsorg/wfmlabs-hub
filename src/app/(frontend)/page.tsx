@@ -4,6 +4,7 @@ import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
+import { DashboardRotator } from '@/components/dashboard/DashboardRotator'
 
 // ── Score → color ──
 function sevColor(s: number): string {
@@ -152,10 +153,10 @@ export default async function HomePage() {
 
       <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
 
-        {/* ── Three Live Panels ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.25rem' }}>
+        {/* ── Live Panels ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
 
-          {/* Panel A: Operations */}
+          {/* Panel A: Operations (scrolling signals) */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #ef4444', overflow: 'hidden' }}>
             <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
@@ -165,47 +166,16 @@ export default async function HomePage() {
               <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>View all →</a>
             </div>
             <div style={{ padding: '0 1rem 1rem' }}>
-              <SignalFeed limit={4} compact />
+              <SignalFeed limit={6} compact />
             </div>
           </div>
 
-          {/* Panel B: Travel Disruption */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #22d3ee', overflow: 'hidden' }}>
-            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                <span style={{ fontSize: '0.875rem' }}>{'\u2708'}</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Travel Disruption</span>
-              </div>
-              <a href="/roc" target="_blank" rel="noopener" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Dashboard →</a>
-            </div>
-            <div style={{ padding: '0 1rem 1rem' }}>
-              {/* Composite score */}
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '2rem', fontWeight: 800, color: levelColor(travelLevel) }}>{travelComposite.toFixed(1)}</span>
-                <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: levelColor(travelLevel) }}>{travelLevel}</span>
-              </div>
-              {/* Domain bars */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                {travelDomains.map((d: { domain: string; score: number; level: string }) => (
-                  <div key={d.domain} style={{ display: 'grid', gridTemplateColumns: '4.5rem 1fr 2rem', alignItems: 'center', gap: '0.375rem', fontSize: '0.6875rem' }}>
-                    <span style={{ color: 'var(--fg-muted)', textTransform: 'capitalize' }}>{d.domain}</span>
-                    <div style={{ height: '0.375rem', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(d.score * 10, 100)}%`, background: sevColor(d.score), borderRadius: '2px', transition: 'width 0.4s' }} />
-                    </div>
-                    <span style={{ textAlign: 'right', fontWeight: 600, color: sevColor(d.score), fontFamily: "'IBM Plex Mono', monospace" }}>{d.score.toFixed(1)}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Top event */}
-              {travelEvents[0] && (
-                <div style={{ marginTop: '0.75rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', fontSize: '0.6875rem', color: 'var(--fg-muted)' }}>
-                  <span style={{ display: 'inline-block', width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: sevColor(travelEvents[0].severity), marginRight: '0.375rem' }} />
-                  {travelEvents[0].title?.substring(0, 60)}{travelEvents[0].title?.length > 60 ? '...' : ''}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* Panel B: Dashboard Rotator (rotating OVIX domains) */}
+          <DashboardRotator />
+        </div>
 
+        {/* ── Intelligence Panel (full width below) ── */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginBottom: '1.25rem' }}>
           {/* Panel C: Intelligence */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #f59e0b', overflow: 'hidden' }}>
             <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -219,7 +189,7 @@ export default async function HomePage() {
               {stories.length === 0 ? (
                 <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '1rem 0', textAlign: 'center' }}>No active stories</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '0.5rem' }}>
                   {stories.map((s: { title: string; severity: number; trajectory: string; affected_regions: string | string[]; slug?: string }, i: number) => (
                     <div key={i} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${sevColor(s.severity)}` }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
