@@ -351,8 +351,8 @@ RocConfig.get().then(function(cfg){
 
 <script>
 window.rocNav=function(a){
-  var R={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
-  var O=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var R={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
+  var O=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var K='roc-rotation';function gs(){try{return JSON.parse(localStorage.getItem(K))||{}}catch(e){return{}}}function ss(s){try{localStorage.setItem(K,JSON.stringify(s))}catch(e){}}
   var en=gs().enabledSlides||O.slice(),p=window.location.pathname,c='travel';for(var k in R){if(p.indexOf(R[k])!==-1){c=k;break}}var i=en.indexOf(c);if(i===-1)i=0;
   if(a==='prev')window.location=R[en[(i-1+en.length)%en.length]];
@@ -362,8 +362,8 @@ window.rocNav=function(a){
 function utu(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation'))||{}}catch(e){s={}}var b=document.getElementById('bnr-play');if(b){b.innerHTML=s.active?'&#9208;':'&#9654;';b.style.background=s.active?'rgba(24,188,156,.25)':'rgba(24,188,156,.08)'}}
 utu();
 (function(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation')||'{}')}catch(e){return}if(!s.active)return;
-var R={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
-var O=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+var R={globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
+var O=['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
 var en=s.enabledSlides||O.slice(),p=window.location.pathname,c='travel';for(var k in R){if(p.indexOf(R[k])!==-1){c=k;break}}var i=en.indexOf(c);if(i===-1)i=0;var n=en[(i+1)%en.length];
 setTimeout(function(){var x;try{x=JSON.parse(localStorage.getItem('roc-rotation')||'{}')}catch(e){return}if(!x.active)return;window.location=R[n]},(s.interval||30)*1000);
 })();

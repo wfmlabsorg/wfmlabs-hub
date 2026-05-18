@@ -917,9 +917,9 @@
 </script>
 <script>
 window.rocNav = function(action) {
-  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
   var ROT_KEY = 'roc-rotation';
-  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   function getState() { try { return JSON.parse(localStorage.getItem(ROT_KEY)) || {}; } catch(e) { return {}; } }
   function setState(s) { try { localStorage.setItem(ROT_KEY, JSON.stringify(s)); } catch(e) {} }
   function getEnabled() { var s = getState(); return s.enabledSlides || ORDER.slice(); }
@@ -971,8 +971,8 @@ updateTransportUI();
 (function(){
   var s; try { s = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
   if (!s.active) return;
-  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html'};
-  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
+  var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var enabled = s.enabledSlides || ORDER.slice();
   var path = window.location.pathname;
   var cur = 'financial';

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seismic Activity — ROC</title>
+<title>Supply Chain & Trade Monitor — ROC</title>
 <style>
   :root {
     --bg-primary: #0a0e1a;
@@ -18,6 +18,7 @@
     --accent-orange: #f97316;
     --accent-yellow: #eab308;
     --accent-green: #22c55e;
+    --accent-purple: #a855f7;
     --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
   }
 
@@ -53,6 +54,12 @@
     flex-direction: column;
     align-items: center;
   }
+
+  /* CARD EXPAND/COLLAPSE */
+  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
+  .card.expanded .card-details { display:block; }
+  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
+  .card.expanded .card-expand { color:var(--accent-cyan); }
 
   /* BANNER */
   .banner {
@@ -160,16 +167,14 @@
     margin-bottom: 4px;
   }
 
-  .mag-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    border-radius: 50%;
-    font-size: 16px;
+  .severity-badge {
+    font-size: 10px;
     font-weight: 700;
     color: #fff;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     flex-shrink: 0;
   }
 
@@ -179,6 +184,18 @@
     height: 8px;
     border-radius: 50%;
     margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .source-tag {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--accent-purple);
+    background: rgba(168,85,247,0.12);
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     flex-shrink: 0;
   }
 
@@ -205,46 +222,20 @@
     margin-top: 4px;
   }
 
-  .source-tag {
-    font-size: 9px;
-    font-weight: 700;
-    color: var(--accent-cyan);
-    background: rgba(6,182,212,0.08);
-    padding: 1px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+  .card-area {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-top: 2px;
   }
 
-  /* MAG DISTRIBUTION BAR */
-  .mag-bar-row {
-    display: grid;
-    grid-template-columns: 50px 1fr 30px;
-    align-items: center;
-    gap: 8px;
+  .card-metric {
     font-size: 11px;
-    padding: 4px 0;
-  }
-  .mag-bar-label {
-    text-align: right;
-    font-weight: 600;
     color: var(--text-secondary);
+    margin-top: 4px;
   }
-  .mag-bar-track {
-    height: 14px;
-    background: rgba(51,65,85,0.3);
-    border-radius: 3px;
-    overflow: hidden;
-  }
-  .mag-bar-fill {
-    height: 100%;
-    border-radius: 3px;
-    transition: width 0.5s;
-  }
-  .mag-bar-count {
-    text-align: right;
-    color: var(--text-dim);
-    font-size: 10px;
+  .card-metric strong {
+    color: var(--text-primary);
+    font-weight: 700;
   }
 
   /* GAUGE */
@@ -287,6 +278,7 @@
     font-size: 11px;
     text-align: center;
     padding: 20px;
+    line-height: 1.6;
   }
 
   @media (max-width: 900px) {
@@ -309,15 +301,6 @@
     .panel.grow { flex: none; max-height: 400px; }
   }
 
-/* Universal card interaction */
-  .card { cursor:pointer; }
-  .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
-  .card.expanded .card-details { display:block; }
-  .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
-  .card.expanded .card-expand { color:var(--accent-cyan); }
-  .card-link { color:var(--accent-cyan); cursor:pointer; font-size:9px; }
-  .card-link:hover { text-decoration:underline; }
-
 /* Hide transport controls when embedded in iframe */
 @media all {
   body.in-iframe .transport,
@@ -328,38 +311,39 @@
 <body>
 <script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
 
-
 <div class="page-grid">
 
   <!-- LEFT: GAUGE PANEL -->
   <div class="gauge-panel">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-cyan);margin-bottom:8px;">Seismic Summary</div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--accent-cyan);margin-bottom:8px;">Supply Chain & Trade Index</div>
     <div class="gauge-container" id="gauge-container">
       <svg id="gauge-svg" width="220" height="130" viewBox="0 0 220 130"></svg>
       <div class="gauge-label" id="gauge-label" style="color:var(--text-dim);">--</div>
     </div>
     <div id="factor-bars" style="padding:8px 0 4px;width:100%;"></div>
     <div style="padding:4px 0 10px;font-size:9px;color:var(--text-dim);line-height:1.5;">
-      OVIX Seismic Index computed from weighted factors: M5+ earthquake count (35%),
-      M6+ earthquake count (25%), maximum magnitude (25%),
-      and geographic spread of events (15%).
-      Severity maps from magnitude: M7+=10, M6=8, M5=6, M4=4.
-      Score maps to OVIX 0-10 scale for cross-domain comparison.
+      Supply Chain & Trade Index from AI-classified news headlines.
+      Categories: Shipping & Maritime (35%), Tariffs & Trade Policy (25%),
+      Port & Logistics (20%), Supply Chain Disruption (20%).
+      Relevance scored 0&ndash;10 for workforce operations impact.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: USGS Earthquake Hazards &middot; EMSC<br>
-      Refreshes every 5 min via OVIX API.
+      Sources: Google News (World, Business, Geopolitical) &middot; Claude Haiku classification<br>
+      RSS every 15 min &middot; Classification 3x daily.
+      <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
 
   <div class="banner">
-    <div class="banner-title">SEISMIC ACTIVITY</div>
+    <div class="banner-title">SUPPLY CHAIN & TRADE</div>
     <div class="banner-stats">
-      <div class="stat-box"><div class="stat-value" id="total-count">--</div><div class="stat-label">TOTAL QUAKES</div></div>
-      <div class="stat-box"><div class="stat-value" id="m5-count">--</div><div class="stat-label">M5+ COUNT</div></div>
-      <div class="stat-box"><div class="stat-value" id="max-mag">--</div><div class="stat-label">MAX MAGNITUDE</div></div>
+      <div class="stat-box"><div class="stat-value" id="shipping-count">--</div><div class="stat-label">SHIPPING</div></div>
+      <div class="stat-box"><div class="stat-value" id="tariff-count">--</div><div class="stat-label">TARIFFS</div></div>
+      <div class="stat-box"><div class="stat-value" id="port-count">--</div><div class="stat-label">PORTS</div></div>
+      <div class="stat-box"><div class="stat-value" id="disruption-count">--</div><div class="stat-label">DISRUPTION</div></div>
+      <div class="stat-box"><div class="stat-value" id="total-count">--</div><div class="stat-label">TOTAL</div></div>
     </div>
-    <div class="level-badge" id="seis-level-badge">--</div>
+    <div class="level-badge" id="sc-level-badge">--</div>
     <div class="transport">
       <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
       <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
@@ -368,42 +352,39 @@
   </div>
 
 
-  <!-- DATA AREA (bottom-right) -->
-  <div class="data-area">
+  <!-- DATA AREA — 2x2 grid by geopolitical category -->
+  <div class="data-area" style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;padding:10px;overflow:hidden;">
 
-    <!-- COL 1: Recent Earthquakes -->
-    <div class="column">
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Recent Earthquakes</span>
-          <span class="panel-count" id="quake-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="quake-list">
-          <div class="status-msg">Loading seismic data...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#ef4444;">Shipping & Maritime</span>
+        <span class="panel-count" id="shipping-panel-count">--</span>
       </div>
+      <div class="panel-body" id="shipping-list"><div class="status-msg">Loading...</div></div>
     </div>
 
-    <!-- COL 2: Magnitude Distribution + Significant -->
-    <div class="column">
-      <div class="panel" style="flex-shrink:0;">
-        <div class="panel-header">
-          <span class="panel-title">Magnitude Distribution</span>
-          <span class="panel-count" style="color:var(--text-dim);font-size:9px;">24h</span>
-        </div>
-        <div class="panel-body" id="mag-dist" style="max-height:220px;">
-          <div class="status-msg">Loading...</div>
-        </div>
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#f59e0b;">Tariffs & Trade Policy</span>
+        <span class="panel-count" id="tariff-panel-count">--</span>
       </div>
-      <div class="panel grow">
-        <div class="panel-header">
-          <span class="panel-title">Significant Quakes</span>
-          <span class="panel-count" id="sig-panel-count">--</span>
-        </div>
-        <div class="panel-body" id="sig-list">
-          <div class="status-msg">Loading significant events...</div>
-        </div>
+      <div class="panel-body" id="tariff-list"><div class="status-msg">Loading...</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#22c55e;">Port & Logistics</span>
+        <span class="panel-count" id="port-panel-count">--</span>
       </div>
+      <div class="panel-body" id="port-list"><div class="status-msg">Loading...</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title" style="color:#a855f7;">Supply Chain Disruption</span>
+        <span class="panel-count" id="disruption-panel-count">--</span>
+      </div>
+      <div class="panel-body" id="disruption-list"><div class="status-msg">Loading...</div></div>
     </div>
 
   </div>
@@ -414,7 +395,7 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?domain=seismic&hours=24&limit=200';
+  var NEWS_API = 'https://news-intel.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -435,60 +416,89 @@
     return Math.floor(h / 24) + 'd ago';
   }
 
-  function magColor(sev) {
+  function severityColor(sev) {
     var s = parseFloat(sev) || 0;
-    if (s >= 8) return 'var(--accent-red)';
-    if (s >= 6) return 'var(--accent-orange)';
-    if (s >= 4) return 'var(--accent-yellow)';
+    if (s >= 7) return 'var(--accent-red)';
+    if (s >= 5) return 'var(--accent-orange)';
+    if (s >= 3) return 'var(--accent-yellow)';
     return 'var(--accent-green)';
   }
 
-  // Severity to approximate magnitude: sev 10=M7+, 8=M6, 6=M5, 4=M4
-  function sevToMag(sev) {
+  function severityLabel(sev) {
     var s = parseFloat(sev) || 0;
-    if (s >= 10) return 7.5;
-    if (s >= 8) return 6.5;
-    if (s >= 6) return 5.5;
-    if (s >= 4) return 4.5;
-    if (s >= 2) return 3.5;
-    return 2.5;
+    if (s >= 8) return 'CRITICAL';
+    if (s >= 6) return 'SEVERE';
+    if (s >= 4) return 'ELEVATED';
+    if (s >= 2) return 'GUARDED';
+    return 'LOW';
   }
 
-  // --- Seismic Index ---
-  function computeSeismicIndex(events) {
-    var m5Count = 0, m6Count = 0, maxSev = 0;
-    var regions = {};
+  // --- Category grouping for headlines ---
+  var CATEGORY_GROUPS = {
+    conflict: { panel: 'shipping-list', count: 'shipping-panel-count', banner: 'shipping-count', color: '#ef4444', cats: ['conflict'] },
+    trade: { panel: 'tariff-list', count: 'tariff-panel-count', banner: 'tariff-count', color: '#f59e0b', cats: ['trade_policy', 'economics'] },
+    labor: { panel: 'port-list', count: 'port-panel-count', banner: 'port-count', color: '#22c55e', cats: ['labor', 'immigration'] },
+    regulation: { panel: 'disruption-list', count: 'disruption-panel-count', banner: 'disruption-count', color: '#a855f7', cats: ['regulation', 'sanctions'] },
+  };
 
-    events.forEach(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      if (sev > maxSev) maxSev = sev;
-      if (sev >= 6) m5Count++;  // sev 6 = M5
-      if (sev >= 8) m6Count++;  // sev 8 = M6
-      // Geographic spread: extract rough region from title
-      var region = (e.title || '').split(',').pop();
-      if (region) regions[region.trim()] = true;
+  // --- Supply Chain & Trade Index (from clustered stories) ---
+  function computeGeopoliticalIndex(stories) {
+    if (!stories.length) return { score: 10, factors: [] };
+
+    // Group by dashboard category
+    var groups = { conflict: [], trade: [], labor: [], regulation: [] };
+    stories.forEach(function(s) {
+      var cat = s.category;
+      if (cat === 'conflict') groups.conflict.push(s);
+      else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(s);
+      else if (cat === 'labor' || cat === 'immigration') groups.labor.push(s);
+      else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(s);
     });
-    var uniqueRegions = Object.keys(regions).length;
 
-    var m5Score = Math.min(100, m5Count * 8);
-    var m6Score = Math.min(100, m6Count * 20);
-    var magScore = maxSev * 10;
-    var spreadScore = Math.min(100, uniqueRegions * 5);
+    // Score per group: max severity × trajectory bonus, scaled to 0-100
+    // In a high-risk environment with sev 8-9 stories, this should produce 70-90
+    function groupScore(arr) {
+      if (!arr.length) return 0;
+      // Use max severity in the group (the worst story drives the score)
+      var maxSev = Math.max.apply(null, arr.map(function(s) { return parseInt(s.severity) || 0; }));
+      // Trajectory bonus from the highest-severity story
+      var topStory = arr.reduce(function(best, s) { return (parseInt(s.severity)||0) > (parseInt(best.severity)||0) ? s : best; });
+      var trajBonus = topStory.trajectory === 'escalating' ? 1.15 : topStory.trajectory === 'peak' ? 1.1 : 1.0;
+      // Volume factor: more stories = higher risk (capped)
+      var volumeFactor = Math.min(1.3, 1 + (arr.length - 1) * 0.05);
+      return Math.min(100, maxSev * 10 * trajBonus * volumeFactor);
+    }
+
+    var conflictScore = groupScore(groups.conflict);
+    var tradeScore = groupScore(groups.trade);
+    var laborScore = groupScore(groups.labor);
+    var regScore = groupScore(groups.regulation);
 
     var factors = [
-      { name: 'M5+ Count', value: Math.round(m5Score), weight: 35 },
-      { name: 'M6+ Count', value: Math.round(m6Score), weight: 25 },
-      { name: 'Max Magnitude', value: Math.round(magScore), weight: 25 },
-      { name: 'Geo Spread', value: Math.round(spreadScore), weight: 15 }
+      { name: 'Conflict', value: Math.round(conflictScore), weight: 35 },
+      { name: 'Trade & Econ', value: Math.round(tradeScore), weight: 25 },
+      { name: 'Labor', value: Math.round(laborScore), weight: 20 },
+      { name: 'Reg & Sanctions', value: Math.round(regScore), weight: 20 }
     ];
 
     var score = Math.round(
-      m5Score * 0.35 + m6Score * 0.25 + magScore * 0.25 + spreadScore * 0.15
+      conflictScore * 0.35 + tradeScore * 0.25 + laborScore * 0.20 + regScore * 0.20
     );
     score = Math.min(score, 100);
 
+    // Baseline when no data
+    if (!stories.length) {
+      score = 10;
+      factors = [
+        { name: 'Conflict', value: 0, weight: 35 },
+        { name: 'Trade & Econ', value: 0, weight: 25 },
+        { name: 'Labor', value: 0, weight: 20 },
+        { name: 'Reg & Sanctions', value: 0, weight: 20 }
+      ];
+    }
+
     renderFactors(factors, score);
-    return { score: score, m5Count: m5Count, m6Count: m6Count, maxSev: maxSev };
+    return { score: score, factors: factors };
   }
 
   function renderFactors(factors, totalScore) {
@@ -516,7 +526,7 @@
     if (score >= 75) return { label: 'CRITICAL', color: 'var(--accent-red)' };
     if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-orange)' };
     if (score >= 25) return { label: 'GUARDED', color: 'var(--accent-yellow)' };
-    return { label: 'LOW', color: 'var(--accent-green)' };
+    return { label: 'NORMAL', color: 'var(--accent-green)' };
   }
 
   // --- Gauge SVG ---
@@ -556,7 +566,7 @@
     html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + indexLevel(score).color + '"/>';
 
     html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + indexLevel(score).color + '" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="28" font-weight="700">' + score + '</text>';
-    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">SEISMIC INDEX</text>';
+    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">GEOPOLITICAL</text>';
 
     html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">0</text>';
     html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">100</text>';
@@ -579,170 +589,115 @@
   }
 
   // --- Render ---
-  function renderQuakeList(events) {
-    var el = document.getElementById('quake-list');
-    document.getElementById('quake-panel-count').textContent = events.length;
-    if (!events.length) { el.innerHTML = '<div class="empty-state">No earthquakes in last 24h</div>'; return; }
+  // --- Trajectory styling ---
+  var TRAJ_STYLE = {
+    emerging:   { icon: '\u25B2', color: '#3b82f6', label: 'EMERGING' },
+    escalating: { icon: '\u25B2\u25B2', color: '#ef4444', label: 'ESCALATING' },
+    peak:       { icon: '\u26A0', color: '#f97316', label: 'PEAK' },
+    steady:     { icon: '\u2014', color: '#eab308', label: 'STEADY' },
+    declining:  { icon: '\u25BC', color: '#22c55e', label: 'DECLINING' },
+    resolved:   { icon: '\u2713', color: '#64748b', label: 'RESOLVED' },
+  };
 
-    // Sort by severity desc
-    events.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
+  // --- Render stories into a panel ---
+  function renderPanel(panelId, countId, stories, accentColor, emptyMsg) {
+    var el = document.getElementById(panelId);
+    var countEl = document.getElementById(countId);
+    countEl.textContent = stories.length;
 
-    el.innerHTML = events.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var mag = sevToMag(sev).toFixed(1);
-      var color = magColor(sev);
-      var location = esc(e.title || 'Unknown');
-      var depth = '';
-      // Try to extract depth from description
-      if (e.description) {
-        var depthMatch = e.description.match(/depth[:\s]*(\d+\.?\d*)\s*km/i);
-        if (depthMatch) depth = depthMatch[1] + ' km depth';
-      }
-      var src = (e.source || '').toUpperCase();
-      var url = e.source_url || '';
+    if (!stories.length) {
+      el.innerHTML = '<div class="empty-state">' + emptyMsg + '</div>';
+      return;
+    }
 
-      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
-        '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<div class="mag-badge" style="background:' + color + ';">' + mag + '</div>' +
-          '<div style="flex:1;min-width:0;">' +
-            '<div class="card-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + location + '</div>' +
-            (depth ? '<div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">' + esc(depth) + '</div>' : '') +
-            '<div class="card-date">' +
-              timeSince(e.occurred_at) +
-              (src ? ' &middot; <span class="source-tag">' + esc(src) + '</span>' : '') +
-              ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
-              (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source &#8599;</span>' : '') +
-            '</div>' +
-          '</div>' +
+    el.innerHTML = stories.sort(function(a,b) {
+      return (parseInt(b.severity)||0) - (parseInt(a.severity)||0);
+    }).map(function(s) {
+      var sev = parseInt(s.severity) || 0;
+      var traj = TRAJ_STYLE[s.trajectory] || TRAJ_STYLE.steady;
+      var regions = s.affected_regions || '';
+      if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}"]/g, '');
+      if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
+      var sCount = s.source_count || 0;
+
+      var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
+
+      return '<div class="card">' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<span class="severity-dot" style="background:' + severityColor(sev) + '"></span>' +
+          '<span style="font-size:12px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(shortTitle) + '</span>' +
+          '<span style="font-size:9px;font-weight:700;color:' + traj.color + ';flex-shrink:0;">' + traj.icon + '</span>' +
         '</div>' +
-        '<div class="card-details">Magnitude ' + mag + ' &middot; Severity ' + esc(String(e.severity)) + (depth ? ' &middot; ' + esc(depth) : '') + (e.description ? '<br>' + esc(e.description) : '') + '</div>' +
+        '<div class="card-date">' +
+          esc(regions) + ' &middot; ' + timeSince(s.first_seen) +
+          ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+        '</div>' +
+        '<div class="card-details">' + esc(s.summary || '') + '</div>' +
       '</div>';
     }).join('');
   }
 
-  function renderMagDist(events) {
-    var el = document.getElementById('mag-dist');
-    if (!events.length) { el.innerHTML = '<div class="empty-state">No data</div>'; return; }
-
-    // Count by magnitude range using severity
-    var ranges = [
-      { label: 'M4-5', min: 4, max: 6, color: 'var(--accent-yellow)', count: 0 },
-      { label: 'M5-6', min: 6, max: 8, color: 'var(--accent-orange)', count: 0 },
-      { label: 'M6-7', min: 8, max: 10, color: '#f97316', count: 0 },
-      { label: 'M7+', min: 10, max: 99, color: 'var(--accent-red)', count: 0 }
-    ];
-
-    events.forEach(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      for (var i = 0; i < ranges.length; i++) {
-        if (sev >= ranges[i].min && sev < ranges[i].max) {
-          ranges[i].count++;
-          break;
-        }
-      }
-    });
-
-    // Also count below M4 (sev < 4)
-    var belowM4 = events.filter(function(e) { return (parseFloat(e.severity) || 0) < 4; }).length;
-    ranges.unshift({ label: '<M4', min: 0, max: 4, color: 'var(--accent-green)', count: belowM4 });
-
-    var maxCount = Math.max.apply(null, ranges.map(function(r) { return r.count; }));
-    if (maxCount === 0) maxCount = 1;
-
-    el.innerHTML = ranges.map(function(r) {
-      var pct = Math.round((r.count / maxCount) * 100);
-      return '<div class="mag-bar-row">' +
-        '<span class="mag-bar-label">' + r.label + '</span>' +
-        '<div class="mag-bar-track">' +
-          '<div class="mag-bar-fill" style="width:' + pct + '%;background:' + r.color + ';"></div>' +
-        '</div>' +
-        '<span class="mag-bar-count">' + r.count + '</span>' +
-      '</div>';
-    }).join('');
-  }
-
-  function renderSignificant(events) {
-    var el = document.getElementById('sig-list');
-    // Significant = severity >= 6 (M5+)
-    var significant = events.filter(function(e) { return (parseFloat(e.severity) || 0) >= 6; });
-    significant.sort(function(a, b) { return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0); });
-
-    document.getElementById('sig-panel-count').textContent = significant.length;
-    if (!significant.length) { el.innerHTML = '<div class="empty-state">No significant earthquakes (M5+) in last 24h</div>'; return; }
-
-    el.innerHTML = significant.map(function(e) {
-      var sev = parseFloat(e.severity) || 0;
-      var mag = sevToMag(sev).toFixed(1);
-      var color = magColor(sev);
-      var src = (e.source || '').toUpperCase();
-      var url = e.source_url || '';
-
-      return '<div class="card"' + (url ? ' data-url="' + esc(url) + '" onclick="if(this.dataset.url)window.open(this.dataset.url,\'_blank\')"' : '') + '>' +
-        '<div style="display:flex;align-items:center;gap:10px;">' +
-          '<div class="mag-badge" style="background:' + color + ';width:36px;height:36px;font-size:14px;">' + mag + '</div>' +
-          '<div style="flex:1;min-width:0;">' +
-            '<div class="card-title">' + esc(e.title) + '</div>' +
-            (e.description ? '<div class="card-desc">' + esc(e.description) + '</div>' : '') +
-            '<div class="card-date">' +
-              timeSince(e.occurred_at) +
-              (src ? ' &middot; <span class="source-tag">' + esc(src) + '</span>' : '') +
-              ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
-              (url ? ' &middot; <span class="card-link" onclick="event.stopPropagation();window.open(\'' + esc(url) + '\',\'_blank\')">Source &#8599;</span>' : '') +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card-details">Magnitude ' + mag + ' &middot; Severity ' + esc(String(e.severity)) + (e.description ? '<br>' + esc(e.description) : '') + '</div>' +
-      '</div>';
-    }).join('');
-  }
-
-  function updateBanner(events, result) {
-    document.getElementById('total-count').textContent = events.length;
-    document.getElementById('m5-count').textContent = result.m5Count;
-    var m6El = document.getElementById('m6-count');
-    if (m6El) m6El.textContent = result.m6Count;
-    var maxMag = result.maxSev > 0 ? sevToMag(result.maxSev).toFixed(1) : '--';
-    var maxMagEl = document.getElementById('max-mag');
-    maxMagEl.textContent = maxMag;
-    maxMagEl.style.color = magColor(result.maxSev);
-    // Level badge
-    var lvl = indexLevel(result.score);
-    var lb = document.getElementById('seis-level-badge');
-    if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
-  }
-
-  // --- Fetch & Process ---
+  // --- Fetch from NewsIntel stories & render ---
   function fetchData() {
-    fetch(API_URL)
+    fetch(NEWS_API + '/stories')
       .then(function(res) {
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
+        var stories = data.stories || [];
 
-        var result = computeSeismicIndex(events);
+        // Group by category
+        var groups = { conflict: [], trade: [], labor: [], regulation: [] };
+        stories.forEach(function(s) {
+          var cat = s.category;
+          if (cat === 'conflict') groups.conflict.push(s);
+          else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(s);
+          else if (cat === 'labor' || cat === 'immigration') groups.labor.push(s);
+          else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(s);
+        });
 
-        renderQuakeList(events);
-        renderMagDist(events);
-        renderSignificant(events);
+        // Render panels
+        renderPanel('shipping-list', 'shipping-panel-count', groups.conflict, '#ef4444', 'No active conflict situations detected.');
+        renderPanel('tariff-list', 'tariff-panel-count', groups.trade, '#f59e0b', 'No trade or economic disruptions detected.');
+        renderPanel('port-list', 'port-panel-count', groups.labor, '#22c55e', 'No labor or workforce disruptions detected.');
+        renderPanel('disruption-list', 'disruption-panel-count', groups.regulation, '#a855f7', 'No regulatory or sanctions events detected.');
+
+        // Banner counts
+        document.getElementById('shipping-count').textContent = groups.conflict.length;
+        document.getElementById('tariff-count').textContent = groups.trade.length;
+        document.getElementById('port-count').textContent = groups.labor.length;
+        document.getElementById('disruption-count').textContent = groups.regulation.length;
+        document.getElementById('total-count').textContent = stories.length;
+
+        // Compute risk index from stories
+        var result = computeGeopoliticalIndex(stories);
         drawGauge(result.score);
-        updateBanner(events, result);
+        renderFactors(result.factors, result.score);
+
+        var lvl = indexLevel(result.score);
+        var lb = document.getElementById('sc-level-badge');
+        if (lb) { lb.textContent = lvl.label; lb.style.color = lvl.color; lb.style.border = '1px solid ' + lvl.color; }
+        var gl = document.getElementById('gauge-label');
+        if (gl) { gl.textContent = lvl.label; gl.style.color = lvl.color; }
+
+        // Show last updated timestamp
+        var luEl = document.getElementById('last-updated');
+        if (luEl) {
+          var clustered = data.lastClustered ? timeSince(data.lastClustered) : 'never';
+          var ingested = data.lastIngested ? timeSince(data.lastIngested) : 'never';
+          var recent = data.recentHeadlines || 0;
+          luEl.textContent = 'Stories clustered: ' + clustered + ' | RSS ingested: ' + ingested + ' | ' + recent + ' headlines (6h)';
+        }
       })
       .catch(function(err) {
-        console.error('Seismic fetch error:', err);
-        ['quake-list', 'sig-list'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el.querySelector('.status-msg')) {
-            el.innerHTML = '<div class="status-msg error-msg">Failed to load: ' + esc(err.message) + '</div>';
-          }
-        });
+        console.error('Supply Chain fetch error:', err);
+        drawGauge(10);
       });
   }
 
-  // Initial draw (empty gauge)
-  drawGauge(0);
+  // Initial draw (baseline gauge at 10 = OVIX 1.0)
+  drawGauge(10);
 
   // Fetch immediately, then every 5 min
   fetchData();
@@ -811,7 +766,7 @@ updateTransportUI();
   var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var enabled = s.enabledSlides || ORDER.slice();
   var path = window.location.pathname;
-  var cur = 'seismic';
+  var cur = 'geopolitical';
   for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) { cur = k; break; } }
   var idx = enabled.indexOf(cur); if (idx === -1) idx = 0;
   var next = enabled[(idx + 1) % enabled.length];

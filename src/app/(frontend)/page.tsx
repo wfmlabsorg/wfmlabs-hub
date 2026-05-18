@@ -196,6 +196,8 @@ export default async function HomePage() {
               { icon: '📈', label: 'Financial', path: 'financial-markets', color: '#f59e0b' },
               { icon: '🌐', label: 'Geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
               { icon: '✈', label: 'Travel', path: 'feed-health', color: '#06b6d4' },
+              { icon: '⚙', label: 'Labor', path: 'labor', color: '#f43f5e' },
+              { icon: '🚢', label: 'Supply Chain', path: 'supply-chain', color: '#8b5cf6' },
             ].map(d => (
               <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}?tc.mode=local&tc.startDelta=1800000&tc.endDelta=30000&tc.timeSystem=utc&view=roc.dashboard.view`} target="_blank" rel="noopener"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `2px solid ${d.color}`, textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', fontWeight: 600 }}>
@@ -304,6 +306,8 @@ export default async function HomePage() {
                   { icon: '🌿', label: 'Environmental', domain: 'environmental', path: 'environmental-monitor', color: '#14b8a6' },
                   { icon: '🌐', label: 'Geopolitical', domain: 'geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
                   { icon: '✈', label: 'Travel', domain: 'travel', path: 'feed-health', color: '#06b6d4' },
+                  { icon: '⚙', label: 'Labor', domain: 'labor', path: 'labor', color: '#f43f5e' },
+                  { icon: '🚢', label: 'Supply Chain', domain: 'supply_chain', path: 'supply-chain', color: '#8b5cf6' },
                 ]
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
