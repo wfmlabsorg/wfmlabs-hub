@@ -90,21 +90,44 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(days / 30)}mo ago`
 }
 
+const severityLevels = [
+  { value: 'info', label: 'Info', color: '#10b981' },
+  { value: 'moderate', label: 'Moderate', color: '#3b82f6' },
+  { value: 'severe', label: 'Severe', color: '#f59e0b' },
+  { value: 'extreme', label: 'Extreme', color: '#ef4444' },
+]
+
 export default function SignalsPage() {
   const [signals, setSignals] = useState<Signal[]>([])
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [activeSource, setActiveSource] = useState<string | null>(null)
+  const [activeSeverity, setActiveSeverity] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const [hasNextPage, setHasNextPage] = useState(false)
   const [totalDocs, setTotalDocs] = useState(0)
+  const [knownSources, setKnownSources] = useState<string[]>([])
 
-  const fetchSignals = useCallback((category: string | null, pg: number) => {
+  // Fetch distinct sources on mount
+  useEffect(() => {
+    fetch('/api/signals?limit=100&page=1')
+      .then((r) => r.json())
+      .then((data) => {
+        const sources = [...new Set((data.docs || []).map((s: Signal) => s.source))].sort() as string[]
+        setKnownSources(sources)
+      })
+      .catch(() => {})
+  }, [])
+
+  const fetchSignals = useCallback((category: string | null, source: string | null, severity: string | null, pg: number) => {
     setLoading(true)
     const params = new URLSearchParams()
     params.set('limit', '50')
     params.set('page', String(pg))
     if (category) params.set('category', category)
+    if (source) params.set('source', source)
+    if (severity) params.set('severityLabel', severity)
 
     fetch(`/api/signals?${params}`)
       .then((r) => r.json())
@@ -119,12 +142,12 @@ export default function SignalsPage() {
 
   useEffect(() => {
     setPage(1)
-    fetchSignals(activeCategory, 1)
-  }, [activeCategory, fetchSignals])
+    fetchSignals(activeCategory, activeSource, activeSeverity, 1)
+  }, [activeCategory, activeSource, activeSeverity, fetchSignals])
 
   useEffect(() => {
-    if (page > 1) fetchSignals(activeCategory, page)
-  }, [page, activeCategory, fetchSignals])
+    if (page > 1) fetchSignals(activeCategory, activeSource, activeSeverity, page)
+  }, [page, activeCategory, activeSource, activeSeverity, fetchSignals])
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
@@ -212,6 +235,95 @@ export default function SignalsPage() {
         })}
       </div>
 
+      {/* Severity + Source filters */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '1.5rem',
+          flexWrap: 'wrap',
+          marginBottom: '1.5rem',
+          alignItems: 'flex-start',
+        }}
+      >
+        {/* Severity */}
+        <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              color: 'var(--fg-faint)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginRight: '0.25rem',
+            }}
+          >
+            Severity
+          </span>
+          {severityLevels.map((sev) => {
+            const isActive = activeSeverity === sev.value
+            return (
+              <button
+                key={sev.value}
+                onClick={() => setActiveSeverity(isActive ? null : sev.value)}
+                style={{
+                  padding: '0.25rem 0.625rem',
+                  borderRadius: '9999px',
+                  border: `1px solid ${isActive ? sev.color : 'var(--border)'}`,
+                  background: isActive ? `${sev.color}15` : 'transparent',
+                  color: isActive ? sev.color : 'var(--fg-muted)',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {sev.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Source agent */}
+        {knownSources.length > 1 && (
+          <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                color: 'var(--fg-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginRight: '0.25rem',
+              }}
+            >
+              Source
+            </span>
+            {knownSources.map((src) => {
+              const isActive = activeSource === src
+              return (
+                <button
+                  key={src}
+                  onClick={() => setActiveSource(isActive ? null : src)}
+                  style={{
+                    padding: '0.25rem 0.625rem',
+                    borderRadius: '9999px',
+                    border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                    background: isActive ? 'var(--accent-light)' : 'transparent',
+                    color: isActive ? 'var(--accent)' : 'var(--fg-muted)',
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {src}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Signal cards */}
       {loading ? (
         <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--fg-faint)' }}>
@@ -228,7 +340,7 @@ export default function SignalsPage() {
           }}
         >
           <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-            No signals {activeCategory ? `in ${domainLabels[activeCategory]}` : 'yet'}
+            No signals{activeCategory ? ` in ${domainLabels[activeCategory]}` : ''}{activeSeverity ? ` with ${activeSeverity} severity` : ''}{activeSource ? ` from ${activeSource}` : ''}{!activeCategory && !activeSeverity && !activeSource ? ' yet' : ' matching filters'}
           </p>
           <p style={{ fontSize: '0.875rem' }}>
             Signals appear here as operational events are detected across monitored domains.

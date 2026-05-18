@@ -121,6 +121,8 @@ export async function GET(req: Request) {
   const page = Math.max(parseInt(url.searchParams.get('page') || '1'), 1)
   const category = url.searchParams.get('category')
   const regionId = url.searchParams.get('region')
+  const source = url.searchParams.get('source')
+  const severityLabel = url.searchParams.get('severityLabel')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {}
@@ -128,6 +130,10 @@ export async function GET(req: Request) {
     where.category = { equals: category }
   }
   if (regionId) where.regionId = { equals: regionId }
+  if (source) where.source = { equals: source }
+  if (severityLabel && ['info', 'moderate', 'severe', 'extreme'].includes(severityLabel)) {
+    where.severityLabel = { equals: severityLabel }
+  }
 
   const signals = await payload.find({
     collection: 'signals',
