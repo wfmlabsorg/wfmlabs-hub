@@ -12,6 +12,7 @@ const navLinks = [
   { href: '/articles', label: 'Articles' },
   { href: '/signals', label: 'Signals' },
   { href: '/incidents', label: 'Incidents' },
+  { href: '/chat', label: 'Chat' },
   { href: '/data-sources', label: 'APIs' },
   { href: '/members', label: 'Members' },
   { href: '/discussions', label: 'Discussions' },

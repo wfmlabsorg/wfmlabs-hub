@@ -31,7 +31,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); height:
 .grid {
   flex:1; display:grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
   gap:1px; background:var(--border); overflow:hidden;
 }
 
@@ -86,7 +86,11 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); height:
     { key:'health', url:'/dashboards/health.html', nav:'/dashboards/health.html' },
     { key:'infrastructure', url:'/dashboards/infrastructure.html', nav:'/dashboards/infrastructure.html' },
     { key:'financial', url:'/dashboards/financial.html', nav:'/dashboards/financial.html' },
-    { key:'environmental', url:'about:blank', nav:'/dashboards/scores.html' }
+    { key:'environmental', url:'about:blank', nav:'/dashboards/scores.html' },
+    { key:'geopolitical', url:'/dashboards/geopolitical.html', nav:'/dashboards/geopolitical.html' },
+    { key:'travel', url:'/dashboards/travel.html', nav:'/dashboards/travel.html' },
+    { key:'labor', url:'/dashboards/labor.html', nav:'/dashboards/labor.html' },
+    { key:'supply-chain', url:'/dashboards/supply-chain.html', nav:'/dashboards/supply-chain.html' }
   ];
 
   var grid = document.getElementById('grid');
@@ -123,7 +127,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); height:
 <script>
 window.rocNav = function(a) {
   ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
-  var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];
+  var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var K = 'roc-rotation';
   function gs() { try { return JSON.parse(localStorage.getItem(K))||{}; } catch(e) { return {}; } }
   function ss(s) { try { localStorage.setItem(K,JSON.stringify(s)); } catch(e) {} }
@@ -137,7 +141,7 @@ window.rocNav = function(a) {
 };
 function updateTransportUI(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation'))||{};}catch(e){s={};}var b=document.getElementById('bnr-play'),ind=document.getElementById('rotation-indicator');if(b){b.textContent=s.active?'⏸':'▶';b.style.background=s.active?'rgba(24,188,156,0.25)':'rgba(24,188,156,0.08)';}if(ind)ind.style.display=s.active?'block':'none';var sp=document.getElementById('bnr-speed');if(sp&&s.interval)sp.value=String(s.interval);}
 updateTransportUI();
-(function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
+(function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
 </script>
 </body>
 </html>

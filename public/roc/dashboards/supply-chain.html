@@ -35,7 +35,6 @@
     margin: 0;
   }
 
-  /* PAGE GRID */
   .page-grid {
     display: grid;
     grid-template-columns: 280px 1fr;
@@ -43,7 +42,6 @@
     height: 100vh;
   }
 
-  /* LEFT GAUGE PANEL */
   .gauge-panel {
     grid-row: 1 / -1;
     background: var(--bg-panel);
@@ -55,13 +53,11 @@
     align-items: center;
   }
 
-  /* CARD EXPAND/COLLAPSE */
   .card-details { display:none; margin-top:6px; font-size:10px; color:var(--text-secondary); line-height:1.4; border-top:1px solid var(--border); padding-top:6px; }
   .card.expanded .card-details { display:block; }
   .card-expand { cursor:pointer; color:var(--text-dim); font-size:9px; }
   .card.expanded .card-expand { color:var(--accent-cyan); }
 
-  /* BANNER */
   .banner {
     display: flex;
     align-items: center;
@@ -82,21 +78,11 @@
   .transport button { background:rgba(24,188,156,0.08); border:1px solid rgba(24,188,156,0.25); color:#18BC9C; font-size:12px; width:26px; height:22px; border-radius:3px; cursor:pointer; padding:0; }
   .transport button:hover { background:rgba(24,188,156,0.2); }
 
-
-  /* DATA AREA */
   .data-area {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 12px;
     padding: 12px;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .column {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
     min-height: 0;
     overflow: hidden;
   }
@@ -110,7 +96,6 @@
     min-height: 0;
     overflow: hidden;
   }
-  .panel.grow { flex: 1; }
 
   .panel-header {
     display: flex;
@@ -141,13 +126,11 @@
     padding: 10px;
   }
 
-  /* SCROLLBAR */
   .panel-body::-webkit-scrollbar { width: 6px; }
   .panel-body::-webkit-scrollbar-track { background: transparent; }
   .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   .panel-body::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-  /* CARDS */
   .card {
     background: var(--bg-card);
     border: 1px solid var(--border);
@@ -159,25 +142,6 @@
   .card:hover { border-color: var(--accent-cyan); }
   .card:last-child { margin-bottom: 0; }
 
-  .card-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 4px;
-  }
-
-  .severity-badge {
-    font-size: 10px;
-    font-weight: 700;
-    color: #fff;
-    padding: 1px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    flex-shrink: 0;
-  }
-
   .severity-dot {
     display: inline-block;
     width: 8px;
@@ -187,58 +151,12 @@
     flex-shrink: 0;
   }
 
-  .source-tag {
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--accent-purple);
-    background: rgba(168,85,247,0.12);
-    padding: 1px 6px;
-    border-radius: 3px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    flex-shrink: 0;
-  }
-
-  .card-title {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-
-  .card-desc {
-    font-size: 11px;
-    color: var(--text-secondary);
-    line-height: 1.4;
-    margin-top: 4px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
   .card-date {
     font-size: 10px;
     color: var(--text-dim);
     margin-top: 4px;
   }
 
-  .card-area {
-    font-size: 10px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-
-  .card-metric {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-top: 4px;
-  }
-  .card-metric strong {
-    color: var(--text-primary);
-    font-weight: 700;
-  }
-
-  /* GAUGE */
   .gauge-container {
     display: flex;
     flex-direction: column;
@@ -253,13 +171,11 @@
     margin-top: 4px;
   }
 
-  /* GAUGE PANEL SCROLLBAR */
   .gauge-panel::-webkit-scrollbar { width: 6px; }
   .gauge-panel::-webkit-scrollbar-track { background: transparent; }
   .gauge-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   .gauge-panel::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
-  /* LOADING / ERROR */
   .status-msg {
     display: flex;
     align-items: center;
@@ -270,9 +186,7 @@
     text-align: center;
     padding: 20px;
   }
-  .error-msg { color: var(--accent-red); }
 
-  /* EMPTY STATE */
   .empty-state {
     color: var(--text-dim);
     font-size: 11px;
@@ -297,19 +211,16 @@
       grid-template-columns: 1fr;
       overflow-y: auto;
     }
-    .column { overflow: visible; }
-    .panel.grow { flex: none; max-height: 400px; }
   }
 
-/* Hide transport controls when embedded in iframe */
-@media all {
-  body.in-iframe .transport,
-  body.in-iframe #rotation-indicator { display:none !important; }
-}
+  @media all {
+    body.in-iframe .transport,
+    body.in-iframe #rotation-indicator { display:none !important; }
+  }
 </style>
 </head>
 <body>
-<script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
+<script>try { if (window !== window.top && window.top.location.pathname.indexOf('/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) {}</script>
 
 <div class="page-grid">
 
@@ -328,8 +239,8 @@
       Relevance scored 0&ndash;10 for workforce operations impact.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: Google News (World, Business, Geopolitical) &middot; Claude Haiku classification<br>
-      RSS every 15 min &middot; Classification 3x daily.
+      Sources: news-intel.tedlango.workers.dev/stories &middot; Claude Haiku classification<br>
+      Keyword-filtered for supply chain &amp; trade relevance &middot; Clustered 3x daily.
       <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
@@ -351,8 +262,7 @@
     </div>
   </div>
 
-
-  <!-- DATA AREA — 2x2 grid by geopolitical category -->
+  <!-- DATA AREA — 2x2 grid by supply chain category -->
   <div class="data-area" style="display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:10px;padding:10px;overflow:hidden;">
 
     <div class="panel">
@@ -398,7 +308,6 @@
   var NEWS_API = 'https://news-intel.tedlango.workers.dev';
   var REFRESH_MS = 5 * 60 * 1000;
 
-  // --- Utility ---
   function esc(str) {
     if (!str) return '';
     var d = document.createElement('div');
@@ -424,76 +333,72 @@
     return 'var(--accent-green)';
   }
 
-  function severityLabel(sev) {
-    var s = parseFloat(sev) || 0;
-    if (s >= 8) return 'CRITICAL';
-    if (s >= 6) return 'SEVERE';
-    if (s >= 4) return 'ELEVATED';
-    if (s >= 2) return 'GUARDED';
-    return 'LOW';
-  }
-
-  // --- Category grouping for headlines ---
-  var CATEGORY_GROUPS = {
-    conflict: { panel: 'shipping-list', count: 'shipping-panel-count', banner: 'shipping-count', color: '#ef4444', cats: ['conflict'] },
-    trade: { panel: 'tariff-list', count: 'tariff-panel-count', banner: 'tariff-count', color: '#f59e0b', cats: ['trade_policy', 'economics'] },
-    labor: { panel: 'port-list', count: 'port-panel-count', banner: 'port-count', color: '#22c55e', cats: ['labor', 'immigration'] },
-    regulation: { panel: 'disruption-list', count: 'disruption-panel-count', banner: 'disruption-count', color: '#a855f7', cats: ['regulation', 'sanctions'] },
+  // --- Supply Chain keyword classification ---
+  // news-intel categories are geopolitical (conflict, trade_policy, etc.)
+  // We reclassify stories into supply chain sub-domains by title/summary keywords
+  var SC_KEYWORDS = {
+    shipping: /\b(ship|shipping|maritime|vessel|cargo|freight|container|tanker|strait|canal|sea route|blockade|naval|piracy|port closure|suez|hormuz|bab el-mandeb|red sea|houthi)\b/i,
+    tariff: /\b(tariff|trade war|trade policy|trade deal|trade agreement|sanction|embargo|export control|import ban|customs|duty|quota|trade deficit|trade surplus|WTO|USMCA|free trade)\b/i,
+    port: /\b(port|logistics|warehouse|distribution|trucking|rail freight|intermodal|dockworker|longshoreman|terminal|congestion|backlog|inventory|cold chain)\b/i,
+    disruption: /\b(supply chain|shortage|disruption|bottleneck|semiconductor|chip shortage|raw material|commodity|supply crisis|stockpile|hoarding|price surge|inflation|scarcity)\b/i,
   };
 
-  // --- Supply Chain & Trade Index (from clustered stories) ---
-  function computeGeopoliticalIndex(stories) {
-    if (!stories.length) return { score: 10, factors: [] };
+  function classifySupplyChain(story) {
+    var text = (story.title || '') + ' ' + (story.summary || '');
+    if (SC_KEYWORDS.shipping.test(text)) return 'shipping';
+    if (SC_KEYWORDS.tariff.test(text)) return 'tariff';
+    if (SC_KEYWORDS.port.test(text)) return 'port';
+    if (SC_KEYWORDS.disruption.test(text)) return 'disruption';
+    // Stories tagged as trade_policy/economics by news-intel
+    if (story.category === 'trade_policy') return 'tariff';
+    if (story.category === 'economics') return 'disruption';
+    return null;
+  }
 
-    // Group by dashboard category
-    var groups = { conflict: [], trade: [], labor: [], regulation: [] };
-    stories.forEach(function(s) {
-      var cat = s.category;
-      if (cat === 'conflict') groups.conflict.push(s);
-      else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(s);
-      else if (cat === 'labor' || cat === 'immigration') groups.labor.push(s);
-      else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(s);
-    });
+  function isSupplyChainRelevant(story) {
+    // Accept trade_policy and economics categories from news-intel
+    if (story.category === 'trade_policy' || story.category === 'economics') return true;
+    // Also check any story for supply chain keywords
+    var text = (story.title || '') + ' ' + (story.summary || '');
+    return SC_KEYWORDS.shipping.test(text) || SC_KEYWORDS.tariff.test(text) ||
+           SC_KEYWORDS.port.test(text) || SC_KEYWORDS.disruption.test(text);
+  }
 
-    // Score per group: max severity × trajectory bonus, scaled to 0-100
-    // In a high-risk environment with sev 8-9 stories, this should produce 70-90
+  // --- Supply Chain & Trade Index ---
+  function computeSupplyChainIndex(groups) {
     function groupScore(arr) {
       if (!arr.length) return 0;
-      // Use max severity in the group (the worst story drives the score)
       var maxSev = Math.max.apply(null, arr.map(function(s) { return parseInt(s.severity) || 0; }));
-      // Trajectory bonus from the highest-severity story
       var topStory = arr.reduce(function(best, s) { return (parseInt(s.severity)||0) > (parseInt(best.severity)||0) ? s : best; });
       var trajBonus = topStory.trajectory === 'escalating' ? 1.15 : topStory.trajectory === 'peak' ? 1.1 : 1.0;
-      // Volume factor: more stories = higher risk (capped)
       var volumeFactor = Math.min(1.3, 1 + (arr.length - 1) * 0.05);
       return Math.min(100, maxSev * 10 * trajBonus * volumeFactor);
     }
 
-    var conflictScore = groupScore(groups.conflict);
-    var tradeScore = groupScore(groups.trade);
-    var laborScore = groupScore(groups.labor);
-    var regScore = groupScore(groups.regulation);
+    var shippingScore = groupScore(groups.shipping);
+    var tariffScore = groupScore(groups.tariff);
+    var portScore = groupScore(groups.port);
+    var disruptionScore = groupScore(groups.disruption);
 
     var factors = [
-      { name: 'Conflict', value: Math.round(conflictScore), weight: 35 },
-      { name: 'Trade & Econ', value: Math.round(tradeScore), weight: 25 },
-      { name: 'Labor', value: Math.round(laborScore), weight: 20 },
-      { name: 'Reg & Sanctions', value: Math.round(regScore), weight: 20 }
+      { name: 'Shipping', value: Math.round(shippingScore), weight: 35 },
+      { name: 'Tariffs & Trade', value: Math.round(tariffScore), weight: 25 },
+      { name: 'Port & Logistics', value: Math.round(portScore), weight: 20 },
+      { name: 'Disruption', value: Math.round(disruptionScore), weight: 20 }
     ];
 
     var score = Math.round(
-      conflictScore * 0.35 + tradeScore * 0.25 + laborScore * 0.20 + regScore * 0.20
+      shippingScore * 0.35 + tariffScore * 0.25 + portScore * 0.20 + disruptionScore * 0.20
     );
     score = Math.min(score, 100);
 
-    // Baseline when no data
-    if (!stories.length) {
+    if (!groups.shipping.length && !groups.tariff.length && !groups.port.length && !groups.disruption.length) {
       score = 10;
       factors = [
-        { name: 'Conflict', value: 0, weight: 35 },
-        { name: 'Trade & Econ', value: 0, weight: 25 },
-        { name: 'Labor', value: 0, weight: 20 },
-        { name: 'Reg & Sanctions', value: 0, weight: 20 }
+        { name: 'Shipping', value: 0, weight: 35 },
+        { name: 'Tariffs & Trade', value: 0, weight: 25 },
+        { name: 'Port & Logistics', value: 0, weight: 20 },
+        { name: 'Disruption', value: 0, weight: 20 }
       ];
     }
 
@@ -507,7 +412,7 @@
     var ovix = (totalScore / 10).toFixed(1);
     var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-orange)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
 
-    var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">OVIX Score: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
+    var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">Supply Chain Risk: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
     factors.forEach(function(f) {
       var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-orange)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
       html += '<div style="display:grid;grid-template-columns:90px 1fr 30px 25px;align-items:center;gap:6px;font-size:9px;margin-bottom:3px;">' +
@@ -566,7 +471,7 @@
     html += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="' + indexLevel(score).color + '"/>';
 
     html += '<text x="' + cx + '" y="' + (cy - 15) + '" text-anchor="middle" fill="' + indexLevel(score).color + '" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="28" font-weight="700">' + score + '</text>';
-    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">GEOPOLITICAL</text>';
+    html += '<text x="' + cx + '" y="' + (cy + 2) + '" text-anchor="middle" fill="#94a3b8" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10" letter-spacing="1">SUPPLY CHAIN</text>';
 
     html += '<text x="15" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">0</text>';
     html += '<text x="198" y="' + (cy + 5) + '" fill="#64748b" font-family="' + getComputedStyle(document.body).fontFamily + '" font-size="10">100</text>';
@@ -588,8 +493,6 @@
     return 'M ' + x1 + ' ' + y1 + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + x2 + ' ' + y2;
   }
 
-  // --- Render ---
-  // --- Trajectory styling ---
   var TRAJ_STYLE = {
     emerging:   { icon: '\u25B2', color: '#3b82f6', label: 'EMERGING' },
     escalating: { icon: '\u25B2\u25B2', color: '#ef4444', label: 'ESCALATING' },
@@ -599,8 +502,7 @@
     resolved:   { icon: '\u2713', color: '#64748b', label: 'RESOLVED' },
   };
 
-  // --- Render stories into a panel ---
-  function renderPanel(panelId, countId, stories, accentColor, emptyMsg) {
+  function renderPanel(panelId, countId, stories, emptyMsg) {
     var el = document.getElementById(panelId);
     var countEl = document.getElementById(countId);
     countEl.textContent = stories.length;
@@ -618,7 +520,6 @@
       var regions = s.affected_regions || '';
       if (typeof regions === 'string' && regions.startsWith('{')) regions = regions.replace(/[{}"]/g, '');
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
-      var sCount = s.source_count || 0;
 
       var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
 
@@ -637,7 +538,6 @@
     }).join('');
   }
 
-  // --- Fetch from NewsIntel stories & render ---
   function fetchData() {
     fetch(NEWS_API + '/stories')
       .then(function(res) {
@@ -645,35 +545,37 @@
         return res.json();
       })
       .then(function(data) {
-        var stories = data.stories || [];
+        var allStories = data.stories || [];
 
-        // Group by category
-        var groups = { conflict: [], trade: [], labor: [], regulation: [] };
-        stories.forEach(function(s) {
-          var cat = s.category;
-          if (cat === 'conflict') groups.conflict.push(s);
-          else if (cat === 'trade_policy' || cat === 'economics') groups.trade.push(s);
-          else if (cat === 'labor' || cat === 'immigration') groups.labor.push(s);
-          else if (cat === 'regulation' || cat === 'sanctions') groups.regulation.push(s);
+        // Filter to supply-chain-relevant stories, then classify into sub-categories
+        var groups = { shipping: [], tariff: [], port: [], disruption: [] };
+        var totalSC = 0;
+
+        allStories.forEach(function(s) {
+          if (!isSupplyChainRelevant(s)) return;
+          var bucket = classifySupplyChain(s);
+          if (bucket && groups[bucket]) {
+            groups[bucket].push(s);
+            totalSC++;
+          }
         });
 
         // Render panels
-        renderPanel('shipping-list', 'shipping-panel-count', groups.conflict, '#ef4444', 'No active conflict situations detected.');
-        renderPanel('tariff-list', 'tariff-panel-count', groups.trade, '#f59e0b', 'No trade or economic disruptions detected.');
-        renderPanel('port-list', 'port-panel-count', groups.labor, '#22c55e', 'No labor or workforce disruptions detected.');
-        renderPanel('disruption-list', 'disruption-panel-count', groups.regulation, '#a855f7', 'No regulatory or sanctions events detected.');
+        renderPanel('shipping-list', 'shipping-panel-count', groups.shipping, 'No shipping or maritime disruptions detected.');
+        renderPanel('tariff-list', 'tariff-panel-count', groups.tariff, 'No tariff or trade policy events detected.');
+        renderPanel('port-list', 'port-panel-count', groups.port, 'No port or logistics disruptions detected.');
+        renderPanel('disruption-list', 'disruption-panel-count', groups.disruption, 'No supply chain disruptions detected.');
 
         // Banner counts
-        document.getElementById('shipping-count').textContent = groups.conflict.length;
-        document.getElementById('tariff-count').textContent = groups.trade.length;
-        document.getElementById('port-count').textContent = groups.labor.length;
-        document.getElementById('disruption-count').textContent = groups.regulation.length;
-        document.getElementById('total-count').textContent = stories.length;
+        document.getElementById('shipping-count').textContent = groups.shipping.length;
+        document.getElementById('tariff-count').textContent = groups.tariff.length;
+        document.getElementById('port-count').textContent = groups.port.length;
+        document.getElementById('disruption-count').textContent = groups.disruption.length;
+        document.getElementById('total-count').textContent = totalSC;
 
-        // Compute risk index from stories
-        var result = computeGeopoliticalIndex(stories);
+        // Compute supply chain risk index
+        var result = computeSupplyChainIndex(groups);
         drawGauge(result.score);
-        renderFactors(result.factors, result.score);
 
         var lvl = indexLevel(result.score);
         var lb = document.getElementById('sc-level-badge');
@@ -681,7 +583,6 @@
         var gl = document.getElementById('gauge-label');
         if (gl) { gl.textContent = lvl.label; gl.style.color = lvl.color; }
 
-        // Show last updated timestamp
         var luEl = document.getElementById('last-updated');
         if (luEl) {
           var clustered = data.lastClustered ? timeSince(data.lastClustered) : 'never';
@@ -696,10 +597,7 @@
       });
   }
 
-  // Initial draw (baseline gauge at 10 = OVIX 1.0)
   drawGauge(10);
-
-  // Fetch immediately, then every 5 min
   fetchData();
   setInterval(fetchData, REFRESH_MS);
 })();
@@ -716,7 +614,7 @@ window.rocNav = function(action) {
   function getCurrentPage() {
     var path = window.location.pathname;
     for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) return k; }
-    return 'globe';
+    return 'supply-chain';
   }
   var enabled = getEnabled();
   var current = getCurrentPage();
@@ -739,7 +637,7 @@ window.rocNav = function(action) {
       setTimeout(function() {
         var c = getState();
         if (!c.active) return;
-        try { window.location = ROUTES[next2]; } catch(e2) { window.location = ROUTES[next2]; }
+        window.location = ROUTES[next2];
       }, s.interval * 1000);
     }
   } else if (action === 'speed') {
@@ -754,11 +652,8 @@ function updateTransportUI() {
   var ind = document.getElementById('rotation-indicator');
   if (btn) { btn.innerHTML = s.active ? '&#9208;' : '&#9654;'; btn.style.background = s.active ? 'rgba(24,188,156,0.25)' : 'rgba(24,188,156,0.08)'; }
   if (ind) ind.style.display = s.active ? 'block' : 'none';
-  var speedEl = document.getElementById('bnr-speed');
-  if (speedEl && s.interval) speedEl.value = String(s.interval);
 }
 updateTransportUI();
-// Auto-advance if rotation is active
 (function(){
   var s; try { s = JSON.parse(localStorage.getItem('roc-rotation') || '{}'); } catch(e) { return; }
   if (!s.active) return;
@@ -766,7 +661,7 @@ updateTransportUI();
   var ORDER = ['globe','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var enabled = s.enabledSlides || ORDER.slice();
   var path = window.location.pathname;
-  var cur = 'geopolitical';
+  var cur = 'supply-chain';
   for (var k in ROUTES) { if (path.indexOf(ROUTES[k]) !== -1) { cur = k; break; } }
   var idx = enabled.indexOf(cur); if (idx === -1) idx = 0;
   var next = enabled[(idx + 1) % enabled.length];
