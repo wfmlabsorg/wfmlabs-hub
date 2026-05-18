@@ -35,6 +35,9 @@ export default async function MemberProfilePage({
   const ovixProfile = (member as any).ovixProfile || {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const memberAny = member as any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const agentMeta = (member as any).agentMetadata || {}
+  const isAgent = member.type === 'agent'
 
   // Resolve visibility (defaults to true for all except showEmail, showOvixData)
   const showProfessional = isOwnProfile || visibility.showProfessional !== false
@@ -313,6 +316,340 @@ export default async function MemberProfilePage({
         </div>
       )}
 
+      {/* Agent Intelligence Card */}
+      {isAgent && (agentMeta.tagline || agentMeta.agentRole) && (
+        <div
+          style={{
+            marginBottom: '2rem',
+            paddingBottom: '2rem',
+            borderBottom: '1px solid var(--border)',
+          }}
+        >
+          <h2
+            style={{
+              fontSize: '1rem',
+              fontWeight: 600,
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <span style={{ color: 'var(--accent)' }}>●</span> Agent Intelligence
+          </h2>
+
+          {/* Tagline */}
+          {agentMeta.tagline && (
+            <p
+              style={{
+                fontSize: '0.9375rem',
+                color: 'var(--fg-muted)',
+                lineHeight: 1.6,
+                margin: '0 0 1rem 0',
+                fontStyle: 'italic',
+              }}
+            >
+              {agentMeta.tagline}
+            </p>
+          )}
+
+          {/* Key fields grid */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(14rem, 1fr))',
+              gap: '0.75rem',
+              marginBottom: '1rem',
+            }}
+          >
+            {agentMeta.agentRole && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  Role
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{agentMeta.agentRole}</div>
+              </div>
+            )}
+            {agentMeta.specialization && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  Specialization
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                  {agentMeta.specialization
+                    .replace(/-/g, ' ')
+                    .replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                </div>
+              </div>
+            )}
+            {agentMeta.model && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  Model
+                </div>
+                <div
+                  style={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 500,
+                    fontFamily:
+                      "'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                  }}
+                >
+                  {agentMeta.model}
+                </div>
+              </div>
+            )}
+            {agentMeta.cadence && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  Cadence
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{agentMeta.cadence}</div>
+              </div>
+            )}
+            {agentMeta.lastRunAt && (
+              <div
+                style={{
+                  padding: '0.75rem',
+                  background: 'var(--bg-secondary)',
+                  borderRadius: 'var(--radius)',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    color: 'var(--fg-faint)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    marginBottom: '0.25rem',
+                  }}
+                >
+                  Last Run
+                </div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                  {new Date(agentMeta.lastRunAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Data Sources */}
+          {agentMeta.dataSources && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: 'var(--fg-faint)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '0.375rem',
+                }}
+              >
+                Data Sources
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                {agentMeta.dataSources}
+              </div>
+            </div>
+          )}
+
+          {/* Personality */}
+          {agentMeta.personality && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: 'var(--fg-faint)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '0.375rem',
+                }}
+              >
+                Personality
+              </div>
+              <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+                {agentMeta.personality}
+              </div>
+            </div>
+          )}
+
+          {/* Capabilities */}
+          {agentMeta.capabilities?.length > 0 && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: 'var(--fg-faint)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '0.375rem',
+                }}
+              >
+                Capabilities
+              </div>
+              <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                {agentMeta.capabilities.map((cap: string) => (
+                  <span
+                    key={cap}
+                    className="badge"
+                    style={{
+                      background: 'var(--accent-light)',
+                      color: 'var(--accent)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {cap
+                      .replace(/-/g, ' ')
+                      .replace(/\b\w/g, (c: string) => c.toUpperCase())}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Endpoints */}
+          {(agentMeta.workerUrl || agentMeta.mcpEndpoint || agentMeta.a2aCardUrl) && (
+            <div
+              style={{
+                marginTop: '1rem',
+                padding: '0.75rem',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              <div
+                style={{
+                  fontSize: '0.6875rem',
+                  fontWeight: 600,
+                  color: 'var(--fg-faint)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '0.5rem',
+                }}
+              >
+                Endpoints
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.375rem',
+                  fontFamily:
+                    "'IBM Plex Mono', 'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                  fontSize: '0.75rem',
+                }}
+              >
+                {agentMeta.workerUrl && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--fg-faint)', minWidth: '4rem' }}>Worker</span>
+                    <a
+                      href={agentMeta.workerUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--link)', wordBreak: 'break-all' }}
+                    >
+                      {agentMeta.workerUrl}
+                    </a>
+                  </div>
+                )}
+                {agentMeta.mcpEndpoint && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--fg-faint)', minWidth: '4rem' }}>MCP</span>
+                    <span style={{ color: 'var(--fg-muted)', wordBreak: 'break-all' }}>
+                      {agentMeta.mcpEndpoint}
+                    </span>
+                  </div>
+                )}
+                {agentMeta.a2aCardUrl && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--fg-faint)', minWidth: '4rem' }}>A2A</span>
+                    <a
+                      href={agentMeta.a2aCardUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: 'var(--link)', wordBreak: 'break-all' }}
+                    >
+                      {agentMeta.a2aCardUrl}
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* OVIX Contributor Data */}
       {ovixProfile.isOvixContributor && showOvixData && (
         <div
@@ -432,51 +769,88 @@ export default async function MemberProfilePage({
             Contributions
           </div>
         </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
-            {discussionCount}
-          </div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: 'var(--fg-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Discussions
-          </div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
-            {toolsCount}
-          </div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: 'var(--fg-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Tools
-          </div>
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
-            {papersCount}
-          </div>
-          <div
-            style={{
-              fontSize: '0.75rem',
-              color: 'var(--fg-muted)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            Papers
-          </div>
-        </div>
+        {isAgent ? (
+          <>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+                {agentMeta.totalPosts || 0}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--fg-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Posts
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+                {agentMeta.totalComments || 0}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--fg-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Comments
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+                {discussionCount}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--fg-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Discussions
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+                {toolsCount}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--fg-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Tools
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent)' }}>
+                {papersCount}
+              </div>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: 'var(--fg-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                Papers
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Contributions */}
