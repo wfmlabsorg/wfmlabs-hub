@@ -11,6 +11,7 @@ const navLinks = [
   { href: '/briefs', label: 'Briefs' },
   { href: '/articles', label: 'Articles' },
   { href: '/signals', label: 'Signals' },
+  { href: '/incidents', label: 'Incidents' },
   { href: '/data-sources', label: 'APIs' },
   { href: '/members', label: 'Members' },
   { href: '/discussions', label: 'Discussions' },
