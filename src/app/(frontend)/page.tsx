@@ -188,16 +188,16 @@ export default async function HomePage() {
           <div style={{ fontSize: '0.6875rem', fontWeight: 700, marginBottom: '0.5rem' }}>Dashboards</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.375rem' }}>
             {[
-              { icon: '⛈', label: 'Weather', path: 'weather', color: '#3b82f6' },
-              { icon: '🌋', label: 'Seismic', path: 'seismic', color: '#ef4444' },
-              { icon: '🔥', label: 'Disaster', path: 'disaster', color: '#f97316' },
-              { icon: '🛡', label: 'Cyber', path: 'cyber', color: '#22c55e' },
-              { icon: '🏥', label: 'Health', path: 'health', color: '#ec4899' },
+              { icon: '⛈', label: 'Weather', path: 'weather-intel', color: '#3b82f6' },
+              { icon: '🌋', label: 'Seismic', path: 'seismic-activity', color: '#ef4444' },
+              { icon: '🔥', label: 'Disaster', path: 'disaster-monitor', color: '#f97316' },
+              { icon: '🛡', label: 'Cyber', path: 'cyber-threat-intel', color: '#22c55e' },
+              { icon: '🏥', label: 'Health', path: 'health-surveillance', color: '#ec4899' },
               { icon: '📈', label: 'Financial', path: 'financial-markets', color: '#f59e0b' },
-              { icon: '🌐', label: 'Geopolitical', path: 'geopolitical', color: '#6366f1' },
-              { icon: '✈', label: 'Travel', path: 'travel', color: '#06b6d4' },
+              { icon: '🌐', label: 'Geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
+              { icon: '✈', label: 'Travel', path: 'feed-health', color: '#06b6d4' },
             ].map(d => (
-              <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}`} target="_blank" rel="noopener"
+              <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}?tc.mode=local&tc.startDelta=1800000&tc.endDelta=30000&tc.timeSystem=utc&view=roc.dashboard.view`} target="_blank" rel="noopener"
                 style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `2px solid ${d.color}`, textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', fontWeight: 600 }}>
                 <span>{d.icon}</span>
                 <span>{d.label}</span>
@@ -294,16 +294,16 @@ export default async function HomePage() {
                   if (f.status !== 'LIVE') domainMap[domain].status = f.status
                 }
                 const dashboards = [
-                  { icon: '⛈', label: 'Weather', domain: 'weather', path: 'weather', color: '#3b82f6' },
-                  { icon: '🌋', label: 'Seismic', domain: 'seismic', path: 'seismic', color: '#ef4444' },
-                  { icon: '🔥', label: 'Disaster', domain: 'disaster', path: 'disaster', color: '#f97316' },
-                  { icon: '🛡', label: 'Cyber', domain: 'cyber', path: 'cyber', color: '#22c55e' },
-                  { icon: '🏥', label: 'Health', domain: 'health', path: 'health', color: '#ec4899' },
-                  { icon: '🏗', label: 'Infrastructure', domain: 'infrastructure', path: 'infrastructure', color: '#8b5cf6' },
+                  { icon: '⛈', label: 'Weather', domain: 'weather', path: 'weather-intel', color: '#3b82f6' },
+                  { icon: '🌋', label: 'Seismic', domain: 'seismic', path: 'seismic-activity', color: '#ef4444' },
+                  { icon: '🔥', label: 'Disaster', domain: 'disaster', path: 'disaster-monitor', color: '#f97316' },
+                  { icon: '🛡', label: 'Cyber', domain: 'cyber', path: 'cyber-threat-intel', color: '#22c55e' },
+                  { icon: '🏥', label: 'Health', domain: 'health', path: 'health-surveillance', color: '#ec4899' },
+                  { icon: '🏗', label: 'Infrastructure', domain: 'infrastructure', path: 'infrastructure-status', color: '#8b5cf6' },
                   { icon: '📈', label: 'Financial', domain: 'financial', path: 'financial-markets', color: '#f59e0b' },
-                  { icon: '🌿', label: 'Environmental', domain: 'environmental', path: 'environmental', color: '#14b8a6' },
-                  { icon: '🌐', label: 'Geopolitical', domain: 'geopolitical', path: 'geopolitical', color: '#6366f1' },
-                  { icon: '✈', label: 'Travel', domain: 'travel', path: 'travel', color: '#06b6d4' },
+                  { icon: '🌿', label: 'Environmental', domain: 'environmental', path: 'environmental-monitor', color: '#14b8a6' },
+                  { icon: '🌐', label: 'Geopolitical', domain: 'geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
+                  { icon: '✈', label: 'Travel', domain: 'travel', path: 'feed-health', color: '#06b6d4' },
                 ]
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
@@ -311,7 +311,7 @@ export default async function HomePage() {
                       const data = domainMap[d.domain]
                       const score = data?.maxSev || 0
                       return (
-                        <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}`} target="_blank" rel="noopener"
+                        <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}?tc.mode=local&tc.startDelta=1800000&tc.endDelta=30000&tc.timeSystem=utc&view=roc.dashboard.view`} target="_blank" rel="noopener"
                           style={{ display: 'grid', gridTemplateColumns: '1.5rem 5.5rem 1fr 2.5rem', alignItems: 'center', gap: '0.375rem', padding: '0.375rem 0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', transition: 'background 0.2s' }}>
                           <span style={{ fontSize: '0.875rem' }}>{d.icon}</span>
                           <span style={{ fontWeight: 600 }}>{d.label}</span>
