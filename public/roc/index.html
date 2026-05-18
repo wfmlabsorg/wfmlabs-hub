@@ -1645,6 +1645,8 @@
                     { namespace: DASH_NS, key: 'environmental-monitor' },
                     { namespace: DASH_NS, key: 'geopolitical-risk' },
                     { namespace: DASH_NS, key: 'travel-aviation' },
+                    { namespace: DASH_NS, key: 'labor-workforce' },
+                    { namespace: DASH_NS, key: 'supply-chain-trade' },
                     { namespace: DASH_NS, key: 'feed-health' }
                   ]
                 });
@@ -1709,6 +1711,18 @@
                   name: 'Travel & Aviation', dashboardUrl: '/roc/dashboards/travel.html'
                 });
               }
+              if (id.key === 'labor-workforce') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Labor & Workforce', dashboardUrl: '/roc/dashboards/labor.html'
+                });
+              }
+              if (id.key === 'supply-chain-trade') {
+                return Promise.resolve({
+                  identifier: id, type: 'roc.dashboard.panel',
+                  name: 'Supply Chain & Trade', dashboardUrl: '/roc/dashboards/supply-chain.html'
+                });
+              }
               if (id.key === 'feed-health') {
                 return Promise.resolve({
                   identifier: id, type: 'roc.dashboard.panel',
@@ -1750,6 +1764,8 @@
                 { namespace: DASH_NS, key: 'environmental-monitor' },
                 { namespace: DASH_NS, key: 'geopolitical-risk' },
                 { namespace: DASH_NS, key: 'travel-aviation' },
+                { namespace: DASH_NS, key: 'labor-workforce' },
+                { namespace: DASH_NS, key: 'supply-chain-trade' },
                 { namespace: DASH_NS, key: 'feed-health' }
               ]);
             }
