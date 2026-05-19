@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import React from 'react'
 import { auth } from '@/lib/auth'
 import { MemberAvatar } from '@/components/MemberAvatar'
+import { isMobile } from '@/lib/mobile'
 
 export default async function MemberProfilePage({
   params,
@@ -22,6 +23,8 @@ export default async function MemberProfilePage({
 
   const member = result.docs[0]
   if (!member) notFound()
+
+  const mobile = await isMobile()
 
   // Check if viewing own profile
   const session = await auth()
@@ -113,7 +116,7 @@ export default async function MemberProfilePage({
   )
 
   return (
-    <div style={{ maxWidth: '50rem', margin: '0 auto', padding: '2rem 1rem' }}>
+    <div style={{ maxWidth: '50rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem' : '2rem 1rem' }}>
       {/* Breadcrumb */}
       <nav style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', marginBottom: '1.5rem' }}>
         <a href="/" style={{ color: 'var(--fg-muted)', textDecoration: 'none' }}>
@@ -131,9 +134,11 @@ export default async function MemberProfilePage({
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-start',
-          gap: '1.5rem',
+          flexDirection: mobile ? 'column' : 'row',
+          alignItems: mobile ? 'center' : 'flex-start',
+          gap: mobile ? '1rem' : '1.5rem',
           marginBottom: '2rem',
+          textAlign: mobile ? 'center' : 'left',
         }}
       >
         <MemberAvatar member={member} size="5rem" fontSize="2rem" />

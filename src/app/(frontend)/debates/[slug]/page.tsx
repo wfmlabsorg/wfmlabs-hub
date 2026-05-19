@@ -1,5 +1,6 @@
 import React from 'react'
 import { notFound } from 'next/navigation'
+import { isMobile } from '@/lib/mobile'
 // import { DiscussionSection } from '@/components/discussion/DiscussionSection'
 
 export const dynamic = 'force-dynamic'
@@ -89,6 +90,7 @@ export default async function DebateDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+  const mobile = await isMobile()
   const { rows } = await neonQuery(`SELECT * FROM debates WHERE slug = $1 LIMIT 1`, [slug])
   if (rows.length === 0) notFound()
 
@@ -109,7 +111,7 @@ export default async function DebateDetailPage({
   )
 
   return (
-    <div style={{ maxWidth: '56rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
+    <div style={{ maxWidth: '56rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
       {/* Breadcrumb */}
       <nav style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', marginBottom: '1.5rem' }}>
         <a href="/" style={{ color: 'var(--fg-muted)', textDecoration: 'none' }}>Home</a>

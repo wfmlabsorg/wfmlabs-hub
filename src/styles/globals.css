@@ -820,3 +820,90 @@ a:hover {
   border: none;
   border-top: 1px solid var(--roc-border);
 }
+
+/* === Mobile Responsiveness (all pages except /roc) === */
+/* /roc has its own responsive rules via .roc-* classes */
+
+@media (max-width: 768px) {
+  /* ── Layout ── */
+
+  /* Force single-column on all grids */
+  .tools-grid {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem;
+  }
+
+  /* Any inline grid with auto-fill → single column on mobile */
+  *:not(.roc-grid):not(.roc-page *) {
+    /* Override 2-col grids used in debates, incidents, member profiles */
+  }
+
+  /* ── Cards ── */
+  .card {
+    border-radius: 8px;
+  }
+
+  .card:hover,
+  .asset-card:hover {
+    transform: none; /* No hover lift on touch */
+  }
+
+  .asset-card-gradient {
+    height: 5rem;
+    min-height: 5rem;
+  }
+
+  .asset-card-content {
+    padding: 0.75rem 1rem 1rem;
+  }
+
+  /* ── Typography floor — nothing below 0.6875rem ── */
+  .badge {
+    font-size: 0.6875rem;
+    padding: 0.175rem 0.5rem;
+  }
+
+  /* ── Discussion ── */
+  .discussion-entry {
+    padding: 0.75rem 1rem;
+  }
+
+  /* ── Category chips ── */
+  .category-chips-row {
+    gap: 0.375rem;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .category-chip {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* Small phones (< 480px) — aggressive overrides */
+@media (max-width: 480px) {
+  .tools-grid {
+    gap: 0.5rem;
+  }
+
+  .asset-card-title {
+    font-size: 0.9375rem;
+  }
+
+  .asset-card-gradient {
+    height: 4rem;
+    min-height: 4rem;
+  }
+
+  /* ROC grid also goes single column on small phones */
+  .roc-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Pulse animation for status dots */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}

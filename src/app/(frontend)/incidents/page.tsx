@@ -1,4 +1,5 @@
 import React from 'react'
+import { isMobile } from '@/lib/mobile'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -134,6 +135,7 @@ export default async function IncidentsPage({
   searchParams: Promise<{ status?: string; sev?: string; domain?: string; page?: string }>
 }) {
   const params = await searchParams
+  const mobile = await isMobile()
   const activeSev = params.sev || null
   const activeDomain = params.domain || null
   const activeStatus = params.status || null
@@ -212,7 +214,7 @@ export default async function IncidentsPage({
   const totalActive = Object.values(sevCounts).reduce((a, b) => a + b, 0)
 
   return (
-    <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
+    <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
@@ -467,7 +469,7 @@ export default async function IncidentsPage({
                   <div style={{ display: 'flex', gap: '0.375rem', marginBottom: '0.5rem', alignItems: 'center' }}>
                     <span
                       style={{
-                        fontSize: '0.5625rem',
+                        fontSize: '0.6875rem',
                         fontWeight: 700,
                         fontFamily: "'IBM Plex Mono', monospace",
                         padding: '0.125rem 0.375rem',
@@ -481,7 +483,7 @@ export default async function IncidentsPage({
                     </span>
                     <span
                       style={{
-                        fontSize: '0.5625rem',
+                        fontSize: '0.6875rem',
                         fontWeight: 600,
                         fontFamily: "'IBM Plex Mono', monospace",
                         textTransform: 'uppercase',
@@ -605,7 +607,7 @@ export default async function IncidentsPage({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.25rem',
-                          fontSize: '0.5625rem',
+                          fontSize: '0.6875rem',
                           fontWeight: 700,
                           fontFamily: "'IBM Plex Mono', monospace",
                           textTransform: 'uppercase',
@@ -637,7 +639,7 @@ export default async function IncidentsPage({
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '0.25rem',
-                          fontSize: '0.5625rem',
+                          fontSize: '0.6875rem',
                           fontWeight: 700,
                           fontFamily: "'IBM Plex Mono', monospace",
                           textTransform: 'uppercase',
@@ -666,7 +668,7 @@ export default async function IncidentsPage({
                       {/* Domain badge */}
                       <span
                         style={{
-                          fontSize: '0.5625rem',
+                          fontSize: '0.6875rem',
                           fontWeight: 600,
                           fontFamily: "'IBM Plex Mono', monospace",
                           textTransform: 'uppercase',
@@ -684,7 +686,7 @@ export default async function IncidentsPage({
                       {incident.is_persistent && (
                         <span
                           style={{
-                            fontSize: '0.5625rem',
+                            fontSize: '0.6875rem',
                             fontWeight: 600,
                             fontFamily: "'IBM Plex Mono', monospace",
                             padding: '0.175rem 0.5rem',
@@ -869,7 +871,7 @@ export default async function IncidentsPage({
                   >
                     <span
                       style={{
-                        fontSize: '0.5625rem',
+                        fontSize: '0.6875rem',
                         fontWeight: 700,
                         fontFamily: "'IBM Plex Mono', monospace",
                         color: sc.color,
