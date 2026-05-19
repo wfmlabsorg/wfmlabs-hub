@@ -135,23 +135,44 @@ export default async function MemberProfilePage({
           marginBottom: '2rem',
         }}
       >
-        <div
-          style={{
-            width: '5rem',
-            height: '5rem',
-            borderRadius: '50%',
-            background: 'var(--accent-light)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '2rem',
-            fontWeight: 700,
-            color: 'var(--accent)',
-            flexShrink: 0,
-          }}
-        >
-          {member.displayName?.charAt(0).toUpperCase() || '?'}
-        </div>
+        {(() => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const avatarObj = (member as any).avatar
+          const avatarUrl = typeof avatarObj === 'object' && avatarObj?.url
+            ? avatarObj.url.startsWith('http') ? avatarObj.url : `/api/media/file/${avatarObj.filename}`
+            : null
+          return avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={`${member.displayName} avatar`}
+              style={{
+                width: '5rem',
+                height: '5rem',
+                borderRadius: '50%',
+                objectFit: 'cover',
+                flexShrink: 0,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: '5rem',
+                height: '5rem',
+                borderRadius: '50%',
+                background: 'var(--accent-light)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2rem',
+                fontWeight: 700,
+                color: 'var(--accent)',
+                flexShrink: 0,
+              }}
+            >
+              {member.displayName?.charAt(0).toUpperCase() || '?'}
+            </div>
+          )
+        })()}
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>
