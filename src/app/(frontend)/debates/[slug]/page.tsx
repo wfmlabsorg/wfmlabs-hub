@@ -245,137 +245,152 @@ export default async function DebateDetailPage({
         </div>
       </div>
 
-      {/* ── Round 1 ── */}
-      {(debate.advocateOpening || debate.challengerOpening) && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 700,
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              textAlign: 'center',
-              padding: '0.5rem',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius) var(--radius) 0 0',
-              border: '1px solid var(--border)',
-              borderBottom: 'none',
-            }}
-          >
-            Round 1 — Opening Statements
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              border: '1px solid var(--border)',
-              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '1.25rem', borderRight: '1px solid var(--border)', borderTop: `2px solid ${ADVOCATE_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.advocateOpening || 'Awaiting opening statement...'}
-              </div>
+      {/* ── Debate Rounds (serial flow) ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '2rem' }}>
+        {/* Round 1 — Opening Statements */}
+        {debate.advocateOpening && (
+          <div>
+            <div
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: 'var(--fg-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                textAlign: 'center',
+                padding: '0.5rem',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+                border: '1px solid var(--border)',
+                borderBottom: 'none',
+              }}
+            >
+              Round 1 — Opening Statements
             </div>
-            <div style={{ padding: '1.25rem', borderTop: `2px solid ${CHALLENGER_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.challengerOpening || 'Awaiting opening statement...'}
+            <div style={{ border: '1px solid var(--border)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
+              {/* Advocate Opening */}
+              <div style={{ borderLeft: `3px solid ${ADVOCATE_COLOR}`, padding: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: ADVOCATE_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ADVOCATE_COLOR }} />
+                  Advocate — Opening
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                  {debate.advocateOpening}
+                </div>
               </div>
+              {/* Challenger Opening */}
+              {debate.challengerOpening && (
+                <div style={{ borderLeft: `3px solid ${CHALLENGER_COLOR}`, padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: CHALLENGER_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: CHALLENGER_COLOR }} />
+                    Challenger — Opening
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    {debate.challengerOpening}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Round 2 ── */}
-      {(debate.advocateRebuttal || debate.challengerRebuttal) && (
-        <div style={{ marginBottom: '1.5rem' }}>
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 700,
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              textAlign: 'center',
-              padding: '0.5rem',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius) var(--radius) 0 0',
-              border: '1px solid var(--border)',
-              borderBottom: 'none',
-            }}
-          >
-            Round 2 — Rebuttals
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              border: '1px solid var(--border)',
-              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '1.25rem', borderRight: '1px solid var(--border)', borderTop: `2px solid ${ADVOCATE_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.advocateRebuttal || 'Awaiting rebuttal...'}
-              </div>
+        {/* Round 2 — Rebuttals */}
+        {debate.advocateRebuttal && (
+          <div>
+            <div
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: 'var(--fg-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                textAlign: 'center',
+                padding: '0.5rem',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+                border: '1px solid var(--border)',
+                borderBottom: 'none',
+              }}
+            >
+              Round 2 — Rebuttals
             </div>
-            <div style={{ padding: '1.25rem', borderTop: `2px solid ${CHALLENGER_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.challengerRebuttal || 'Awaiting rebuttal...'}
+            <div style={{ border: '1px solid var(--border)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
+              {/* Advocate Rebuttal */}
+              <div style={{ borderLeft: `3px solid ${ADVOCATE_COLOR}`, padding: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: ADVOCATE_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ADVOCATE_COLOR }} />
+                  Advocate — Rebuttal
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                  {debate.advocateRebuttal}
+                </div>
               </div>
+              {/* Challenger Rebuttal */}
+              {debate.challengerRebuttal && (
+                <div style={{ borderLeft: `3px solid ${CHALLENGER_COLOR}`, padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: CHALLENGER_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: CHALLENGER_COLOR }} />
+                    Challenger — Rebuttal
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    {debate.challengerRebuttal}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Closing Statements ── */}
-      {(debate.advocateClosing || debate.challengerClosing) && (
-        <div style={{ marginBottom: '2rem' }}>
-          <div
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 700,
-              fontFamily: "'IBM Plex Mono', monospace",
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              textAlign: 'center',
-              padding: '0.5rem',
-              background: 'var(--bg-tertiary)',
-              borderRadius: 'var(--radius) var(--radius) 0 0',
-              border: '1px solid var(--border)',
-              borderBottom: 'none',
-            }}
-          >
-            Closing Statements
-          </div>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              border: '1px solid var(--border)',
-              borderRadius: '0 0 var(--radius-lg) var(--radius-lg)',
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '1.25rem', borderRight: '1px solid var(--border)', borderTop: `2px solid ${ADVOCATE_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.advocateClosing || 'Awaiting closing statement...'}
-              </div>
+        {/* Closing Statements */}
+        {debate.advocateClosing && (
+          <div>
+            <div
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: 'var(--fg-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                textAlign: 'center',
+                padding: '0.5rem',
+                background: 'var(--bg-tertiary)',
+                borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0',
+                border: '1px solid var(--border)',
+                borderBottom: 'none',
+              }}
+            >
+              Closing Statements
             </div>
-            <div style={{ padding: '1.25rem', borderTop: `2px solid ${CHALLENGER_COLOR}` }}>
-              <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                {debate.challengerClosing || 'Awaiting closing statement...'}
+            <div style={{ border: '1px solid var(--border)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', overflow: 'hidden' }}>
+              {/* Advocate Closing */}
+              <div style={{ borderLeft: `3px solid ${ADVOCATE_COLOR}`, padding: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: ADVOCATE_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ADVOCATE_COLOR }} />
+                  Advocate — Closing
+                </div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                  {debate.advocateClosing}
+                </div>
               </div>
+              {/* Challenger Closing */}
+              {debate.challengerClosing && (
+                <div style={{ borderLeft: `3px solid ${CHALLENGER_COLOR}`, padding: '1.25rem' }}>
+                  <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: CHALLENGER_COLOR, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: CHALLENGER_COLOR }} />
+                    Challenger — Closing
+                  </div>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--fg)', lineHeight: 1.8, whiteSpace: 'pre-wrap' }}>
+                    {debate.challengerClosing}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Voting Section ── */}
       {(isVoting || isDecided) && (
