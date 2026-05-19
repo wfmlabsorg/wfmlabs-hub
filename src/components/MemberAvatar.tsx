@@ -16,7 +16,10 @@ export function MemberAvatar({
 }) {
   const displayName = member?.displayName || member?.username || '?'
   const avatar = member?.avatar
-  const avatarUrl = typeof avatar === 'object' && avatar?.url ? avatar.url : null
+  // Priority: uploaded R2 avatar > OAuth avatar URL > initial letter
+  const avatarUrl = (typeof avatar === 'object' && avatar?.url)
+    ? avatar.url
+    : (member?.avatarUrl || null)
 
   if (avatarUrl) {
     return (

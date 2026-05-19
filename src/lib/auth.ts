@@ -34,6 +34,16 @@ async function findOrCreateMember(
   if (existing.docs.length > 0) {
     const member = existing.docs[0]
 
+    // Update OAuth avatar if provided and member doesn't have a custom uploaded one
+    if (user.image && !member.avatar) {
+      await payload.update({
+        collection: 'members',
+        id: member.id,
+        data: { avatarUrl: user.image } as Record<string, unknown>,
+        overrideAccess: true,
+      }).catch(() => {}) // Non-critical — don't block login
+    }
+
     // Auto-promote admin emails if they're not already admin
     if (isAdminEmail && member.role !== 'admin') {
       await payload.update({
@@ -88,6 +98,16 @@ async function findOrCreateMember(
     },
     overrideAccess: true,
   })
+
+  // Save OAuth avatar URL if provided
+  if (user.image) {
+    await payload.update({
+      collection: 'members',
+      id: member.id,
+      data: { avatarUrl: user.image } as Record<string, unknown>,
+      overrideAccess: true,
+    }).catch(() => {})
+  }
 
   // Notify Ted of new signup
   notifyNewMember(user.email, user.name || username, account.provider).catch(() => {})

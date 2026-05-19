@@ -157,6 +157,11 @@ export const Members: CollectionConfig = {
       relationTo: 'media',
     },
     {
+      name: 'avatarUrl',
+      type: 'text',
+      admin: { description: 'External avatar URL from OAuth (Google/GitHub). Used when no uploaded avatar exists.' },
+    },
+    {
       name: 'profile',
       type: 'group',
       fields: [
