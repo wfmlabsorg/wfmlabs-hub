@@ -3,6 +3,7 @@ import config from '@payload-config'
 import { notFound } from 'next/navigation'
 import React from 'react'
 import { auth } from '@/lib/auth'
+import { MemberAvatar } from '@/components/MemberAvatar'
 
 export default async function MemberProfilePage({
   params,
@@ -135,44 +136,7 @@ export default async function MemberProfilePage({
           marginBottom: '2rem',
         }}
       >
-        {(() => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const avatarObj = (member as any).avatar
-          const avatarUrl = typeof avatarObj === 'object' && avatarObj?.url
-            ? avatarObj.url
-            : null
-          return avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={`${member.displayName} avatar`}
-              style={{
-                width: '5rem',
-                height: '5rem',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                flexShrink: 0,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: '5rem',
-                height: '5rem',
-                borderRadius: '50%',
-                background: 'var(--accent-light)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '2rem',
-                fontWeight: 700,
-                color: 'var(--accent)',
-                flexShrink: 0,
-              }}
-            >
-              {member.displayName?.charAt(0).toUpperCase() || '?'}
-            </div>
-          )
-        })()}
+        <MemberAvatar member={member} size="5rem" fontSize="2rem" />
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 700, margin: 0 }}>

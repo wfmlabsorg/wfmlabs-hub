@@ -1,4 +1,5 @@
 import React from 'react'
+import { MemberAvatar } from '@/components/MemberAvatar'
 
 const categoryGradients: Record<string, string> = {
   // Tool type gradients — vibrant, consistent with HF card style
@@ -210,9 +211,7 @@ export function AssetCard({
               </div>
             ) : (
               <div className="asset-card-contributor">
-                <div className="asset-card-avatar">
-                  {contributor ? contributor.displayName.charAt(0).toUpperCase() : '?'}
-                </div>
+                <MemberAvatar member={contributor} size="1.5rem" fontSize="0.625rem" />
                 <span>{contributor ? contributor.displayName : 'Unknown'}</span>
               </div>
             )}

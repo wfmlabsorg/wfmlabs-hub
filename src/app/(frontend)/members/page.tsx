@@ -1,6 +1,7 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import React from 'react'
+import { MemberAvatar } from '@/components/MemberAvatar'
 
 export const metadata = { title: 'Members' }
 export const dynamic = 'force-dynamic'
@@ -114,23 +115,7 @@ export default async function MembersBrowsePage({
             marginBottom: '0.75rem',
           }}
         >
-          <div
-            style={{
-              width: '2.75rem',
-              height: '2.75rem',
-              borderRadius: '50%',
-              background: 'var(--accent-light)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '1.125rem',
-              fontWeight: 600,
-              color: 'var(--accent)',
-              flexShrink: 0,
-            }}
-          >
-            {member.displayName?.charAt(0).toUpperCase() || '?'}
-          </div>
+          <MemberAvatar member={member} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 600, fontSize: '0.9375rem' }}>{member.displayName}</div>
             <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)' }}>

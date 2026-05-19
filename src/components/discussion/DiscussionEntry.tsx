@@ -1,6 +1,7 @@
 import React from 'react'
 import { RichTextContent } from '@/components/ui/RichTextContent'
 import { ReactionBar } from '@/components/ui/ReactionBar'
+import { MemberAvatar } from '@/components/MemberAvatar'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 
@@ -53,7 +54,7 @@ export async function DiscussionEntry({ discussion }: DiscussionEntryProps) {
   return (
     <div className="discussion-entry">
       <div className="discussion-meta">
-        <div className="discussion-avatar">{initial}</div>
+        <MemberAvatar member={author} size="1.75rem" fontSize="0.75rem" />
         <span style={{ fontWeight: 500, fontSize: '0.875rem' }}>{displayName}</span>
         <span style={{ color: 'var(--fg-faint)', fontSize: '0.8125rem' }}>
           &middot; {timeAgo(discussion.createdAt)}
