@@ -71,6 +71,7 @@ export interface Config {
     topics: Topic;
     papers: Paper;
     articles: Article;
+    debates: Debate;
     briefs: Brief;
     tools: Tool;
     'newsletter-issues': NewsletterIssue;
@@ -94,6 +95,7 @@ export interface Config {
     topics: TopicsSelect<false> | TopicsSelect<true>;
     papers: PapersSelect<false> | PapersSelect<true>;
     articles: ArticlesSelect<false> | ArticlesSelect<true>;
+    debates: DebatesSelect<false> | DebatesSelect<true>;
     briefs: BriefsSelect<false> | BriefsSelect<true>;
     tools: ToolsSelect<false> | ToolsSelect<true>;
     'newsletter-issues': NewsletterIssuesSelect<false> | NewsletterIssuesSelect<true>;
@@ -599,6 +601,9 @@ export interface Paper {
         | 'process-optimization'
         | 'technology'
         | 'economics-finance'
+        | 'employee-wellbeing'
+        | 'contact-center-operations'
+        | 'scheduling-optimization'
         | 'other'
       )
     | null;
@@ -734,6 +739,254 @@ export interface Article {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "debates".
+ */
+export interface Debate {
+  id: number;
+  /**
+   * The debate question
+   */
+  title: string;
+  slug: string;
+  status: 'harvesting' | 'framing' | 'round_1' | 'round_2' | 'closing' | 'voting' | 'decided' | 'archived';
+  category?:
+    | (
+        | 'service-levels'
+        | 'staffing'
+        | 'automation'
+        | 'ai-workforce'
+        | 'scheduling'
+        | 'forecasting'
+        | 'attrition'
+        | 'outsourcing'
+        | 'technology'
+        | 'leadership'
+        | 'cost-optimization'
+        | 'cx-vs-cost'
+      )
+    | null;
+  difficulty?: ('foundational' | 'intermediate' | 'advanced') | null;
+  /**
+   * Background context and stakes — written by Beacon
+   */
+  context?: string | null;
+  /**
+   * One-line stakes summary
+   */
+  stakes?: string | null;
+  /**
+   * One-line YES position summary
+   */
+  advocatePosition?: string | null;
+  /**
+   * Round 1: Advocate opening statement (400-600 words)
+   */
+  advocateOpening?: string | null;
+  /**
+   * Round 2: Advocate rebuttal (300-400 words)
+   */
+  advocateRebuttal?: string | null;
+  /**
+   * Closing: Advocate final statement (200-300 words)
+   */
+  advocateClosing?: string | null;
+  /**
+   * One-line NO/contrarian position summary
+   */
+  challengerPosition?: string | null;
+  /**
+   * Round 1: Challenger opening statement (400-600 words)
+   */
+  challengerOpening?: string | null;
+  /**
+   * Round 2: Challenger rebuttal (300-400 words)
+   */
+  challengerRebuttal?: string | null;
+  /**
+   * Closing: Challenger final statement (200-300 words)
+   */
+  challengerClosing?: string | null;
+  advocateVotes?: number | null;
+  challengerVotes?: number | null;
+  votingOpensAt?: string | null;
+  votingClosesAt?: string | null;
+  winner?: ('advocate' | 'challenger' | 'draw') | null;
+  /**
+   * Beacon final synthesis after voting closes
+   */
+  verdict?: string | null;
+  linkedTools?: (number | Tool)[] | null;
+  linkedSignals?: (number | Signal)[] | null;
+  /**
+   * Beacon agent member (moderator)
+   */
+  primaryContributor?: (number | null) | Member;
+  publishedAt?: string | null;
+  decidedAt?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "tools".
+ */
+export interface Tool {
+  id: number;
+  /**
+   * Display name of the tool
+   */
+  title: string;
+  /**
+   * URL-safe identifier (auto-generated or manual)
+   */
+  slug: string;
+  primaryContributor: number | Member;
+  description?: string | null;
+  topics?: (number | Topic)[] | null;
+  coverImage?: (number | null) | Media;
+  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
+  publishedAt?: string | null;
+  reviewedAt?: string | null;
+  /**
+   * Days between scheduled reviews
+   */
+  reviewIntervalDays?: number | null;
+  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
+  isFeatured?: boolean | null;
+  /**
+   * Aggregate statistics (auto-updated)
+   */
+  stats?: {
+    discussionCount?: number | null;
+    reactionCount?: number | null;
+    contributorCount?: number | null;
+    viewCount?: number | null;
+    citationCount?: number | null;
+  };
+  /**
+   * URL of the live tool (e.g., montecarlo.wfmlabs.com)
+   */
+  embedUrl?: string | null;
+  /**
+   * GitHub repo URL if open source
+   */
+  sourceCodeUrl?: string | null;
+  /**
+   * Tool type: Calculator (input→answer), Analyzer (data→insight), Simulator (scenarios), Model (strategic framework), Methodology (practice/technique)
+   */
+  category?: ('calculator' | 'analyzer' | 'simulator' | 'model' | 'methodology') | null;
+  /**
+   * WFM domain this tool serves
+   */
+  domain?:
+    | (
+        | 'staffing-capacity'
+        | 'forecasting-accuracy'
+        | 'workforce-economics'
+        | 'operations-routing'
+        | 'measurement-analytics'
+      )
+    | null;
+  /**
+   * How practitioners use this tool — the value narrative
+   */
+  methodology?: {
+    root: {
+      type: string;
+      children: {
+        type: any;
+        version: number;
+        [k: string]: unknown;
+      }[];
+      direction: ('ltr' | 'rtl') | null;
+      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
+      indent: number;
+      version: number;
+    };
+    [k: string]: unknown;
+  } | null;
+  version?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "signals".
+ */
+export interface Signal {
+  id: number;
+  /**
+   * Source type — AI-generated, system alert, OVIX scoring event, or member-submitted
+   */
+  signalType: 'ai' | 'alert' | 'ovix' | 'member';
+  /**
+   * Short title for the signal
+   */
+  title: string;
+  /**
+   * Full signal message
+   */
+  message: string;
+  /**
+   * Origin agent or system (e.g., ovix-weather, ovix-seismic, member)
+   */
+  source: string;
+  /**
+   * Severity score 0-10 (from OVIX scoring)
+   */
+  severity?: number | null;
+  severityLabel?: ('info' | 'moderate' | 'severe' | 'extreme') | null;
+  /**
+   * OVIX category this signal relates to
+   */
+  category?:
+    | (
+        | 'weather'
+        | 'seismic'
+        | 'disaster'
+        | 'events'
+        | 'cyber'
+        | 'infrastructure'
+        | 'health'
+        | 'financial'
+        | 'environmental'
+        | 'geopolitical'
+        | 'general'
+      )
+    | null;
+  /**
+   * OVIX region ID (e.g., us-southeast, philippines)
+   */
+  regionId?: string | null;
+  /**
+   * Human-readable region name
+   */
+  regionName?: string | null;
+  /**
+   * Member who submitted (for member-type signals)
+   */
+  author?: (number | null) | Member;
+  /**
+   * Link to source data or event detail
+   */
+  sourceUrl?: string | null;
+  /**
+   * Additional structured data (scores, coordinates, raw event data)
+   */
+  metadata?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "briefs".
  */
 export interface Brief {
@@ -817,74 +1070,6 @@ export interface Brief {
     reactionCount?: number | null;
     viewCount?: number | null;
   };
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "tools".
- */
-export interface Tool {
-  id: number;
-  /**
-   * Display name of the tool
-   */
-  title: string;
-  /**
-   * URL-safe identifier (auto-generated or manual)
-   */
-  slug: string;
-  primaryContributor: number | Member;
-  description?: string | null;
-  topics?: (number | Topic)[] | null;
-  coverImage?: (number | null) | Media;
-  status?: ('draft' | 'proposed' | 'published' | 'refined' | 'mature' | 'deprecated' | 'archived') | null;
-  publishedAt?: string | null;
-  reviewedAt?: string | null;
-  /**
-   * Days between scheduled reviews
-   */
-  reviewIntervalDays?: number | null;
-  tier?: ('public' | 'free' | 'practitioner' | 'practitioner-plus') | null;
-  isFeatured?: boolean | null;
-  /**
-   * Aggregate statistics (auto-updated)
-   */
-  stats?: {
-    discussionCount?: number | null;
-    reactionCount?: number | null;
-    contributorCount?: number | null;
-    viewCount?: number | null;
-    citationCount?: number | null;
-  };
-  /**
-   * URL of the live tool (e.g., montecarlo.wfmlabs.com)
-   */
-  embedUrl?: string | null;
-  /**
-   * GitHub repo URL if open source
-   */
-  sourceCodeUrl?: string | null;
-  category?: ('capacity-planning' | 'forecasting' | 'scheduling' | 'analytics' | 'value-planning' | 'staffing') | null;
-  /**
-   * How practitioners use this tool — the value narrative
-   */
-  methodology?: {
-    root: {
-      type: string;
-      children: {
-        type: any;
-        version: number;
-        [k: string]: unknown;
-      }[];
-      direction: ('ltr' | 'rtl') | null;
-      format: 'left' | 'start' | 'center' | 'right' | 'end' | 'justify' | '';
-      indent: number;
-      version: number;
-    };
-    [k: string]: unknown;
-  } | null;
-  version?: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1021,6 +1206,10 @@ export interface WikiEntry {
             value: number | Article;
           }
         | {
+            relationTo: 'debates';
+            value: number | Debate;
+          }
+        | {
             relationTo: 'briefs';
             value: number | Brief;
           }
@@ -1055,6 +1244,10 @@ export interface Discussion {
     | {
         relationTo: 'articles';
         value: number | Article;
+      }
+    | {
+        relationTo: 'debates';
+        value: number | Debate;
       }
     | {
         relationTo: 'briefs';
@@ -1110,6 +1303,10 @@ export interface AssetVersion {
         value: number | Article;
       }
     | {
+        relationTo: 'debates';
+        value: number | Debate;
+      }
+    | {
         relationTo: 'briefs';
         value: number | Brief;
       }
@@ -1157,6 +1354,10 @@ export interface AssetRelationship {
         value: number | Article;
       }
     | {
+        relationTo: 'debates';
+        value: number | Debate;
+      }
+    | {
         relationTo: 'briefs';
         value: number | Brief;
       }
@@ -1180,6 +1381,10 @@ export interface AssetRelationship {
     | {
         relationTo: 'articles';
         value: number | Article;
+      }
+    | {
+        relationTo: 'debates';
+        value: number | Debate;
       }
     | {
         relationTo: 'briefs';
@@ -1229,6 +1434,10 @@ export interface AssetContribution {
         value: number | Article;
       }
     | {
+        relationTo: 'debates';
+        value: number | Debate;
+      }
+    | {
         relationTo: 'briefs';
         value: number | Brief;
       }
@@ -1267,6 +1476,10 @@ export interface Reaction {
         value: number | Article;
       }
     | {
+        relationTo: 'debates';
+        value: number | Debate;
+      }
+    | {
         relationTo: 'briefs';
         value: number | Brief;
       }
@@ -1288,82 +1501,6 @@ export interface Reaction {
       };
   member: number | Member;
   type: 'like' | 'insightful' | 'practical' | 'question';
-  updatedAt: string;
-  createdAt: string;
-}
-/**
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "signals".
- */
-export interface Signal {
-  id: number;
-  /**
-   * Source type — AI-generated, system alert, OVIX scoring event, or member-submitted
-   */
-  signalType: 'ai' | 'alert' | 'ovix' | 'member';
-  /**
-   * Short title for the signal
-   */
-  title: string;
-  /**
-   * Full signal message
-   */
-  message: string;
-  /**
-   * Origin agent or system (e.g., ovix-weather, ovix-seismic, member)
-   */
-  source: string;
-  /**
-   * Severity score 0-10 (from OVIX scoring)
-   */
-  severity?: number | null;
-  severityLabel?: ('info' | 'moderate' | 'severe' | 'extreme') | null;
-  /**
-   * OVIX category this signal relates to
-   */
-  category?:
-    | (
-        | 'weather'
-        | 'seismic'
-        | 'disaster'
-        | 'events'
-        | 'cyber'
-        | 'infrastructure'
-        | 'health'
-        | 'financial'
-        | 'environmental'
-        | 'geopolitical'
-        | 'general'
-      )
-    | null;
-  /**
-   * OVIX region ID (e.g., us-southeast, philippines)
-   */
-  regionId?: string | null;
-  /**
-   * Human-readable region name
-   */
-  regionName?: string | null;
-  /**
-   * Member who submitted (for member-type signals)
-   */
-  author?: (number | null) | Member;
-  /**
-   * Link to source data or event detail
-   */
-  sourceUrl?: string | null;
-  /**
-   * Additional structured data (scores, coordinates, raw event data)
-   */
-  metadata?:
-    | {
-        [k: string]: unknown;
-      }
-    | unknown[]
-    | string
-    | number
-    | boolean
-    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -1457,6 +1594,10 @@ export interface PayloadLockedDocument {
     | ({
         relationTo: 'articles';
         value: number | Article;
+      } | null)
+    | ({
+        relationTo: 'debates';
+        value: number | Debate;
       } | null)
     | ({
         relationTo: 'briefs';
@@ -1748,6 +1889,40 @@ export interface ArticlesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "debates_select".
+ */
+export interface DebatesSelect<T extends boolean = true> {
+  title?: T;
+  slug?: T;
+  status?: T;
+  category?: T;
+  difficulty?: T;
+  context?: T;
+  stakes?: T;
+  advocatePosition?: T;
+  advocateOpening?: T;
+  advocateRebuttal?: T;
+  advocateClosing?: T;
+  challengerPosition?: T;
+  challengerOpening?: T;
+  challengerRebuttal?: T;
+  challengerClosing?: T;
+  advocateVotes?: T;
+  challengerVotes?: T;
+  votingOpensAt?: T;
+  votingClosesAt?: T;
+  winner?: T;
+  verdict?: T;
+  linkedTools?: T;
+  linkedSignals?: T;
+  primaryContributor?: T;
+  publishedAt?: T;
+  decidedAt?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "briefs_select".
  */
 export interface BriefsSelect<T extends boolean = true> {
@@ -1807,6 +1982,7 @@ export interface ToolsSelect<T extends boolean = true> {
   embedUrl?: T;
   sourceCodeUrl?: T;
   category?: T;
+  domain?: T;
   methodology?: T;
   version?: T;
   updatedAt?: T;

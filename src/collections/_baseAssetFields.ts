@@ -128,6 +128,7 @@ export const baseAssetFields: Field[] = [
 export const assetCollectionSlugs = [
   'papers',
   'articles',
+  'debates',
   'briefs',
   'tools',
   'newsletter-issues',

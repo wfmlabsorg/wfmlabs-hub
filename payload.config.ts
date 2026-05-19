@@ -11,6 +11,7 @@ import { Members } from '@/collections/Members'
 import { Topics } from '@/collections/Topics'
 import { Papers } from '@/collections/Papers'
 import { Articles } from '@/collections/Articles'
+import { Debates } from '@/collections/Debates'
 import { Briefs } from '@/collections/Briefs'
 import { Tools } from '@/collections/Tools'
 import { NewsletterIssues } from '@/collections/NewsletterIssues'
@@ -75,6 +76,7 @@ export default buildConfig({
     Topics,
     Papers,
     Articles,
+    Debates,
     Briefs,
     Tools,
     NewsletterIssues,
