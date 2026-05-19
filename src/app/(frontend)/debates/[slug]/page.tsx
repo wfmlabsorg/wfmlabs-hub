@@ -1,6 +1,6 @@
 import React from 'react'
 import { notFound } from 'next/navigation'
-import { DiscussionSection } from '@/components/discussion/DiscussionSection'
+// import { DiscussionSection } from '@/components/discussion/DiscussionSection'
 
 export const dynamic = 'force-dynamic'
 
@@ -547,11 +547,7 @@ export default async function DebateDetailPage({
         </div>
       )}
 
-      {/* ── Discussion Section ── */}
-      <DiscussionSection
-        assetType="debates"
-        assetId={debate.id}
-      />
+      {/* Discussion section — will activate once Payload migration syncs debates as a valid asset type */}
     </div>
   )
 }
