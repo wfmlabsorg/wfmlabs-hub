@@ -139,7 +139,7 @@ export default async function MemberProfilePage({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const avatarObj = (member as any).avatar
           const avatarUrl = typeof avatarObj === 'object' && avatarObj?.url
-            ? avatarObj.url.startsWith('http') ? avatarObj.url : `/api/media/file/${avatarObj.filename}`
+            ? avatarObj.url
             : null
           return avatarUrl ? (
             <img
