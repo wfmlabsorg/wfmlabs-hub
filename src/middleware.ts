@@ -17,6 +17,7 @@ const PUBLIC_PATHS = [
 const PUBLIC_PREFIXES = [
   '/api/',
   '/roc/',
+  '/incidents',
   '/_next/',
   '/favicon',
   '/admin',
