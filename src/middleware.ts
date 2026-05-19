@@ -18,6 +18,7 @@ const PUBLIC_PREFIXES = [
   '/api/',
   '/roc/',
   '/incidents',
+  '/debates',
   '/_next/',
   '/favicon',
   '/admin',
