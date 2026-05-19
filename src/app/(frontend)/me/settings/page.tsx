@@ -38,6 +38,8 @@ interface MemberData {
   id: number
   displayName: string
   username: string
+  avatar?: { id: number; url: string; filename: string } | null
+  avatarUrl?: string | null
   email: string
   bio?: string
   industry?: string
@@ -117,6 +119,10 @@ export default function SettingsPage() {
   const [linkedinUrl, setLinkedinUrl] = useState('')
   const [githubUsername, setGithubUsername] = useState('')
   const [websiteUrl, setWebsiteUrl] = useState('')
+
+  // Avatar
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [industry, setIndustry] = useState('')
   const [workforceTypes, setWorkforceTypes] = useState<string[]>([])
 
@@ -161,6 +167,11 @@ export default function SettingsPage() {
         .then((r) => r.json())
         .then((data: MemberData) => {
           setMember(data)
+          // Set avatar preview
+          const avUrl = (typeof data.avatar === 'object' && data.avatar?.url)
+            ? data.avatar.url
+            : (data.avatarUrl || null)
+          setAvatarPreview(avUrl)
           setDisplayName(data.displayName || '')
           setUsername(data.username || '')
           setTitle(data.profile?.title || '')
@@ -542,6 +553,132 @@ export default function SettingsPage() {
               {/* ── Profile Tab ── */}
               {activeTab === 'profile' && (
                 <>
+                  {/* Avatar section */}
+                  <div style={{ marginBottom: '2rem', paddingBottom: '1.5rem', borderBottom: '1px solid var(--border)' }}>
+                    <label style={labelStyle}>Profile Picture</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
+                      {/* Preview */}
+                      {avatarPreview ? (
+                        <img
+                          src={avatarPreview}
+                          alt="Avatar"
+                          style={{ width: '4.5rem', height: '4.5rem', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--border)' }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: '4.5rem', height: '4.5rem', borderRadius: '50%',
+                            background: 'var(--accent-light)', display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', fontSize: '1.5rem', fontWeight: 700,
+                            color: 'var(--accent)', border: '2px solid var(--border)',
+                          }}
+                        >
+                          {(displayName || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {/* Upload button */}
+                        <label
+                          style={{
+                            padding: '0.375rem 0.875rem', borderRadius: '6px',
+                            border: '1px solid var(--border)', background: 'var(--bg-secondary)',
+                            color: 'var(--fg)', fontSize: '0.8125rem', fontWeight: 500,
+                            cursor: avatarUploading ? 'wait' : 'pointer', display: 'inline-block',
+                          }}
+                        >
+                          {avatarUploading ? 'Uploading...' : 'Upload image'}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            style={{ display: 'none' }}
+                            disabled={avatarUploading}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              if (file.size > 5 * 1024 * 1024) {
+                                setError('Image must be under 5MB')
+                                return
+                              }
+                              setAvatarUploading(true)
+                              setError('')
+                              try {
+                                const form = new FormData()
+                                form.append('file', file)
+                                const res = await fetch('/api/members/avatar', { method: 'POST', body: form })
+                                const data = await res.json()
+                                if (res.ok && data.avatarUrl) {
+                                  setAvatarPreview(data.avatarUrl)
+                                } else if (res.ok) {
+                                  // Reload to get the resolved URL
+                                  window.location.reload()
+                                } else {
+                                  setError(data.error || 'Upload failed')
+                                }
+                              } catch { setError('Upload failed') }
+                              setAvatarUploading(false)
+                              e.target.value = ''
+                            }}
+                          />
+                        </label>
+
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          {/* Use OAuth avatar */}
+                          {session?.user?.image && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setAvatarUploading(true)
+                                try {
+                                  const res = await fetch('/api/members/avatar', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ action: 'use-oauth', avatarUrl: session.user.image }),
+                                  })
+                                  if (res.ok) setAvatarPreview(session.user.image!)
+                                } catch {}
+                                setAvatarUploading(false)
+                              }}
+                              style={{
+                                padding: '0.25rem 0.625rem', borderRadius: '6px',
+                                border: '1px solid var(--border)', background: 'transparent',
+                                color: 'var(--fg-muted)', fontSize: '0.75rem', cursor: 'pointer',
+                              }}
+                            >
+                              Use {session.user.image?.includes('google') ? 'Google' : 'GitHub'} photo
+                            </button>
+                          )}
+
+                          {/* Remove */}
+                          {avatarPreview && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setAvatarUploading(true)
+                                try {
+                                  const res = await fetch('/api/members/avatar', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ action: 'remove' }),
+                                  })
+                                  if (res.ok) setAvatarPreview(null)
+                                } catch {}
+                                setAvatarUploading(false)
+                              }}
+                              style={{
+                                padding: '0.25rem 0.625rem', borderRadius: '6px',
+                                border: '1px solid var(--border)', background: 'transparent',
+                                color: 'var(--fg-faint)', fontSize: '0.75rem', cursor: 'pointer',
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div style={{ marginBottom: fieldGap }}>
                     <label style={labelStyle}>Email</label>
                     <input
