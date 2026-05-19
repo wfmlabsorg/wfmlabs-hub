@@ -1,9 +1,21 @@
 import React from 'react'
-import { getPayload } from 'payload'
-import config from '@payload-config'
 
 export const metadata = { title: 'Debates — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
+
+const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
+
+async function neonQuery<T = Record<string, unknown>>(query: string, params: unknown[] = []) {
+  const connStr = process.env.DATABASE_URI || ''
+  const resp = await fetch(NEON_SQL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
+    body: JSON.stringify({ query, params }),
+    cache: 'no-store',
+  })
+  if (!resp.ok) throw new Error(`Neon ${resp.status}: ${await resp.text()}`)
+  return (await resp.json()) as { rows: T[]; rowCount: number }
+}
 
 const categoryLabels: Record<string, string> = {
   'service-levels': 'Service Levels',
@@ -58,37 +70,55 @@ export default async function DebatesPage({
   const activeCategory = params.category || null
   const activeStatus = params.status || null
 
-  const payload = await getPayload({ config })
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {}
-  const conditions = []
-  if (activeCategory) conditions.push({ category: { equals: activeCategory } })
-  if (activeStatus) {
-    conditions.push({ status: { equals: activeStatus } })
+  // Build SQL query with optional filters
+  const conditions: string[] = []
+  const queryParams: unknown[] = []
+  let paramIdx = 1
+  if (activeCategory) {
+    conditions.push(`category = $${paramIdx++}`)
+    queryParams.push(activeCategory)
   }
-  if (conditions.length > 0) where.and = conditions
+  if (activeStatus) {
+    conditions.push(`status = $${paramIdx++}`)
+    queryParams.push(activeStatus)
+  }
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-  const result = await payload.find({
-    collection: 'debates',
-    where: Object.keys(where).length > 0 ? where : undefined,
-    limit: 50,
-    sort: '-createdAt',
-    depth: 1,
-    overrideAccess: true,
-  })
+  const { rows: debates } = await neonQuery(
+    `SELECT * FROM debates ${whereClause} ORDER BY created_at DESC LIMIT 50`,
+    queryParams,
+  )
 
+  // Map snake_case DB columns to camelCase for template compatibility
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const debates = result.docs as any[]
+  const mapped = debates.map((d: any) => ({
+    ...d,
+    advocatePosition: d.advocate_position,
+    advocateOpening: d.advocate_opening,
+    advocateRebuttal: d.advocate_rebuttal,
+    advocateClosing: d.advocate_closing,
+    challengerPosition: d.challenger_position,
+    challengerOpening: d.challenger_opening,
+    challengerRebuttal: d.challenger_rebuttal,
+    challengerClosing: d.challenger_closing,
+    advocateVotes: parseInt(d.advocate_votes || '0'),
+    challengerVotes: parseInt(d.challenger_votes || '0'),
+    votingOpensAt: d.voting_opens_at,
+    votingClosesAt: d.voting_closes_at,
+    publishedAt: d.published_at,
+    decidedAt: d.decided_at,
+    createdAt: d.created_at,
+    primaryContributor: d.primary_contributor_id ? { id: d.primary_contributor_id } : null,
+  })) as any[]
 
   // Split into active (voting/in-progress) and decided
-  const activeDebate = debates.find(
+  const activeDebate = mapped.find(
     (d) => ['voting', 'round_1', 'round_2', 'closing'].includes(d.status),
   )
-  const decidedDebates = debates.filter((d) => d.status === 'decided' || d.status === 'archived')
+  const decidedDebates = mapped.filter((d) => d.status === 'decided' || d.status === 'archived')
   const allDebates = activeDebate
-    ? [activeDebate, ...debates.filter((d) => d.id !== activeDebate.id)]
-    : debates
+    ? [activeDebate, ...mapped.filter((d) => d.id !== activeDebate.id)]
+    : mapped
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>

@@ -1,10 +1,43 @@
 import React from 'react'
-import { getPayload } from 'payload'
-import config from '@payload-config'
 import { notFound } from 'next/navigation'
 import { DiscussionSection } from '@/components/discussion/DiscussionSection'
 
 export const dynamic = 'force-dynamic'
+
+const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
+
+async function neonQuery<T = Record<string, unknown>>(query: string, params: unknown[] = []) {
+  const connStr = process.env.DATABASE_URI || ''
+  const resp = await fetch(NEON_SQL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
+    body: JSON.stringify({ query, params }),
+    cache: 'no-store',
+  })
+  if (!resp.ok) throw new Error(`Neon ${resp.status}: ${await resp.text()}`)
+  return (await resp.json()) as { rows: T[]; rowCount: number }
+}
+
+function mapDebate(d: Record<string, unknown>) {
+  return {
+    ...d,
+    advocatePosition: d.advocate_position,
+    advocateOpening: d.advocate_opening,
+    advocateRebuttal: d.advocate_rebuttal,
+    advocateClosing: d.advocate_closing,
+    challengerPosition: d.challenger_position,
+    challengerOpening: d.challenger_opening,
+    challengerRebuttal: d.challenger_rebuttal,
+    challengerClosing: d.challenger_closing,
+    advocateVotes: parseInt((d.advocate_votes as string) || '0'),
+    challengerVotes: parseInt((d.challenger_votes as string) || '0'),
+    votingOpensAt: d.voting_opens_at,
+    votingClosesAt: d.voting_closes_at,
+    publishedAt: d.published_at,
+    decidedAt: d.decided_at,
+    createdAt: d.created_at,
+  }
+}
 
 const ADVOCATE_COLOR = '#3b82f6'
 const CHALLENGER_COLOR = '#f97316'
@@ -44,15 +77,8 @@ function daysLeft(closesAt: string): string {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const payload = await getPayload({ config })
-  const result = await payload.find({
-    collection: 'debates',
-    where: { slug: { equals: slug } },
-    limit: 1,
-    depth: 0,
-    overrideAccess: true,
-  })
-  const debate = result.docs[0]
+  const { rows } = await neonQuery(`SELECT title FROM debates WHERE slug = $1 LIMIT 1`, [slug])
+  const debate = rows[0] as { title?: string } | undefined
   if (!debate) return { title: 'Debate Not Found — WFM Labs Hub' }
   return { title: `${debate.title} — Debates — WFM Labs Hub` }
 }
@@ -63,19 +89,11 @@ export default async function DebateDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  const payload = await getPayload({ config })
-
-  const result = await payload.find({
-    collection: 'debates',
-    where: { slug: { equals: slug } },
-    limit: 1,
-    depth: 1,
-    overrideAccess: true,
-  })
+  const { rows } = await neonQuery(`SELECT * FROM debates WHERE slug = $1 LIMIT 1`, [slug])
+  if (rows.length === 0) notFound()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const debate = result.docs[0] as any
-  if (!debate) notFound()
+  const debate = mapDebate(rows[0]) as any
 
   const st = statusConfig[debate.status] || statusConfig.framing
   const total = (debate.advocateVotes || 0) + (debate.challengerVotes || 0)
