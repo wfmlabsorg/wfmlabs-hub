@@ -110,8 +110,8 @@ export default async function ResearchBrowsePage({
         ))}
       </div>
 
-      {/* Domain filter chips */}
-      <div className="category-chips-row" style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem' }}>
+      {/* Domain filter chips — wrap instead of scroll */}
+      <div className="category-chips-row" style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem', flexWrap: 'wrap' }}>
         {domains.map((d) => (
           <a
             key={d.value}
