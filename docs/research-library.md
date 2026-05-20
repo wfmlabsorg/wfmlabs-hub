@@ -1,8 +1,8 @@
 # Research Library Architecture
 
 **Owner:** RESEARCH fleet agent
-**Last updated:** 2026-05-18
-**Status:** Active build — Phase 1 (metadata + harvest) complete, Phase 2 (full-text + vectors) in progress
+**Last updated:** 2026-05-20
+**Status:** Library built — 1,090 papers, vector search live, hybrid search validated. Beacon agent build next.
 
 ---
 
@@ -86,23 +86,37 @@ The WFM Labs Research Library is a curated, searchable collection of academic pa
 | section_title | text | Section header if available |
 | created_at | timestamptz | Timestamp |
 
-### Categories (enum_papers_category)
+### Paper Types (enum_papers_paper_type)
 
-| Value | Label | Count (current) |
-|-------|-------|-----------------|
-| employee-wellbeing | Employee Well-Being | 39 |
-| workforce-management | Workforce Management | 30 |
-| ai-machine-learning | AI & Machine Learning | 27 |
-| process-optimization | Process Optimization | 27 |
-| analytics-forecasting | Analytics & Forecasting | 26 |
-| queuing-theory | Queuing Theory | 23 |
-| contact-center-operations | Contact Center Operations | 20 |
-| customer-experience | Customer Experience | 16 |
-| technology | Technology | 15 |
-| operations-management | Operations Management | 6 |
-| scheduling-optimization | Scheduling & Optimization | 4 |
-| economics-finance | Economics & Finance | 2 |
-| other | Other | 0 |
+Each paper is classified by research type, which drives the card color and icon:
+
+| Value | Icon | Color | Description |
+|-------|------|-------|-------------|
+| empirical-study | 🔬 | Teal | Field experiments, RCTs, surveys with original data |
+| mathematical-model | 📐 | Blue | Queuing theory, optimization, algorithms, simulation |
+| framework | 🧩 | Green | Conceptual frameworks, taxonomies, design principles |
+| literature-review | 📚 | Purple | Meta-analyses, systematic reviews, survey papers |
+| case-study | 🏢 | Rose | Single-org implementations, pilot studies |
+| industry-report | 📈 | Amber | McKinsey, BCG, Gartner, WEF reports |
+| reference | 📖 | Slate | Textbooks, foundational reference works |
+
+### Categories / Domains (enum_papers_category)
+
+| Value | Label | Count (as of 2026-05-20) |
+|-------|-------|--------------------------|
+| employee-wellbeing | Employee Well-Being | 140 |
+| ai-machine-learning | AI & Machine Learning | 125 |
+| workforce-management | Workforce Management | 108 |
+| analytics-forecasting | Analytics & Forecasting | 101 |
+| technology | Technology | 98 |
+| scheduling-optimization | Scheduling & Optimization | 84 |
+| queuing-theory | Queuing Theory | 79 |
+| customer-experience | Customer Experience | 77 |
+| process-optimization | Process Optimization | 76 |
+| contact-center-operations | Contact Center Operations | 75 |
+| operations-management | Operations Management | 65 |
+| economics-finance | Economics & Finance | 62 |
+| **Total** | | **1,090** |
 
 ---
 
@@ -125,7 +139,7 @@ Titles (from legacy site, manual entry, or discovery)
 - `02-working/import-papers.ts` — import from FOW-Value research collections
 - `02-working/import-harvested.ts` — import harvested papers with dedup + logging
 
-### Phase 2: Full-Text Acquisition (IN PROGRESS)
+### Phase 2: Full-Text Acquisition (COMPLETE)
 
 ```
 papers table (sourceUrl, openAccessUrl)
@@ -205,9 +219,9 @@ ORDER BY pc.embedding <=> $1::vector
 LIMIT 20;
 ```
 
-**Embedding model:** OpenAI text-embedding-3-small (1536 dims, $0.02/1M tokens)
-- 235 papers × ~5,000 tokens avg = ~1.2M tokens = ~$0.024 for initial corpus
-- Scales linearly — 1,000 papers ≈ $0.10
+**Embedding model:** all-MiniLM-L6-v2 via transformers.js (384 dims, local, free)
+- 1,090 papers, 4,104+ chunks embedded
+- Runs locally via Node.js — no API cost
 
 ### Hybrid Search (production)
 
@@ -223,12 +237,9 @@ Combine both for best results:
 
 | Resource | Current Usage | Limit | Cost |
 |----------|--------------|-------|------|
-| Neon Postgres | ~50MB (235 papers, metadata) | 512MB (free tier) | $0 |
-| Neon + full_text | ~200MB estimated (with text) | 512MB free, then $19/mo | $0-19/mo |
-| Neon + vectors | ~300MB estimated (1536-dim, 1000 papers) | Scales with storage | Included |
-| R2 storage | ~0 (no PDFs yet) | 10GB free | $0 |
-| R2 with PDFs | ~500MB estimated (500 papers avg 1MB) | 10GB free | $0 |
-| Embeddings | One-time | — | ~$0.10 for 1000 papers |
+| Neon Postgres | ~60MB (1,090 papers + vectors) | 512MB (free tier) | $0 |
+| R2 storage | ~0 (PDFs not yet uploaded) | 10GB free | $0 |
+| Embeddings | Local (transformers.js) | — | $0 |
 
 ---
 

@@ -214,6 +214,10 @@ export interface Member {
     | null;
   bio?: string | null;
   avatar?: (number | null) | Media;
+  /**
+   * External avatar URL from OAuth (Google/GitHub). Used when no uploaded avatar exists.
+   */
+  avatarUrl?: string | null;
   profile?: {
     /**
      * e.g., VP Operations
@@ -584,6 +588,20 @@ export interface Paper {
     viewCount?: number | null;
     citationCount?: number | null;
   };
+  /**
+   * Research type: what kind of paper this is
+   */
+  paperType?:
+    | (
+        | 'empirical-study'
+        | 'literature-review'
+        | 'mathematical-model'
+        | 'industry-report'
+        | 'framework'
+        | 'case-study'
+        | 'reference'
+      )
+    | null;
   sourceUrl: string;
   sourceType?: ('arxiv' | 'ssrn' | 'journal' | 'industry-report' | 'blog' | 'vendor-research' | 'manual') | null;
   /**
@@ -1705,6 +1723,7 @@ export interface MembersSelect<T extends boolean = true> {
   workforceTypes?: T;
   bio?: T;
   avatar?: T;
+  avatarUrl?: T;
   profile?:
     | T
     | {
@@ -1833,6 +1852,7 @@ export interface PapersSelect<T extends boolean = true> {
         viewCount?: T;
         citationCount?: T;
       };
+  paperType?: T;
   sourceUrl?: T;
   sourceType?: T;
   sourceName?: T;

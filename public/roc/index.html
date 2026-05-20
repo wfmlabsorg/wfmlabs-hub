@@ -2065,6 +2065,371 @@
     });
   </script>
 
+  <!-- =============================================
+       ROC OPS CHAT PANEL (chat-010)
+       Floating collapsible panel for roc:ops channel.
+       Admin/operator coordination only — gate with role check before showing.
+       Uses the same window.ably client initialized above.
+       Bottom-left to avoid overlap with OpenMCT chat plugin (bottom-right area).
+       ============================================= -->
+  <style>
+    #roc-ops-panel {
+      position: fixed;
+      bottom: 36px; /* above presence bar */
+      left: 16px;
+      z-index: 9000;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 11px;
+    }
+
+    /* Collapsed toggle button */
+    #roc-ops-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 4px;
+      padding: 5px 12px;
+      cursor: pointer;
+      color: #f1f5f9;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: bold;
+      letter-spacing: 0.08em;
+      transition: border-color 0.15s;
+    }
+    #roc-ops-toggle:hover { border-color: #22d3ee; }
+    #roc-ops-toggle .ops-badge {
+      display: inline-block;
+      background: #22d3ee;
+      color: #0b1120;
+      border-radius: 2px;
+      padding: 1px 5px;
+      font-size: 9px;
+      font-weight: bold;
+    }
+    #roc-ops-toggle .ops-unread {
+      display: none;
+      background: #ef4444;
+      color: #fff;
+      border-radius: 10px;
+      padding: 0 5px;
+      font-size: 9px;
+      min-width: 14px;
+      text-align: center;
+    }
+    #roc-ops-toggle .ops-unread.visible { display: inline-block; }
+
+    /* Expanded chat panel */
+    #roc-ops-chat {
+      display: none;
+      flex-direction: column;
+      width: 350px;
+      height: 400px;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    #roc-ops-chat.open { display: flex; }
+
+    #roc-ops-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #1e293b;
+      background: #0b1120;
+      flex-shrink: 0;
+    }
+    #roc-ops-header .ops-title {
+      color: #22d3ee;
+      font-weight: bold;
+      font-size: 11px;
+      letter-spacing: 0.05em;
+    }
+    #roc-ops-header .ops-meta {
+      color: #475569;
+      font-size: 9px;
+    }
+    #roc-ops-header .ops-close {
+      color: #475569;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1;
+      padding: 0 2px;
+    }
+    #roc-ops-header .ops-close:hover { color: #f1f5f9; }
+
+    #roc-ops-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    #roc-ops-messages::-webkit-scrollbar { width: 4px; }
+    #roc-ops-messages::-webkit-scrollbar-track { background: transparent; }
+    #roc-ops-messages::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
+
+    .ops-msg {
+      padding: 5px 8px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.02);
+      word-wrap: break-word;
+    }
+    .ops-msg.ops-msg-me { background: rgba(34,211,238,0.05); }
+    .ops-msg.ops-msg-system { background: transparent; }
+    .ops-msg-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+    .ops-msg-handle { color: #22d3ee; font-weight: bold; font-size: 10px; }
+    .ops-msg-handle.other { color: #60a5fa; }
+    .ops-msg-time { color: #334155; font-size: 9px; }
+    .ops-msg-body { color: #94a3b8; font-size: 11px; }
+    .ops-msg-system .ops-msg-body { color: #334155; font-style: italic; font-size: 10px; }
+
+    #roc-ops-input-row {
+      display: flex;
+      padding: 8px;
+      border-top: 1px solid #1e293b;
+      gap: 6px;
+      flex-shrink: 0;
+      background: #0b1120;
+    }
+    #roc-ops-input {
+      flex: 1;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 3px;
+      color: #f1f5f9;
+      padding: 5px 8px;
+      font-family: inherit;
+      font-size: 10px;
+      outline: none;
+    }
+    #roc-ops-input:focus { border-color: #22d3ee44; }
+    #roc-ops-send {
+      background: #22d3ee;
+      border: none;
+      color: #0b1120;
+      padding: 5px 12px;
+      border-radius: 3px;
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #roc-ops-send:hover { background: #06b6d4; }
+  </style>
+
+  <!-- ROC Ops Panel HTML -->
+  <div id="roc-ops-panel">
+    <div id="roc-ops-chat">
+      <div id="roc-ops-header">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="ops-title">roc:ops</span>
+          <span class="ops-meta" id="roc-ops-online">— online</span>
+        </div>
+        <span class="ops-close" onclick="rocOpsToggle()" title="Collapse">✕</span>
+      </div>
+      <div id="roc-ops-messages"></div>
+      <div id="roc-ops-input-row">
+        <input id="roc-ops-input" type="text" placeholder="Message roc:ops..." maxlength="1000">
+        <button id="roc-ops-send">SEND</button>
+      </div>
+    </div>
+    <button id="roc-ops-toggle" onclick="rocOpsToggle()">
+      <span class="ops-badge">OPS</span>
+      roc:ops
+      <span class="ops-unread" id="roc-ops-unread">0</span>
+    </button>
+  </div>
+
+  <script>
+    // =============================================
+    // ROC OPS CHAT — roc:ops channel (chat-010)
+    // Operator coordination panel. Admin-only.
+    // TODO: gate visibility with role check once RBAC is in place:
+    //   if (!rocUser || rocUser.role !== 'admin') document.getElementById('roc-ops-panel').style.display = 'none';
+    // =============================================
+    (function () {
+      var panel = document.getElementById('roc-ops-panel');
+      var chatEl = document.getElementById('roc-ops-chat');
+      var messagesEl = document.getElementById('roc-ops-messages');
+      var inputEl = document.getElementById('roc-ops-input');
+      var onlineEl = document.getElementById('roc-ops-online');
+      var unreadEl = document.getElementById('roc-ops-unread');
+      var isOpen = false;
+      var unreadCount = 0;
+      var opsAblyChannel = null;
+      var opsPresenceChannel = null;
+
+      // Get current user handle from localStorage (set by auth gate)
+      function getMyHandle() {
+        try {
+          var u = JSON.parse(localStorage.getItem('roc-user') || '{}');
+          return u.handle || ('op-' + (window.ably && window.ably.auth && window.ably.auth.clientId ? window.ably.auth.clientId.replace('operator-','') : '?'));
+        } catch (e) { return 'unknown'; }
+      }
+
+      // Add a message to the panel
+      function appendMsg(sender, body, ts, isSystem) {
+        var myHandle = getMyHandle();
+        var isMe = !isSystem && sender === myHandle;
+
+        var div = document.createElement('div');
+        div.className = 'ops-msg' + (isSystem ? ' ops-msg-system' : isMe ? ' ops-msg-me' : '');
+
+        var time = '';
+        if (ts) {
+          var d = new Date(ts);
+          time = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+        }
+
+        if (isSystem) {
+          div.innerHTML = '<div class="ops-msg-body">' + escHtml(body) + '</div>';
+        } else {
+          div.innerHTML =
+            '<div class="ops-msg-meta">'
+            + '<span class="ops-msg-handle' + (isMe ? '' : ' other') + '">@' + escHtml(sender) + '</span>'
+            + '<span class="ops-msg-time">' + time + '</span>'
+            + '</div>'
+            + '<div class="ops-msg-body">' + escHtml(body) + '</div>';
+        }
+
+        messagesEl.appendChild(div);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      function escHtml(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+
+      function addUnread() {
+        if (!isOpen) {
+          unreadCount++;
+          unreadEl.textContent = unreadCount;
+          unreadEl.classList.add('visible');
+        }
+      }
+
+      function clearUnread() {
+        unreadCount = 0;
+        unreadEl.textContent = '0';
+        unreadEl.classList.remove('visible');
+      }
+
+      function updateOnlineCount(n) {
+        onlineEl.textContent = n + ' online';
+      }
+
+      // Toggle open/collapsed
+      window.rocOpsToggle = function () {
+        isOpen = !isOpen;
+        if (isOpen) {
+          chatEl.classList.add('open');
+          clearUnread();
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+          setTimeout(function () { inputEl.focus(); }, 50);
+        } else {
+          chatEl.classList.remove('open');
+        }
+      };
+
+      // Send a message
+      function sendOpsMsg() {
+        var text = inputEl.value.trim();
+        if (!text) return;
+        inputEl.value = '';
+
+        var myHandle = getMyHandle();
+        var ts = new Date().toISOString();
+
+        // Render immediately (optimistic)
+        appendMsg(myHandle, text, ts, false);
+
+        // Publish to Ably roc:ops
+        if (opsAblyChannel) {
+          opsAblyChannel.publish({
+            name: 'message',
+            data: {
+              body: text,
+              sender: myHandle,
+              senderType: 'human',
+              timestamp: ts
+            }
+          });
+        }
+      }
+
+      document.getElementById('roc-ops-send').addEventListener('click', sendOpsMsg);
+      inputEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') sendOpsMsg();
+      });
+
+      // Attach Ably once window.ably is ready
+      function attachAbly() {
+        if (!window.ably) return;
+
+        opsAblyChannel = window.ably.channels.get('roc:ops');
+        opsPresenceChannel = window.ably.channels.get('roc:ops');
+
+        // Subscribe to incoming messages
+        opsAblyChannel.subscribe('message', function (msg) {
+          var d = msg.data || {};
+          var myHandle = getMyHandle();
+          // Skip messages we sent ourselves (already rendered optimistically)
+          if (d.sender === myHandle) return;
+          appendMsg(d.sender || 'unknown', d.body || '', d.timestamp || null, false);
+          addUnread();
+        });
+
+        // Presence: track online operators in roc:ops
+        opsAblyChannel.presence.subscribe(function () {
+          opsAblyChannel.presence.get().then(function (members) {
+            updateOnlineCount(members.length);
+          }).catch(function () {});
+        });
+
+        // Enter presence on roc:ops
+        var myHandle = getMyHandle();
+        opsAblyChannel.presence.enter({ handle: myHandle }).catch(function () {});
+
+        // Initial presence count
+        opsAblyChannel.presence.get().then(function (members) {
+          updateOnlineCount(members.length);
+        }).catch(function () {});
+      }
+
+      // Ably may already be connected or connecting — attach when connected
+      if (window.ably) {
+        if (window.ably.connection.state === 'connected') {
+          attachAbly();
+        } else {
+          window.ably.connection.once('connected', attachAbly);
+        }
+      } else {
+        // Fallback: poll until ably is available (shouldn't happen given script order)
+        var pollAbly = setInterval(function () {
+          if (window.ably) {
+            clearInterval(pollAbly);
+            attachAbly();
+          }
+        }, 200);
+      }
+
+      // System message on load
+      appendMsg(null, 'roc:ops — operator coordination channel', new Date().toISOString(), true);
+    }());
+  </script>
+
   <!-- ROC Presence Bar -->
   <div id="roc-presence">
     <span class="status-dot"></span>

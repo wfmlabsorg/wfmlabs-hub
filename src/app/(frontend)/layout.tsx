@@ -4,6 +4,7 @@ import '@/styles/globals.css'
 import { GlobalNav } from '@/components/nav/GlobalNav'
 import { Footer } from '@/components/nav/Footer'
 import { AuthProvider } from '@/components/providers/AuthProvider'
+import { ChatSidebar } from '@/components/chat'
 import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
@@ -29,6 +30,7 @@ export default async function FrontendLayout({ children }: { children: React.Rea
           <GlobalNav />
           <main style={{ flex: 1 }}>{children}</main>
           <Footer />
+          <ChatSidebar />
         </AuthProvider>
       </body>
     </html>

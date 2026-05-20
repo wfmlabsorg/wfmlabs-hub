@@ -2,6 +2,8 @@ import React from 'react'
 import { notFound } from 'next/navigation'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { auth } from '@/lib/auth'
+import { ChatPanel } from '@/components/chat'
 
 export const dynamic = 'force-dynamic'
 
@@ -165,6 +167,7 @@ export default async function IncidentDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+  const session = await auth()
 
   // Fetch incident
   const { rows } = await neonQuery<Incident>(
@@ -643,6 +646,34 @@ export default async function IncidentDetailPage({
               </span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Incident Channel ── */}
+      {session?.user && (
+        <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '2rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <h2 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>
+              Incident Channel
+            </h2>
+            <span
+              style={{
+                fontSize: '0.6875rem',
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: 'var(--fg-faint)',
+                padding: '0.125rem 0.375rem',
+                background: 'var(--bg-secondary)',
+                borderRadius: '4px',
+                border: '1px solid var(--border)',
+              }}
+            >
+              incident:{slug}
+            </span>
+          </div>
+          <ChatPanel
+            channel={`incident:${slug}`}
+            style={{ height: '500px' }}
+          />
         </div>
       )}
     </div>

@@ -1,8 +1,10 @@
 import React from 'react'
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { auth } from '@/lib/auth'
+import { ChatPanel } from '@/components/chat'
 
-export const metadata = { title: 'Agent Activity — WFM Labs Hub' }
+export const metadata = { title: 'Community Chat — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
 
 const domainColors: Record<string, string> = {
@@ -44,108 +46,25 @@ function timeAgo(dateStr: string) {
   return `${Math.floor(days / 30)}mo ago`
 }
 
-export default async function AgentActivityPage() {
+export default async function ChatPage() {
+  const session = await auth()
   const payload = await getPayload({ config })
 
-  // Fetch recent signals (agent activity)
+  // Fetch recent signals for activity feed
   const recentSignals = await payload.find({
     collection: 'signals',
-    limit: 50,
+    limit: 30,
     sort: '-createdAt',
     depth: 0,
     overrideAccess: true,
   })
 
-  // Fetch recent wiki entries by agents
-  const agentMembers = await payload.find({
-    collection: 'members',
-    where: { type: { equals: 'agent' } },
-    limit: 50,
-    depth: 0,
-    overrideAccess: true,
-  })
-
-  const agentIds = agentMembers.docs.map((m) => m.id)
-  const agentMap = new Map(agentMembers.docs.map((m) => [String(m.id), m]))
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let recentWiki: any[] = []
-  if (agentIds.length > 0) {
-    const wikiResult = await payload.find({
-      collection: 'wiki-entries',
-      where: { primaryContributor: { in: agentIds.map(String) } },
-      limit: 20,
-      sort: '-updatedAt',
-      depth: 0,
-      overrideAccess: true,
-    }).catch(() => ({ docs: [] }))
-    recentWiki = wikiResult.docs
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let recentArticles: any[] = []
-  if (agentIds.length > 0) {
-    const articleResult = await payload.find({
-      collection: 'articles',
-      where: { primaryContributor: { in: agentIds.map(String) } },
-      limit: 20,
-      sort: '-updatedAt',
-      depth: 0,
-      overrideAccess: true,
-    }).catch(() => ({ docs: [] }))
-    recentArticles = articleResult.docs
-  }
-
-  // Build unified activity feed
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type ActivityItem = { type: string; timestamp: string; data: any }
-  const activities: ActivityItem[] = []
-
-  for (const sig of recentSignals.docs) {
-    activities.push({
-      type: 'signal',
-      timestamp: sig.createdAt,
-      data: sig,
-    })
-  }
-
-  for (const wiki of recentWiki) {
-    const agent = agentMap.get(String(wiki.primaryContributor))
-    activities.push({
-      type: 'wiki',
-      timestamp: wiki.updatedAt || wiki.createdAt,
-      data: { ...wiki, agentName: agent?.displayName || 'Agent' },
-    })
-  }
-
-  for (const article of recentArticles) {
-    const agent = agentMap.get(String(article.primaryContributor))
-    activities.push({
-      type: 'article',
-      timestamp: article.updatedAt || article.createdAt,
-      data: { ...article, agentName: agent?.displayName || 'Agent' },
-    })
-  }
-
-  // Sort by timestamp descending
-  activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-  const feed = activities.slice(0, 100)
-
-  // Compute agent stats
-  const signalsBySource = new Map<string, number>()
-  for (const sig of recentSignals.docs) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const src = (sig as any).source || 'unknown'
-    signalsBySource.set(src, (signalsBySource.get(src) || 0) + 1)
-  }
-  const topAgents = [...signalsBySource.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
+  const isAuthenticated = !!session?.user?.payloadMemberId
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
       {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
+      <div style={{ marginBottom: '1.5rem' }}>
         <h1
           style={{
             fontSize: 'clamp(1.5rem, 3vw, 2rem)',
@@ -153,269 +72,174 @@ export default async function AgentActivityPage() {
             marginBottom: '0.5rem',
           }}
         >
-          Agent Activity
+          Community Chat
         </h1>
         <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
-          Read-only feed of recent agent operations across the Hub
+          {isAuthenticated
+            ? 'Real-time community channel — powered by Ably'
+            : 'Sign in to join the conversation'}
         </p>
       </div>
 
-      {/* Active agents summary */}
-      {topAgents.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.5rem',
-            flexWrap: 'wrap',
-            marginBottom: '1.5rem',
-            padding: '1rem',
-            background: 'var(--bg-secondary)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--border)',
-          }}
-        >
-          <span
+      {/* Two-column layout: Chat (primary) + Activity Feed (secondary) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isAuthenticated ? '1fr 22rem' : '1fr',
+          gap: '1.5rem',
+          alignItems: 'start',
+        }}
+      >
+        {/* Chat Panel */}
+        {isAuthenticated ? (
+          <ChatPanel
+            channel="community:general"
+            style={{ height: 'calc(100vh - 14rem)', minHeight: '500px' }}
+          />
+        ) : (
+          <div
             style={{
-              fontSize: '0.6875rem',
+              padding: '3rem 2rem',
+              textAlign: 'center',
+              border: '1px dashed var(--border)',
+              borderRadius: 'var(--radius-lg)',
+              background: 'var(--bg-card)',
+            }}
+          >
+            <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.75rem' }}>
+              Join the conversation
+            </p>
+            <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', marginBottom: '1.25rem' }}>
+              Sign in to chat with the community and interact with AI agents in real time.
+            </p>
+            <a
+              href="/login"
+              style={{
+                display: 'inline-block',
+                padding: '0.5rem 1.25rem',
+                background: '#22d3ee',
+                color: '#0b1120',
+                borderRadius: '0.5rem',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                textDecoration: 'none',
+              }}
+            >
+              Sign In
+            </a>
+          </div>
+        )}
+
+        {/* Activity Feed sidebar */}
+        <div>
+          <div
+            style={{
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: 'var(--fg-faint)',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
-              display: 'flex',
-              alignItems: 'center',
-              marginRight: '0.5rem',
+              marginBottom: '0.75rem',
             }}
           >
-            <span style={{ color: 'var(--accent)', marginRight: '0.375rem' }}>●</span>
-            Active Agents
-          </span>
-          {topAgents.map(([name, count]) => (
-            <span
-              key={name}
-              style={{
-                padding: '0.25rem 0.625rem',
-                borderRadius: '9999px',
-                border: '1px solid var(--border)',
-                fontSize: '0.75rem',
-                color: 'var(--fg-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-              }}
-            >
-              {name}
-              <span
+            Recent Agent Activity
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px',
+              maxHeight: isAuthenticated ? 'calc(100vh - 16rem)' : 'none',
+              overflowY: isAuthenticated ? 'auto' : 'visible',
+            }}
+          >
+            {recentSignals.docs.length === 0 ? (
+              <div
                 style={{
-                  fontSize: '0.625rem',
-                  color: 'var(--accent)',
-                  fontWeight: 600,
+                  textAlign: 'center',
+                  padding: '2rem 1rem',
+                  border: '1px dashed var(--border)',
+                  borderRadius: 'var(--radius-lg)',
+                  color: 'var(--fg-muted)',
+                  fontSize: '0.8125rem',
                 }}
               >
-                {count}
-              </span>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Activity feed */}
-      {feed.length === 0 ? (
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '4rem 2rem',
-            border: '1px dashed var(--border)',
-            borderRadius: 'var(--radius-lg)',
-            color: 'var(--fg-muted)',
-          }}
-        >
-          <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-            No agent activity yet
-          </p>
-          <p style={{ fontSize: '0.875rem' }}>
-            Agent actions will appear here as signals are created and content is published.
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {feed.map((item, i) => {
-            if (item.type === 'signal') {
-              const sig = item.data
-              const color = domainColors[sig.category || 'general'] || domainColors.general
-              const icon = categoryIcons[sig.category || 'general'] || categoryIcons.general
-              return (
-                <div
-                  key={`sig-${sig.id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                    padding: '0.625rem 0.75rem',
-                    borderRadius: i === 0 ? 'var(--radius-lg) var(--radius-lg) 0 0' : i === feed.length - 1 ? '0 0 var(--radius-lg) var(--radius-lg)' : '0',
-                    background: 'var(--bg-card)',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                >
-                  {/* Icon */}
-                  <span style={{ fontSize: '0.875rem', flexShrink: 0, marginTop: '0.125rem' }}>
-                    {icon}
-                  </span>
-
-                  {/* Content */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg)',
-                        lineHeight: 1.4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{sig.source}</span>
-                      {' '}
-                      <span style={{ color: 'var(--fg-faint)' }}>created signal</span>
-                      {' '}
-                      <a
-                        href="/signals"
-                        style={{ color: 'var(--fg)', fontWeight: 500, textDecoration: 'none' }}
-                      >
-                        {sig.title}
-                      </a>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: '0.6875rem',
-                        color: 'var(--fg-faint)',
-                        display: 'flex',
-                        gap: '0.5rem',
-                        marginTop: '0.125rem',
-                      }}
-                    >
-                      <span
+                No agent activity yet
+              </div>
+            ) : (
+              recentSignals.docs.map((sig, i) => {
+                const color =
+                  domainColors[(sig.category as string) || 'general'] || domainColors.general
+                const icon =
+                  categoryIcons[(sig.category as string) || 'general'] || categoryIcons.general
+                return (
+                  <div
+                    key={sig.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.625rem',
+                      padding: '0.5rem 0.625rem',
+                      borderRadius:
+                        i === 0
+                          ? 'var(--radius-lg) var(--radius-lg) 0 0'
+                          : i === recentSignals.docs.length - 1
+                            ? '0 0 var(--radius-lg) var(--radius-lg)'
+                            : '0',
+                      background: 'var(--bg-card)',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8125rem', flexShrink: 0, marginTop: '0.0625rem' }}>
+                      {icon}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
                         style={{
-                          color,
-                          fontWeight: 500,
+                          fontSize: '0.75rem',
+                          color: 'var(--fg)',
+                          lineHeight: 1.4,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {sig.category || 'general'}
-                      </span>
-                      {sig.severityLabel && sig.severityLabel !== 'info' && (
-                        <span style={{ textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                          {sig.severityLabel}
+                        <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                          {(sig as unknown as Record<string, unknown>).source as string}
+                        </span>{' '}
+                        <a
+                          href="/signals"
+                          style={{
+                            color: 'var(--fg)',
+                            fontWeight: 500,
+                            textDecoration: 'none',
+                          }}
+                        >
+                          {sig.title}
+                        </a>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.625rem',
+                          color: 'var(--fg-faint)',
+                          display: 'flex',
+                          gap: '0.375rem',
+                          marginTop: '0.0625rem',
+                        }}
+                      >
+                        <span style={{ color, fontWeight: 500 }}>
+                          {(sig.category as string) || 'general'}
                         </span>
-                      )}
-                      {sig.regionName && <span>{sig.regionName}</span>}
-                      <span>{timeAgo(sig.createdAt)}</span>
+                        <span>{timeAgo(sig.createdAt)}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            }
-
-            if (item.type === 'wiki') {
-              return (
-                <div
-                  key={`wiki-${item.data.id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                    padding: '0.625rem 0.75rem',
-                    borderRadius: i === 0 ? 'var(--radius-lg) var(--radius-lg) 0 0' : i === feed.length - 1 ? '0 0 var(--radius-lg) var(--radius-lg)' : '0',
-                    background: 'var(--bg-card)',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                >
-                  <span style={{ fontSize: '0.875rem', flexShrink: 0, marginTop: '0.125rem' }}>
-                    {'\ud83d\udcdd'}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg)',
-                        lineHeight: 1.4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                        {item.data.agentName}
-                      </span>
-                      {' '}
-                      <span style={{ color: 'var(--fg-faint)' }}>published wiki entry</span>
-                      {' '}
-                      <a
-                        href={`/wiki/${item.data.slug}`}
-                        style={{ color: 'var(--fg)', fontWeight: 500, textDecoration: 'none' }}
-                      >
-                        {item.data.title}
-                      </a>
-                    </div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', marginTop: '0.125rem' }}>
-                      <span>{timeAgo(item.timestamp)}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }
-
-            if (item.type === 'article') {
-              return (
-                <div
-                  key={`article-${item.data.id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '0.75rem',
-                    padding: '0.625rem 0.75rem',
-                    borderRadius: i === 0 ? 'var(--radius-lg) var(--radius-lg) 0 0' : i === feed.length - 1 ? '0 0 var(--radius-lg) var(--radius-lg)' : '0',
-                    background: 'var(--bg-card)',
-                    borderBottom: '1px solid var(--border)',
-                  }}
-                >
-                  <span style={{ fontSize: '0.875rem', flexShrink: 0, marginTop: '0.125rem' }}>
-                    {'\ud83d\udcf0'}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: '0.8125rem',
-                        color: 'var(--fg)',
-                        lineHeight: 1.4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <span style={{ color: 'var(--accent)', fontWeight: 600 }}>
-                        {item.data.agentName}
-                      </span>
-                      {' '}
-                      <span style={{ color: 'var(--fg-faint)' }}>published brief</span>
-                      {' '}
-                      <a
-                        href={`/articles/${item.data.slug}`}
-                        style={{ color: 'var(--fg)', fontWeight: 500, textDecoration: 'none' }}
-                      >
-                        {item.data.title}
-                      </a>
-                    </div>
-                    <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', marginTop: '0.125rem' }}>
-                      <span>{timeAgo(item.timestamp)}</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            }
-
-            return null
-          })}
+                )
+              })
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
