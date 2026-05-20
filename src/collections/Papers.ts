@@ -18,6 +18,22 @@ export const Papers: CollectionConfig = {
     ...baseAssetFields,
     // Paper-specific fields
     {
+      name: 'paperType',
+      type: 'select',
+      options: [
+        { label: 'Empirical Study', value: 'empirical-study' },
+        { label: 'Literature Review', value: 'literature-review' },
+        { label: 'Mathematical Model', value: 'mathematical-model' },
+        { label: 'Industry Report', value: 'industry-report' },
+        { label: 'Framework', value: 'framework' },
+        { label: 'Case Study', value: 'case-study' },
+        { label: 'Reference', value: 'reference' },
+      ],
+      admin: {
+        description: 'Research type: what kind of paper this is',
+      },
+    },
+    {
       name: 'sourceUrl',
       type: 'text',
       required: true,

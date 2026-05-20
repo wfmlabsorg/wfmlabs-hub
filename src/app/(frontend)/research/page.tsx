@@ -6,54 +6,37 @@ import { AssetCard } from '@/components/cards/AssetCard'
 export const metadata = { title: 'Research | WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
 
-const categories = [
-  { value: 'all', label: 'All' },
-  { value: 'queuing-theory', label: 'Queuing Theory' },
-  { value: 'ai-machine-learning', label: 'AI & Machine Learning' },
-  { value: 'operations-management', label: 'Operations Management' },
-  { value: 'workforce-management', label: 'Workforce Management' },
-  { value: 'customer-experience', label: 'Customer Experience' },
-  { value: 'analytics-forecasting', label: 'Analytics & Forecasting' },
-  { value: 'process-optimization', label: 'Process Optimization' },
-  { value: 'technology', label: 'Technology' },
-  { value: 'economics-finance', label: 'Economics & Finance' },
-  { value: 'other', label: 'Other' },
+const paperTypes = [
+  { value: 'all', label: 'All Research', icon: '📄' },
+  { value: 'empirical-study', label: 'Empirical Studies', icon: '🔬' },
+  { value: 'literature-review', label: 'Literature Reviews', icon: '📚' },
+  { value: 'mathematical-model', label: 'Mathematical Models', icon: '📐' },
+  { value: 'industry-report', label: 'Industry Reports', icon: '📈' },
+  { value: 'framework', label: 'Frameworks', icon: '🧩' },
+  { value: 'case-study', label: 'Case Studies', icon: '🏢' },
+  { value: 'reference', label: 'Reference', icon: '📖' },
 ]
 
-const sourceTypeLabels: Record<string, string> = {
-  arxiv: 'arXiv',
-  ssrn: 'SSRN',
-  journal: 'Journal',
-  'industry-report': 'Industry Report',
-  blog: 'Blog',
-  'vendor-research': 'Vendor Research',
-  manual: 'Manual',
-}
-
-const sourceTypeColors: Record<string, string> = {
-  arxiv: '#ef4444',
-  ssrn: '#f59e0b',
-  journal: '#3b82f6',
-  'industry-report': '#8b5cf6',
-  blog: '#10b981',
-  'vendor-research': '#6366f1',
-  manual: '#6b7280',
-}
-
-const sourceTypeGradients: Record<string, string> = {
-  arxiv: 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)',
-  ssrn: 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',
-  journal: 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-  'industry-report': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)',
-  blog: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-  'vendor-research': 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-  manual: 'linear-gradient(135deg, #4b5563 0%, #6b7280 100%)',
-}
+const domains = [
+  { value: 'all', label: 'All Domains' },
+  { value: 'employee-wellbeing', label: 'Well-Being' },
+  { value: 'workforce-management', label: 'Workforce' },
+  { value: 'ai-machine-learning', label: 'AI & ML' },
+  { value: 'process-optimization', label: 'Optimization' },
+  { value: 'analytics-forecasting', label: 'Forecasting' },
+  { value: 'queuing-theory', label: 'Queuing Theory' },
+  { value: 'contact-center-operations', label: 'Contact Center' },
+  { value: 'customer-experience', label: 'Customer Experience' },
+  { value: 'technology', label: 'Technology' },
+  { value: 'operations-management', label: 'Operations' },
+  { value: 'scheduling-optimization', label: 'Scheduling' },
+  { value: 'economics-finance', label: 'Economics' },
+]
 
 export default async function ResearchBrowsePage() {
   const payload = await getPayload({ config })
   const papers = await payload
-    .find({ collection: 'papers', limit: 50, sort: '-createdAt', depth: 1, overrideAccess: true })
+    .find({ collection: 'papers', limit: 200, sort: '-createdAt', depth: 1, overrideAccess: true })
     .catch(() => ({ docs: [] }))
 
   return (
@@ -77,22 +60,35 @@ export default async function ResearchBrowsePage() {
         </div>
       </div>
 
-      {/* Category filter chips */}
+      {/* Paper type filter chips */}
       <div className="category-chips-row">
-        {categories.map((cat) => (
+        {paperTypes.map((pt) => (
           <span
-            key={cat.value}
-            className={`category-chip ${cat.value === 'all' ? 'category-chip-active' : ''}`}
+            key={pt.value}
+            className={`category-chip ${pt.value === 'all' ? 'category-chip-active' : ''}`}
           >
-            {cat.label}
+            {pt.icon} {pt.label}
           </span>
         ))}
       </div>
 
-      {/* Featured section header */}
+      {/* Domain filter chips (secondary row) */}
+      <div className="category-chips-row" style={{ marginTop: '0.5rem', marginBottom: '1.5rem' }}>
+        {domains.map((d) => (
+          <span
+            key={d.value}
+            className={`category-chip ${d.value === 'all' ? 'category-chip-active' : ''}`}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.625rem' }}
+          >
+            {d.label}
+          </span>
+        ))}
+      </div>
+
+      {/* Section header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>
-          Featured Research
+          Research Library
         </h2>
         <span style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
           {papers.docs.length} {papers.docs.length === 1 ? 'Paper' : 'Papers'}
@@ -120,73 +116,25 @@ export default async function ResearchBrowsePage() {
       ) : (
         <div className="tools-grid">
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          {papers.docs.map((paper: any) => {
-            const stColor = sourceTypeColors[paper.sourceType || ''] || '#6b7280'
-            const stLabel = sourceTypeLabels[paper.sourceType || ''] || paper.sourceType || ''
-            const authorNames = paper.authors && paper.authors.length > 0
-              ? paper.authors.length === 1
-                ? (paper.authors[0] as { name: string }).name
-                : `${(paper.authors[0] as { name: string }).name} et al.`
-              : null
-
-            return (
-              <a key={paper.id} href={`/research/${paper.slug}`} className="asset-card-link">
-                <div className="asset-card">
-                  {/* Gradient header — blue/indigo for research */}
-                  <div className="asset-card-gradient" style={{ background: sourceTypeGradients[paper.sourceType || ''] || 'linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)' }}>
-                    <div className="asset-card-badges">
-                      <div className="asset-card-badges-left">
-                        {stLabel && (
-                          <span
-                            className="asset-card-badge"
-                            style={{ background: `${stColor}cc`, color: '#fff' }}
-                          >
-                            {stLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="asset-card-badges-right">
-                        <span className="asset-card-badge">
-                          &#9829; {paper.stats?.reactionCount || 0}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="asset-card-content">
-                    <h3 className="asset-card-title">{paper.title}</h3>
-
-                    {authorNames && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginBottom: '0.25rem', lineHeight: 1.4 }}>
-                        {authorNames}
-                      </p>
-                    )}
-
-                    {paper.description && (
-                      <p className="asset-card-description">{paper.description}</p>
-                    )}
-                    {!paper.description && !authorNames && <div style={{ flex: 1 }} />}
-
-                    <div className="asset-card-footer">
-                      <div className="asset-card-contributor">
-                        <div className="asset-card-avatar" style={{ fontSize: '0.5rem' }}>
-                          {(paper.sourceName || stLabel || '?').charAt(0).toUpperCase()}
-                        </div>
-                        <span>
-                          {paper.sourceName || stLabel || 'Unknown'}
-                        </span>
-                      </div>
-                      {paper.createdAt && (
-                        <span className="asset-card-time">
-                          {new Date(paper.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </a>
-            )
-          })}
+          {papers.docs.map((paper: any) => (
+            <AssetCard
+              key={paper.id}
+              title={paper.title}
+              description={paper.description}
+              slug={paper.slug}
+              assetType="paper"
+              category={paper.category}
+              paperType={paper.paperType}
+              sourceType={paper.sourceType}
+              sourceName={paper.sourceName}
+              authors={paper.authors}
+              stats={paper.stats}
+              href={`/research/${paper.slug}`}
+              isFeatured={paper.isFeatured}
+              updatedAt={paper.updatedAt}
+              createdAt={paper.createdAt}
+            />
+          ))}
         </div>
       )}
     </div>

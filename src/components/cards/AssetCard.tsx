@@ -71,6 +71,53 @@ const sourceTypeGradientOverrides: Record<string, string> = {
   manual: 'linear-gradient(135deg, #4b5563 0%, #6b7280 100%)',
 }
 
+// Paper research type → gradient color + icon
+const paperTypeGradients: Record<string, string> = {
+  'empirical-study': 'linear-gradient(135deg, #0891b2 0%, #22d3ee 100%)',    // Teal
+  'literature-review': 'linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%)', // Purple
+  'mathematical-model': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',// Blue
+  'industry-report': 'linear-gradient(135deg, #d97706 0%, #f59e0b 100%)',   // Amber
+  'framework': 'linear-gradient(135deg, #059669 0%, #10b981 100%)',          // Green
+  'case-study': 'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)',        // Rose
+  'reference': 'linear-gradient(135deg, #475569 0%, #64748b 100%)',         // Slate
+}
+
+const paperTypeIcons: Record<string, string> = {
+  'empirical-study': '🔬',
+  'literature-review': '📚',
+  'mathematical-model': '📐',
+  'industry-report': '📈',
+  'framework': '🧩',
+  'case-study': '🏢',
+  'reference': '📖',
+}
+
+const paperTypeLabels: Record<string, string> = {
+  'empirical-study': 'Empirical Study',
+  'literature-review': 'Literature Review',
+  'mathematical-model': 'Mathematical Model',
+  'industry-report': 'Industry Report',
+  'framework': 'Framework',
+  'case-study': 'Case Study',
+  'reference': 'Reference',
+}
+
+// Paper domain labels (category field on papers)
+const paperDomainLabels: Record<string, string> = {
+  'queuing-theory': 'Queuing Theory',
+  'ai-machine-learning': 'AI & ML',
+  'operations-management': 'Operations',
+  'workforce-management': 'Workforce',
+  'customer-experience': 'Customer Experience',
+  'analytics-forecasting': 'Forecasting',
+  'process-optimization': 'Optimization',
+  'technology': 'Technology',
+  'economics-finance': 'Economics',
+  'employee-wellbeing': 'Well-Being',
+  'contact-center-operations': 'Contact Center',
+  'scheduling-optimization': 'Scheduling',
+}
+
 interface AssetCardProps {
   title: string
   description?: string | null
@@ -87,6 +134,8 @@ interface AssetCardProps {
   sourceName?: string | null
   /** Paper-specific: source type key */
   sourceType?: string | null
+  /** Paper-specific: research type */
+  paperType?: string | null
   /** Paper-specific: authors array */
   authors?: Array<{ name: string }> | null
   stats?: {
@@ -110,6 +159,7 @@ export function AssetCard({
   primaryContributor,
   sourceName,
   sourceType,
+  paperType,
   authors,
   stats,
   href,
@@ -119,7 +169,8 @@ export function AssetCard({
 }: AssetCardProps) {
   const isPaper = assetType === 'paper'
   const gradient = isPaper
-    ? (sourceType ? sourceTypeGradientOverrides[sourceType] : undefined) ||
+    ? (paperType ? paperTypeGradients[paperType] : undefined) ||
+      (sourceType ? sourceTypeGradientOverrides[sourceType] : undefined) ||
       assetTypeGradients['paper'] ||
       defaultGradient
     : (category ? categoryGradients[category] : undefined) ||
@@ -160,14 +211,20 @@ export function AssetCard({
           {/* Badges on gradient */}
           <div className="asset-card-badges">
             <div className="asset-card-badges-left">
-              {category && categoryLabels[category] && (
+              {isPaper && paperType && paperTypeLabels[paperType] ? (
+                <span className="asset-card-badge">
+                  {paperTypeIcons[paperType] ? `${paperTypeIcons[paperType]} ` : ''}{paperTypeLabels[paperType]}
+                </span>
+              ) : category && categoryLabels[category] ? (
                 <span className="asset-card-badge">
                   {assetType === 'tool' && categoryIcons[category] ? `${categoryIcons[category]} ` : ''}{categoryLabels[category]}
                 </span>
-              )}
-              {domain && domainLabels[domain] && (
+              ) : null}
+              {isPaper && category && paperDomainLabels[category] ? (
+                <span className="asset-card-badge">{paperDomainLabels[category]}</span>
+              ) : domain && domainLabels[domain] ? (
                 <span className="asset-card-badge">{domainLabels[domain]}</span>
-              )}
+              ) : null}
               {isFeatured && (
                 <span className="asset-card-badge asset-card-badge-featured">Featured</span>
               )}

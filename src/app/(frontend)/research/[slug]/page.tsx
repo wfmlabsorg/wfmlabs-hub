@@ -26,6 +26,51 @@ const sourceTypeColors: Record<string, string> = {
   manual: '#6b7280',
 }
 
+const paperTypeLabels: Record<string, string> = {
+  'empirical-study': 'Empirical Study',
+  'literature-review': 'Literature Review',
+  'mathematical-model': 'Mathematical Model',
+  'industry-report': 'Industry Report',
+  'framework': 'Framework',
+  'case-study': 'Case Study',
+  'reference': 'Reference',
+}
+
+const paperTypeIcons: Record<string, string> = {
+  'empirical-study': '🔬',
+  'literature-review': '📚',
+  'mathematical-model': '📐',
+  'industry-report': '📈',
+  'framework': '🧩',
+  'case-study': '🏢',
+  'reference': '📖',
+}
+
+const paperTypeColors: Record<string, string> = {
+  'empirical-study': '#22d3ee',
+  'literature-review': '#8b5cf6',
+  'mathematical-model': '#3b82f6',
+  'industry-report': '#f59e0b',
+  'framework': '#10b981',
+  'case-study': '#f43f5e',
+  'reference': '#64748b',
+}
+
+const paperDomainLabels: Record<string, string> = {
+  'queuing-theory': 'Queuing Theory',
+  'ai-machine-learning': 'AI & ML',
+  'operations-management': 'Operations',
+  'workforce-management': 'Workforce',
+  'customer-experience': 'Customer Experience',
+  'analytics-forecasting': 'Forecasting',
+  'process-optimization': 'Optimization',
+  'technology': 'Technology',
+  'economics-finance': 'Economics',
+  'employee-wellbeing': 'Well-Being',
+  'contact-center-operations': 'Contact Center',
+  'scheduling-optimization': 'Scheduling',
+}
+
 const statusColors: Record<string, string> = {
   published: '#10b981',
   draft: '#6b7280',
@@ -87,6 +132,10 @@ export default async function ResearchDetailPage({
   const stColor = sourceTypeColors[paper.sourceType || ''] || '#6b7280'
   const stLabel = sourceTypeLabels[paper.sourceType || ''] || paper.sourceType || ''
   const sColor = statusColors[paper.status || ''] || '#6b7280'
+  const ptColor = paperTypeColors[paper.paperType || ''] || '#6b7280'
+  const ptLabel = paper.paperType ? paperTypeLabels[paper.paperType] : null
+  const ptIcon = paper.paperType ? paperTypeIcons[paper.paperType] : null
+  const domainLabel = paper.category ? paperDomainLabels[paper.category] : null
 
   return (
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.5rem 1rem' }}>
@@ -118,6 +167,43 @@ export default async function ResearchDetailPage({
           flexWrap: 'wrap',
         }}
       >
+        {ptLabel && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0.25rem 0.625rem',
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              borderRadius: '9999px',
+              background: `${ptColor}20`,
+              color: ptColor,
+            }}
+          >
+            {ptIcon} {ptLabel}
+          </span>
+        )}
+        {domainLabel && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0.25rem 0.625rem',
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              borderRadius: '9999px',
+              background: 'var(--bg-subtle)',
+              color: 'var(--fg-muted)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            {domainLabel}
+          </span>
+        )}
         {stLabel && (
           <span
             style={{
