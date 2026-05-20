@@ -7,7 +7,7 @@ const footerLinks = [
       { href: '/wiki', label: 'Wiki' },
       { href: '/research', label: 'Research' },
       { href: '/tools', label: 'Tools' },
-      { href: '/articles', label: 'Articles' },
+      // { href: '/articles', label: 'Articles' },  // Suspended
       { href: '/compass', label: 'Compass' },
     ],
   },
