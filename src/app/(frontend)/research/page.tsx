@@ -1,10 +1,13 @@
 import { getPayload } from 'payload'
+import type { Where } from 'payload'
 import config from '@payload-config'
 import React from 'react'
 import { AssetCard } from '@/components/cards/AssetCard'
 
 export const metadata = { title: 'Research | WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
+
+const PAPERS_PER_PAGE = 24
 
 const paperTypes = [
   { value: 'all', label: 'All Research', icon: '📄' },
@@ -33,65 +36,112 @@ const domains = [
   { value: 'economics-finance', label: 'Economics' },
 ]
 
-export default async function ResearchBrowsePage() {
+function buildFilterUrl(type: string, domain: string, page?: number) {
+  const params = new URLSearchParams()
+  if (type !== 'all') params.set('type', type)
+  if (domain !== 'all') params.set('domain', domain)
+  if (page && page > 1) params.set('page', String(page))
+  const qs = params.toString()
+  return `/research${qs ? `?${qs}` : ''}`
+}
+
+export default async function ResearchBrowsePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ type?: string; domain?: string; page?: string }>
+}) {
+  const resolvedParams = await searchParams
+  const activeType = resolvedParams.type || 'all'
+  const activeDomain = resolvedParams.domain || 'all'
+  const currentPage = Math.max(1, parseInt(resolvedParams.page || '1', 10))
+
   const payload = await getPayload({ config })
+
+  // Build where clause
+  const conditions: Where[] = []
+  if (activeType !== 'all') conditions.push({ paperType: { equals: activeType } })
+  if (activeDomain !== 'all') conditions.push({ category: { equals: activeDomain } })
+
+  const whereClause: Where = conditions.length > 0
+    ? { and: conditions }
+    : {}
+
   const papers = await payload
-    .find({ collection: 'papers', limit: 200, sort: '-createdAt', depth: 1, overrideAccess: true })
-    .catch(() => ({ docs: [] }))
+    .find({
+      collection: 'papers',
+      limit: PAPERS_PER_PAGE,
+      page: currentPage,
+      sort: '-createdAt',
+      depth: 1,
+      overrideAccess: true,
+      where: whereClause,
+    })
+    .catch(() => ({ docs: [], totalDocs: 0, totalPages: 1, page: 1 }))
+
+  const totalDocs = (papers as any).totalDocs || papers.docs.length
+  const totalPages = (papers as any).totalPages || 1
+
+  const activeTypeInfo = paperTypes.find((t) => t.value === activeType)
 
   return (
     <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '2rem 1rem' }}>
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-            Research
-          </h1>
-          <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
-            Curated academic papers, industry reports, and vendor research with practitioner commentary.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <select className="input" style={{ width: 'auto', fontSize: '0.8125rem', padding: '0.375rem 0.75rem' }}>
-            <option>Sort: Recent</option>
-            <option>Sort: Most Discussed</option>
-            <option>Sort: Most Liked</option>
-          </select>
-        </div>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+          Research
+        </h1>
+        <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
+          Curated academic papers, industry reports, and vendor research with practitioner commentary.
+        </p>
       </div>
 
       {/* Paper type filter chips */}
-      <div className="category-chips-row">
+      <div className="category-chips-row" style={{ marginBottom: '0.5rem', paddingBottom: '0.75rem' }}>
         {paperTypes.map((pt) => (
-          <span
+          <a
             key={pt.value}
-            className={`category-chip ${pt.value === 'all' ? 'category-chip-active' : ''}`}
+            href={buildFilterUrl(pt.value, activeDomain)}
+            className={`category-chip ${pt.value === activeType ? 'category-chip-active' : ''}`}
+            style={{ textDecoration: 'none', color: 'inherit', whiteSpace: 'nowrap' }}
           >
-            {pt.icon} {pt.label}
-          </span>
+            <span className="category-chip-icon">{pt.icon}</span>
+            {pt.label}
+          </a>
         ))}
       </div>
 
-      {/* Domain filter chips (secondary row) */}
-      <div className="category-chips-row" style={{ marginTop: '0.5rem', marginBottom: '1.5rem' }}>
+      {/* Domain filter chips */}
+      <div className="category-chips-row" style={{ marginBottom: '1.5rem', paddingBottom: '0.75rem' }}>
         {domains.map((d) => (
-          <span
+          <a
             key={d.value}
-            className={`category-chip ${d.value === 'all' ? 'category-chip-active' : ''}`}
-            style={{ fontSize: '0.75rem', padding: '0.25rem 0.625rem' }}
+            href={buildFilterUrl(activeType, d.value)}
+            className={`category-chip ${d.value === activeDomain ? 'category-chip-active' : ''}`}
+            style={{
+              textDecoration: 'none',
+              color: 'inherit',
+              fontSize: '0.75rem',
+              padding: '0.25rem 0.625rem',
+              whiteSpace: 'nowrap',
+            }}
           >
             {d.label}
-          </span>
+          </a>
         ))}
       </div>
 
-      {/* Section header */}
+      {/* Section header with count */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
         <h2 style={{ fontSize: '1.125rem', fontWeight: 600 }}>
-          Research Library
+          {activeTypeInfo?.icon || '📄'} {activeTypeInfo?.label || 'All Research'}
+          {activeDomain !== 'all' && (
+            <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: '0.9375rem' }}>
+              {' '}/ {domains.find((d) => d.value === activeDomain)?.label}
+            </span>
+          )}
         </h2>
         <span style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
-          {papers.docs.length} {papers.docs.length === 1 ? 'Paper' : 'Papers'}
+          {totalDocs} {totalDocs === 1 ? 'Paper' : 'Papers'}
         </span>
       </div>
 
@@ -107,10 +157,10 @@ export default async function ResearchBrowsePage() {
           }}
         >
           <p style={{ fontSize: '1.125rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-            No papers yet
+            No papers match these filters
           </p>
           <p style={{ fontSize: '0.875rem' }}>
-            Research papers will appear here once published.
+            Try a different combination of research type and domain.
           </p>
         </div>
       ) : (
@@ -136,6 +186,84 @@ export default async function ResearchBrowsePage() {
             />
           ))}
         </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <nav
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            marginTop: '2rem',
+            paddingTop: '1.5rem',
+            borderTop: '1px solid var(--border)',
+          }}
+        >
+          {currentPage > 1 && (
+            <a
+              href={buildFilterUrl(activeType, activeDomain, currentPage - 1)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                color: 'var(--fg)',
+                textDecoration: 'none',
+                background: 'var(--bg)',
+              }}
+            >
+              Previous
+            </a>
+          )}
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+            <a
+              key={pageNum}
+              href={buildFilterUrl(activeType, activeDomain, pageNum)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '2.25rem',
+                height: '2.25rem',
+                fontSize: '0.8125rem',
+                fontWeight: pageNum === currentPage ? 700 : 400,
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                color: pageNum === currentPage ? '#fff' : 'var(--fg)',
+                background: pageNum === currentPage ? 'var(--accent)' : 'var(--bg)',
+                textDecoration: 'none',
+              }}
+            >
+              {pageNum}
+            </a>
+          ))}
+
+          {currentPage < totalPages && (
+            <a
+              href={buildFilterUrl(activeType, activeDomain, currentPage + 1)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0.5rem 1rem',
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                borderRadius: 'var(--radius)',
+                border: '1px solid var(--border)',
+                color: 'var(--fg)',
+                textDecoration: 'none',
+                background: 'var(--bg)',
+              }}
+            >
+              Next
+            </a>
+          )}
+        </nav>
       )}
     </div>
   )
