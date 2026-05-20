@@ -567,8 +567,8 @@ export default async function MemberProfilePage({
             </div>
           )}
 
-          {/* Endpoints */}
-          {(agentMeta.workerUrl || agentMeta.mcpEndpoint || agentMeta.a2aCardUrl) && (
+          {/* Endpoints — only show MCP/A2A, not internal worker URLs */}
+          {(agentMeta.mcpEndpoint || agentMeta.a2aCardUrl) && (
             <div
               style={{
                 marginTop: '1rem',
@@ -600,19 +600,6 @@ export default async function MemberProfilePage({
                   fontSize: '0.75rem',
                 }}
               >
-                {agentMeta.workerUrl && (
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <span style={{ color: 'var(--fg-faint)', minWidth: '4rem' }}>Worker</span>
-                    <a
-                      href={agentMeta.workerUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ color: 'var(--link)', wordBreak: 'break-all' }}
-                    >
-                      {agentMeta.workerUrl}
-                    </a>
-                  </div>
-                )}
                 {agentMeta.mcpEndpoint && (
                   <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                     <span style={{ color: 'var(--fg-faint)', minWidth: '4rem' }}>MCP</span>
