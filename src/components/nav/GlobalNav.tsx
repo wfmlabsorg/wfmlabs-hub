@@ -6,18 +6,19 @@ import { UserMenu } from './UserMenu'
 
 const navLinks = [
   { href: '/roc', label: 'ROC' },
+  { href: '/incidents', label: 'Incidents' },
+  { href: '/briefs', label: 'Briefs' },
+  { href: '/signals', label: 'Signals' },
   { href: '/tools', label: 'Tools' },
   { href: '/research', label: 'Research' },
-  { href: '/briefs', label: 'Briefs' },
-  // { href: '/debates', label: 'Debates' },  // Suspended — reactivate when ready
-  { href: '/signals', label: 'Signals' },
-  { href: '/incidents', label: 'Incidents' },
   { href: '/chat', label: 'Chat' },
   { href: '/data-sources', label: 'APIs' },
   { href: '/members', label: 'Members' },
   { href: '/discussions', label: 'Discussions' },
   { href: '/wiki', label: 'Docs' },
   { href: '/pricing', label: 'Pricing' },
+  // Suspended: { href: '/debates', label: 'Debates' }
+  // Suspended: { href: '/articles', label: 'Articles' }
 ]
 
 export function GlobalNav() {
