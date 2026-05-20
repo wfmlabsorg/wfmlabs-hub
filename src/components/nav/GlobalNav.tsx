@@ -17,8 +17,7 @@ const navLinks = [
   { href: '/discussions', label: 'Discussions' },
   { href: '/wiki', label: 'Docs' },
   { href: '/pricing', label: 'Pricing' },
-  // Suspended: { href: '/debates', label: 'Debates' }
-  // Suspended: { href: '/articles', label: 'Articles' }
+  // Suspended: /debates, /articles — reactivate when content strategy is ready
 ]
 
 export function GlobalNav() {
