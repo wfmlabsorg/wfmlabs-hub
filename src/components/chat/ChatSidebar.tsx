@@ -3,12 +3,14 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { usePathname, useRouter } from 'next/navigation'
-import { Realtime } from 'ably'
+import { useChatClient } from '@/lib/chat/ChatContext'
 
 interface Channel {
   name: string
   label: string
-  section: 'incidents' | 'dm' | 'community'
+  section: string
+  channelType: string
+  description?: string
 }
 
 interface ChannelsResponse {
@@ -19,21 +21,19 @@ export function ChatSidebar() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const router = useRouter()
+  const { client } = useChatClient()
 
   const [expanded, setExpanded] = useState(false)
   const [channels, setChannels] = useState<Channel[]>([])
   const [unread, setUnread] = useState<Record<string, number>>({})
 
-  const clientRef = useRef<Realtime | null>(null)
   const subscriptionsRef = useRef<string[]>([])
 
   // Derive active channel from URL
   const activeChannel = useCallback((): string | null => {
     if (!pathname) return null
-    // /incidents/[slug] → incident:{slug}
     const incidentMatch = pathname.match(/^\/incidents\/([^/]+)/)
     if (incidentMatch) return `incident:${incidentMatch[1]}`
-    // /chat?dm=user → dm:{me}:{user} — just clear unread for any dm on /chat
     if (pathname === '/chat') return '__chat_page__'
     return null
   }, [pathname])
@@ -47,36 +47,26 @@ export function ChatSidebar() {
       .catch(() => {})
   }, [status])
 
-  // Connect to Ably and subscribe for unread tracking
+  // Subscribe to all channels via shared client for unread tracking
   useEffect(() => {
-    if (status !== 'authenticated' || channels.length === 0) return
+    if (!client || channels.length === 0) return
 
-    const ably = new Realtime({
-      authCallback: async (_, cb) => {
-        try {
-          const res = await fetch('/api/chat/auth', { method: 'POST' })
-          if (!res.ok) throw new Error('Auth failed')
-          cb(null, await res.json())
-        } catch (err) {
-          cb(err instanceof Error ? err.message : 'Auth failed', null)
-        }
-      },
+    // Unsubscribe previous
+    subscriptionsRef.current.forEach((name) => {
+      try { client.channels.get(name).unsubscribe() } catch { /* ignore */ }
     })
-
-    clientRef.current = ably
     subscriptionsRef.current = []
 
     const active = activeChannel()
 
     channels.forEach((ch) => {
-      const ablyChannel = ably.channels.get(ch.name)
+      const ablyChannel = client.channels.get(ch.name)
       subscriptionsRef.current.push(ch.name)
 
       ablyChannel.subscribe('message', () => {
         const isActive =
           ch.name === active ||
-          (active === '__chat_page__' && ch.section === 'community') ||
-          (active === '__chat_page__' && ch.section === 'dm')
+          (active === '__chat_page__' && (ch.section === 'community' || ch.section === 'dm' || ch.channelType === 'community' || ch.channelType === 'dm'))
 
         if (!isActive) {
           setUnread((prev) => ({ ...prev, [ch.name]: (prev[ch.name] ?? 0) + 1 }))
@@ -86,18 +76,13 @@ export function ChatSidebar() {
 
     return () => {
       subscriptionsRef.current.forEach((name) => {
-        try {
-          ably.channels.get(name).unsubscribe()
-        } catch {
-          // ignore
-        }
+        try { client.channels.get(name).unsubscribe() } catch { /* ignore */ }
       })
-      ably.close()
-      clientRef.current = null
+      subscriptionsRef.current = []
     }
-  }, [status, channels, activeChannel])
+  }, [client, channels, activeChannel])
 
-  // Clear unread for the currently active channel
+  // Clear unread for currently active channel
   useEffect(() => {
     const active = activeChannel()
     if (!active) return
@@ -105,10 +90,9 @@ export function ChatSidebar() {
     setUnread((prev) => {
       const next = { ...prev }
       if (active === '__chat_page__') {
-        // clear all community + dm channels
         Object.keys(next).forEach((k) => {
           const ch = channels.find((c) => c.name === k)
-          if (ch && (ch.section === 'community' || ch.section === 'dm')) {
+          if (ch && (ch.section === 'community' || ch.section === 'dm' || ch.channelType === 'community' || ch.channelType === 'dm')) {
             delete next[k]
           }
         })
@@ -124,32 +108,55 @@ export function ChatSidebar() {
   const totalUnread = Object.values(unread).reduce((sum, n) => sum + n, 0)
 
   const handleChannelClick = (ch: Channel) => {
-    // Clear unread for this channel
     setUnread((prev) => {
       const next = { ...prev }
       delete next[ch.name]
       return next
     })
 
-    if (ch.section === 'community' || ch.section === 'dm') {
-      if (ch.section === 'dm') {
-        const parts = ch.name.split(':')
-        const me = session?.user?.name ?? ''
-        const other = parts.find((p) => p !== 'dm' && p !== me) ?? parts[parts.length - 1]
-        router.push(`/chat?dm=${other}`)
-      } else {
-        router.push('/chat')
-      }
-    } else if (ch.section === 'incidents') {
+    const type = ch.channelType || ch.section
+
+    if (type === 'dm') {
+      const parts = ch.name.split(':')
+      const me = session?.user?.name ?? ''
+      const other = parts.find((p) => p !== 'dm' && p !== me) ?? parts[parts.length - 1]
+      router.push(`/chat?dm=${other}`)
+    } else if (type === 'incident') {
       const slug = ch.name.replace('incident:', '')
       router.push(`/incidents/${slug}`)
+    } else {
+      // operational, community, regional — go to /chat
+      router.push('/chat')
     }
   }
 
-  const sections: Array<{ key: Channel['section']; label: string }> = [
-    { key: 'incidents', label: 'INCIDENTS' },
-    { key: 'dm', label: 'DIRECT MESSAGES' },
-    { key: 'community', label: 'COMMUNITY' },
+  // Group channels into ordered sections
+  const sectionDefs: Array<{ key: string; label: string; match: (ch: Channel) => boolean }> = [
+    {
+      key: 'incident',
+      label: 'INCIDENTS',
+      match: (ch) => ch.channelType === 'incident' || ch.section === 'incidents',
+    },
+    {
+      key: 'operational',
+      label: 'OPERATIONS',
+      match: (ch) => ch.channelType === 'operational',
+    },
+    {
+      key: 'community',
+      label: 'COMMUNITY',
+      match: (ch) => ch.channelType === 'community',
+    },
+    {
+      key: 'regional',
+      label: 'REGIONAL',
+      match: (ch) => ch.channelType === 'regional',
+    },
+    {
+      key: 'dm',
+      label: 'DIRECT MESSAGES',
+      match: (ch) => ch.channelType === 'dm' || ch.section === 'dm',
+    },
   ]
 
   return (
@@ -215,7 +222,7 @@ export function ChatSidebar() {
             position: 'fixed',
             bottom: '5rem',
             right: '1.5rem',
-            width: '18.75rem', // 300px
+            width: '18.75rem',
             maxHeight: 'calc(100vh - 7rem)',
             background: '#111827',
             border: '1px solid #1e293b',
@@ -264,8 +271,8 @@ export function ChatSidebar() {
 
           {/* Channel list */}
           <div style={{ overflowY: 'auto', flex: 1, padding: '0.5rem 0' }}>
-            {sections.map(({ key, label }) => {
-              const sectionChannels = channels.filter((c) => c.section === key)
+            {sectionDefs.map(({ key, label, match }) => {
+              const sectionChannels = channels.filter(match)
               if (sectionChannels.length === 0) return null
 
               return (
@@ -286,11 +293,11 @@ export function ChatSidebar() {
 
                   {sectionChannels.map((ch) => {
                     const count = unread[ch.name] ?? 0
+                    const isIncident = ch.channelType === 'incident' || ch.section === 'incidents'
                     const isActive =
                       activeChannel() === ch.name ||
                       (activeChannel() === '__chat_page__' &&
-                        (ch.section === 'community' || ch.section === 'dm'))
-                    const isIncident = ch.section === 'incidents'
+                        (ch.section === 'community' || ch.section === 'dm' || ch.channelType === 'community' || ch.channelType === 'dm'))
 
                     return (
                       <button

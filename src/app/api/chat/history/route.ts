@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { getPool } from '@/lib/db'
 
-// GET /api/chat/history?channel=community:general&limit=50&before=2026-05-20T00:00:00Z
+// GET /api/chat/history?channel=community:general&limit=50&before=2026-05-20T00:00:00Z&parent_id=123
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
@@ -18,50 +18,45 @@ export async function GET(request: Request) {
   const limit = Math.min(Math.max(isNaN(rawLimit) ? 50 : rawLimit, 1), 200)
 
   const before = searchParams.get('before')
+  const parentId = searchParams.get('parent_id')
 
   const pool = getPool()
 
-  let query: string
-  let params: (string | number)[]
+  const params: (string | number)[] = [channel]
+  let whereClause = `WHERE channel = $1 AND deleted = FALSE`
 
   if (before) {
-    query = `
-      SELECT
-        id,
-        channel,
-        sender_username,
-        sender_type,
-        sender_display_name,
-        message_type,
-        body,
-        metadata,
-        created_at
-      FROM chat_messages
-      WHERE channel = $1
-        AND created_at < $2
-      ORDER BY created_at DESC
-      LIMIT $3
-    `
-    params = [channel, before, limit]
-  } else {
-    query = `
-      SELECT
-        id,
-        channel,
-        sender_username,
-        sender_type,
-        sender_display_name,
-        message_type,
-        body,
-        metadata,
-        created_at
-      FROM chat_messages
-      WHERE channel = $1
-      ORDER BY created_at DESC
-      LIMIT $2
-    `
-    params = [channel, limit]
+    params.push(before)
+    whereClause += ` AND created_at < $${params.length}`
   }
+
+  // Thread replies vs root messages
+  if (parentId !== null) {
+    params.push(parentId)
+    whereClause += ` AND parent_id = $${params.length}`
+  } else {
+    whereClause += ` AND parent_id IS NULL`
+  }
+
+  params.push(limit)
+  const query = `
+    SELECT
+      id,
+      channel,
+      sender_username,
+      sender_type,
+      sender_display_name,
+      message_type,
+      body,
+      metadata,
+      parent_id,
+      edited,
+      created_at
+    FROM chat_messages
+    ${whereClause}
+    ORDER BY created_at DESC
+    LIMIT $${params.length}
+  `
 
   const result = await pool.query(query, params)
 

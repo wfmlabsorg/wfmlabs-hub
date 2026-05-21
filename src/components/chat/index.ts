@@ -1,4 +1,5 @@
 export { ChatPanel } from './ChatPanel'
 export { ChatSidebar } from './ChatSidebar'
+export { ChatProvider } from './ChatProvider'
 export { PollMessage } from './PollMessage'
-export type { PollMessageProps, PollOption } from './PollMessage'
+export type { PollOption, PollMessageProps } from './PollMessage'

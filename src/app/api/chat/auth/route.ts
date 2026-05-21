@@ -3,6 +3,7 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { Rest, type capabilityOp } from 'ably'
 
+// ROC worker is same-origin (/roc on Hub domain) — session cookies work automatically.
 export async function POST() {
   const session = await auth()
   if (!session?.user?.payloadMemberId) {
@@ -31,16 +32,17 @@ export async function POST() {
 
   const allOps: capabilityOp[] = ['subscribe', 'publish', 'presence']
 
-  // Build channel capabilities based on role
+  // Unified namespace — no roc: prefix
   const capability: Record<string, capabilityOp[]> = {
     'community:*': allOps,
     'incident:*': allOps,
     'debate:*': allOps,
     'dm:*': allOps,
-    'roc:ops': isAdmin ? allOps : ['subscribe'],
+    'ops': isAdmin ? allOps : ['subscribe'],
+    'presence': allOps,
+    'signals': ['subscribe'],
   }
 
-  // Create Ably token request
   const ably = new Rest(apiKey)
   const tokenRequest = await ably.auth.createTokenRequest({
     clientId: username,

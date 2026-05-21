@@ -1,10 +1,12 @@
 'use client'
 
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { Realtime, type RealtimeChannel } from 'ably'
+import type { RealtimeChannel } from 'ably'
+import { useChatClient } from '@/lib/chat/ChatContext'
 import { PollMessage, type PollOption } from './PollMessage'
 
-interface ChatMessage {
+interface InternalMessage {
+  id: string
   body: string
   sender: string
   senderType: 'human' | 'agent' | 'system'
@@ -12,10 +14,8 @@ interface ChatMessage {
   messageType?: 'text' | 'alert' | 'poll' | 'system'
   metadata?: Record<string, unknown>
   timestamp?: string
-}
-
-interface InternalMessage extends ChatMessage {
-  id: string
+  parentId?: number | null
+  edited?: boolean
 }
 
 interface ChatPanelProps {
@@ -29,16 +29,35 @@ function formatTime(ts?: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapHistoryMessage(row: any): InternalMessage {
+  return {
+    id: String(row.id),
+    body: row.body,
+    sender: row.sender_username,
+    senderType: row.sender_type,
+    senderDisplayName: row.sender_display_name,
+    messageType: row.message_type,
+    metadata: row.metadata,
+    timestamp: row.created_at,
+    parentId: row.parent_id,
+    edited: row.edited,
+  }
+}
+
 export function ChatPanel({ channel, className, style }: ChatPanelProps) {
+  const { client, clientId, connected } = useChatClient()
+
   const [messages, setMessages] = useState<InternalMessage[]>([])
   const [presenceCount, setPresenceCount] = useState(0)
   const [inputValue, setInputValue] = useState('')
-  const [connected, setConnected] = useState(false)
-  const [clientId, setClientId] = useState<string>('')
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [oldestTimestamp, setOldestTimestamp] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(true)
 
-  const clientRef = useRef<Realtime | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   // Auto-scroll on new messages
@@ -46,48 +65,63 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Ably connection lifecycle
+  // Load initial history
   useEffect(() => {
-    const ably = new Realtime({
-      authCallback: async (_, cb) => {
-        try {
-          const res = await fetch('/api/chat/auth', { method: 'POST' })
-          if (!res.ok) throw new Error('Auth failed')
-          cb(null, await res.json())
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : 'Auth failed'
-          cb(msg, null)
+    setMessages([])
+    setOldestTimestamp(null)
+    setHasMore(true)
+    setLoadingHistory(true)
+
+    fetch(`/api/chat/history?channel=${encodeURIComponent(channel)}&limit=50`)
+      .then((r) => r.json())
+      .then((data) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const historyMsgs: InternalMessage[] = (data.messages ?? []).reverse().map(mapHistoryMessage)
+        setMessages(historyMsgs)
+        if (historyMsgs.length > 0) {
+          setOldestTimestamp(historyMsgs[0].timestamp ?? null)
         }
-      },
-    })
+        if ((data.messages ?? []).length < 50) {
+          setHasMore(false)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingHistory(false))
+  }, [channel])
 
-    clientRef.current = ably
+  // Subscribe to Ably channel for live messages
+  useEffect(() => {
+    if (!client) return
 
-    ably.connection.on('connected', () => {
-      setConnected(true)
-      setClientId(ably.auth.clientId ?? '')
-    })
-
-    ably.connection.on('disconnected', () => setConnected(false))
-    ably.connection.on('failed', () => setConnected(false))
-
-    const ch = ably.channels.get(channel)
+    const ch = client.channels.get(channel)
     channelRef.current = ch
 
-    // Subscribe to messages
     ch.subscribe('message', (msg) => {
-      const data = msg.data as ChatMessage
-      setMessages((prev) => [
-        ...prev,
-        {
-          ...data,
-          id: msg.id ?? `${Date.now()}-${Math.random()}`,
-          timestamp: data.timestamp ?? new Date().toISOString(),
-        },
-      ])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = msg.data as any
+      const ablyMsgId = msg.id ?? `${Date.now()}-${Math.random()}`
+
+      setMessages((prev) => {
+        // Dedup: if ably_message_id already present, skip
+        if (prev.some((m) => m.id === ablyMsgId)) return prev
+        return [
+          ...prev,
+          {
+            id: ablyMsgId,
+            body: data.body,
+            sender: data.sender,
+            senderType: data.senderType ?? 'human',
+            senderDisplayName: data.senderDisplayName,
+            messageType: data.messageType,
+            metadata: data.metadata,
+            timestamp: data.timestamp ?? new Date().toISOString(),
+            parentId: data.parentId ?? null,
+          },
+        ]
+      })
     })
 
-    // Subscribe to presence
+    // Presence
     const updatePresence = async () => {
       try {
         const members = await ch.presence.get()
@@ -105,11 +139,42 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
       ch.presence.leave().catch(() => {})
       ch.unsubscribe()
       ch.presence.unsubscribe()
-      ably.close()
-      clientRef.current = null
       channelRef.current = null
     }
-  }, [channel])
+  }, [client, channel])
+
+  // Load more on scroll to top
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el || loadingHistory || !hasMore || !oldestTimestamp) return
+
+    if (el.scrollTop < 80) {
+      setLoadingHistory(true)
+      fetch(
+        `/api/chat/history?channel=${encodeURIComponent(channel)}&limit=50&before=${encodeURIComponent(oldestTimestamp)}`
+      )
+        .then((r) => r.json())
+        .then((data) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const older: InternalMessage[] = (data.messages ?? []).reverse().map(mapHistoryMessage)
+          if (older.length === 0) {
+            setHasMore(false)
+            return
+          }
+          const prevScrollHeight = el.scrollHeight
+          setMessages((prev) => [...older, ...prev])
+          setOldestTimestamp(older[0].timestamp ?? null)
+          if ((data.messages ?? []).length < 50) setHasMore(false)
+
+          // Preserve scroll position after prepend
+          requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight - prevScrollHeight
+          })
+        })
+        .catch(() => {})
+        .finally(() => setLoadingHistory(false))
+    }
+  }, [channel, loadingHistory, hasMore, oldestTimestamp])
 
   const sendMessage = useCallback(async () => {
     const body = inputValue.trim()
@@ -117,17 +182,17 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
 
     setInputValue('')
 
-    const data: ChatMessage = {
+    const data = {
       body,
       sender: clientId,
       senderType: 'human',
       timestamp: new Date().toISOString(),
+      parentId: null,
     }
 
     try {
       await channelRef.current.publish('message', data)
     } catch {
-      // Restore on failure
       setInputValue(body)
     }
   }, [inputValue, connected, clientId])
@@ -188,6 +253,8 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
 
       {/* Message list */}
       <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
         style={{
           flex: 1,
           overflowY: 'auto',
@@ -197,7 +264,35 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
           gap: '0.625rem',
         }}
       >
-        {messages.length === 0 && (
+        {/* Load more indicator */}
+        {loadingHistory && (
+          <div
+            style={{
+              textAlign: 'center',
+              color: '#64748b',
+              fontSize: '0.75rem',
+              padding: '0.25rem 0',
+            }}
+          >
+            Loading…
+          </div>
+        )}
+
+        {!hasMore && messages.length > 0 && (
+          <div
+            style={{
+              textAlign: 'center',
+              color: '#64748b',
+              fontSize: '0.75rem',
+              padding: '0.25rem 0',
+              fontStyle: 'italic',
+            }}
+          >
+            Beginning of conversation
+          </div>
+        )}
+
+        {messages.length === 0 && !loadingHistory && (
           <div
             style={{
               flex: 1,
@@ -299,7 +394,9 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
                   style={{
                     maxWidth: '80%',
                     padding: '0.5rem 0.75rem',
-                    borderRadius: isOwn ? '0.75rem 0.75rem 0.125rem 0.75rem' : '0.75rem 0.75rem 0.75rem 0.125rem',
+                    borderRadius: isOwn
+                      ? '0.75rem 0.75rem 0.125rem 0.75rem'
+                      : '0.75rem 0.75rem 0.75rem 0.125rem',
                     background: isOwn
                       ? '#0e7490'
                       : isAlert

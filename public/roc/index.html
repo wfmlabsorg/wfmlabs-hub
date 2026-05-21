@@ -1056,7 +1056,7 @@
                   // Live signals via Ably
                   try {
                     if (window.ably) {
-                      ablyChannel = window.ably.channels.get('roc:signals');
+                      ablyChannel = window.ably.channels.get('signals');
                       ablyChannel.subscribe('signal', function(m) {
                         renderSignal(m.data.type||'ai', m.data.text||'', m.data.handle||'', null, false);
                       });
@@ -1081,7 +1081,7 @@
                       }).catch(function() {});
                     } else if (window.ably) {
                       // Fallback: Ably direct (no persistence)
-                      window.ably.channels.get('roc:signals').publish('signal', { type: 'member', text: text, handle: myHandle });
+                      window.ably.channels.get('signals').publish('signal', { type: 'member', text: text, handle: myHandle });
                     }
                   }
 
@@ -1110,7 +1110,7 @@
                   container.appendChild(el);
                   var cnt = el.querySelector('.cnt'), dots = el.querySelector('.dots');
                   function upd() {
-                    try { if (window.ably) { window.ably.channels.get('roc:presence').presence.get().then(function(m) { cnt.textContent=m.length; dots.innerHTML=''; for(var i=0;i<Math.min(m.length,30);i++){var d=document.createElement('span');d.style.cssText='width:8px;height:8px;border-radius:50%;background:#18BC9C;opacity:'+(0.3+Math.random()*0.5);dots.appendChild(d);} }); } } catch(e){}
+                    try { if (window.ably) { window.ably.channels.get('presence').presence.get().then(function(m) { cnt.textContent=m.length; dots.innerHTML=''; for(var i=0;i<Math.min(m.length,30);i++){var d=document.createElement('span');d.style.cssText='width:8px;height:8px;border-radius:50%;background:#18BC9C;opacity:'+(0.3+Math.random()*0.5);dots.appendChild(d);} }); } } catch(e){}
                   }
                   upd(); iv = setInterval(upd, 15000);
                 },
@@ -1324,7 +1324,6 @@
       openmct.install(function () {
         return function (openmct) {
           var CHAT_NS = 'roc-chat';
-          var CHAT_API = 'https://ovix-api.tedlango.workers.dev';
           var channelCache = null;
 
           openmct.types.addType('roc.chat.channel', {
@@ -1333,16 +1332,9 @@
 
           openmct.objects.addRoot({ namespace: CHAT_NS, key: 'root' });
 
-          function chatHeaders() {
-            var h = { 'Content-Type': 'application/json' };
-            var t = localStorage.getItem('roc-token');
-            if (t) h['Authorization'] = 'Bearer ' + t;
-            return h;
-          }
-
           function fetchChannels() {
             if (channelCache) return Promise.resolve(channelCache);
-            return fetch(CHAT_API + '/api/chat/channels', { headers: chatHeaders() })
+            return fetch('/api/chat/channels', { credentials: 'include' })
               .then(function(r) { return r.ok ? r.json() : { channels: [] }; })
               .then(function(d) { channelCache = d.channels || []; return channelCache; })
               .catch(function() { return []; });
@@ -1356,13 +1348,13 @@
                     identifier: id, type: 'folder',
                     name: '◆ ROC Chat',
                     location: 'ROOT',
-                    composition: channels.map(function (c) { return { namespace: CHAT_NS, key: c.slug }; })
+                    composition: channels.map(function (c) { return { namespace: CHAT_NS, key: c.name }; })
                   };
                 });
               }
               return fetchChannels().then(function(channels) {
-                var ch = channels.find(function(c) { return c.slug === id.key; });
-                if (ch) return { identifier: id, type: 'roc.chat.channel', name: ch.name, channelSlug: ch.slug, channelDesc: ch.description };
+                var ch = channels.find(function(c) { return c.name === id.key; });
+                if (ch) return { identifier: id, type: 'roc.chat.channel', name: ch.label, channelName: ch.name, channelDesc: ch.description };
                 return undefined;
               });
             }
@@ -1372,7 +1364,7 @@
             appliesTo: function (o) { return o.identifier && o.identifier.namespace === CHAT_NS && o.identifier.key === 'root'; },
             load: function () {
               return fetchChannels().then(function(channels) {
-                return channels.map(function(c) { return { namespace: CHAT_NS, key: c.slug }; });
+                return channels.map(function(c) { return { namespace: CHAT_NS, key: c.name }; });
               });
             }
           });
@@ -1383,7 +1375,7 @@
             canView: function (o) { return o.type === 'roc.chat.channel'; },
             view: function (domainObject) {
               var el, ablyChannel, refreshInterval;
-              var slug = domainObject.channelSlug || domainObject.identifier.key;
+              var channelName = domainObject.channelName || domainObject.identifier.key;
               return {
                 show: function (container) {
                   var myHandle = '';
@@ -1393,13 +1385,13 @@
                   el.style.cssText = 'height:100%;display:flex;flex-direction:column;background:#08081a;font-family:"JetBrains Mono",monospace;font-size:11px;color:#ccc;';
                   el.innerHTML =
                     '<div style="padding:8px 12px;border-bottom:1px solid rgba(24,188,156,0.15);display:flex;justify-content:space-between;align-items:center;">'
-                    + '<span style="color:#18BC9C;font-size:11px;font-weight:bold;">' + (domainObject.name || slug) + '</span>'
+                    + '<span style="color:#18BC9C;font-size:11px;font-weight:bold;">' + (domainObject.name || channelName) + '</span>'
                     + '<span style="color:#333;font-size:9px;">' + (domainObject.channelDesc || '') + '</span>'
                     + '</div>'
                     + '<div class="ch-body" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;"></div>'
                     + '<div class="ch-thread" style="display:none;border-top:1px solid rgba(24,188,156,0.15);max-height:40%;overflow-y:auto;padding:8px;background:#0a0a1a;"></div>'
                     + '<div style="display:flex;padding:8px;border-top:1px solid rgba(24,188,156,0.1);align-items:center;">'
-                    + '<input class="ch-in" type="text" placeholder="Message ' + (domainObject.name || '#' + slug) + '..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:6px 8px;border-radius:3px;font-family:inherit;font-size:10px;outline:none;">'
+                    + '<input class="ch-in" type="text" placeholder="Message ' + (domainObject.name || '#' + channelName) + '..." style="flex:1;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#ccc;padding:6px 8px;border-radius:3px;font-family:inherit;font-size:10px;outline:none;">'
                     + '<button class="ch-send" style="background:#18BC9C;border:none;color:#000;padding:6px 12px;margin-left:4px;border-radius:3px;font-family:inherit;font-size:10px;cursor:pointer;font-weight:bold;">SEND</button>'
                     + '</div>';
                   container.appendChild(el);
@@ -1412,7 +1404,8 @@
 
                   function renderMsg(msg, target, isThread) {
                     var d = document.createElement('div');
-                    var isMe = msg.sender_handle === myHandle;
+                    var senderHandle = msg.sender_username || msg.sender_handle || 'unknown';
+                    var isMe = senderHandle === myHandle;
                     d.style.cssText = 'padding:5px 8px;margin-bottom:4px;border-radius:3px;background:' + (isMe ? 'rgba(24,188,156,0.06)' : 'rgba(255,255,255,0.02)') + ';';
 
                     var time = '';
@@ -1422,11 +1415,12 @@
                     }
 
                     var handleColor = isMe ? '#18BC9C' : '#3498db';
+                    var msgBody = msg.body || msg.message || '';
                     d.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:2px;">'
-                      + '<span style="color:' + handleColor + ';font-weight:bold;font-size:10px;">@' + (msg.sender_handle || 'unknown').replace(/</g,'&lt;') + '</span>'
+                      + '<span style="color:' + handleColor + ';font-weight:bold;font-size:10px;">@' + senderHandle.replace(/</g,'&lt;') + '</span>'
                       + '<span style="color:#333;font-size:9px;">' + time + '</span>'
                       + '</div>'
-                      + '<div style="color:#aaa;font-size:11px;word-wrap:break-word;">' + (msg.message || '').replace(/</g,'&lt;') + '</div>';
+                      + '<div style="color:#aaa;font-size:11px;word-wrap:break-word;">' + msgBody.replace(/</g,'&lt;') + '</div>';
 
                     // Reply button (only on root messages, not in thread view)
                     if (!isThread && !msg.parent_id) {
@@ -1442,14 +1436,12 @@
                   }
 
                   // Load history
-                  fetch(CHAT_API + '/api/chat/messages?channel=' + slug + '&limit=50', { headers: chatHeaders() })
-                    .then(function(r) { return r.ok ? r.json() : { messages: [], replyCounts: {} }; })
+                  fetch('/api/chat/history?channel=' + encodeURIComponent(channelName) + '&limit=50', { credentials: 'include' })
+                    .then(function(r) { return r.ok ? r.json() : { messages: [] }; })
                     .then(function(data) {
-                      (data.messages || []).forEach(function(m) {
-                        if (!m.parent_id) {
-                          m._replyCount = (data.replyCounts || {})[m.id] || 0;
-                          renderMsg(m, body, false);
-                        }
+                      var msgs = (data.messages || []).slice().reverse();
+                      msgs.forEach(function(m) {
+                        renderMsg(m, body, false);
                       });
                       body.scrollTop = body.scrollHeight;
                     }).catch(function() {});
@@ -1460,10 +1452,11 @@
                     threadPanel.style.display = 'block';
                     threadPanel.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span style="color:#18BC9C;font-size:10px;font-weight:bold;">THREAD</span><span style="color:#555;font-size:10px;cursor:pointer;" onclick="this.parentNode.parentNode.style.display=\'none\'">✕</span></div>';
                     inp.placeholder = 'Reply in thread...';
-                    fetch(CHAT_API + '/api/chat/thread?parentId=' + parentId, { headers: chatHeaders() })
-                      .then(function(r) { return r.ok ? r.json() : { replies: [] }; })
+                    fetch('/api/chat/history?channel=' + encodeURIComponent(channelName) + '&parent_id=' + encodeURIComponent(parentId), { credentials: 'include' })
+                      .then(function(r) { return r.ok ? r.json() : { messages: [] }; })
                       .then(function(data) {
-                        (data.replies || []).forEach(function(m) { renderMsg(m, threadPanel, true); });
+                        var msgs = (data.messages || []).slice().reverse();
+                        msgs.forEach(function(m) { renderMsg(m, threadPanel, true); });
                         threadPanel.scrollTop = threadPanel.scrollHeight;
                       }).catch(function() {});
                   }
@@ -1474,22 +1467,18 @@
                     var text = inp.value.trim();
                     inp.value = '';
 
-                    var msgData = { channel: slug, message: text };
-                    if (replyingTo) msgData.parentId = replyingTo;
+                    var ts = new Date().toISOString();
 
-                    // Show immediately
+                    // Show immediately (optimistic)
                     var target = replyingTo ? threadPanel : body;
-                    renderMsg({ sender_handle: myHandle, message: text, created_at: new Date().toISOString() }, target, !!replyingTo);
+                    renderMsg({ sender_username: myHandle, body: text, created_at: ts }, target, !!replyingTo);
                     target.scrollTop = target.scrollHeight;
 
-                    // Persist
-                    fetch(CHAT_API + '/api/chat/messages', {
-                      method: 'POST', headers: chatHeaders(),
-                      body: JSON.stringify(msgData)
-                    }).catch(function() {});
-
-                    if (!replyingTo) {
-                      // Reset thread state
+                    // Publish via Ably (chat-persist worker will save to DB)
+                    if (window.ably) {
+                      var pubData = { handle: myHandle, message: text, createdAt: ts };
+                      if (replyingTo) pubData.parentId = replyingTo;
+                      window.ably.channels.get(channelName).publish('message', pubData);
                     }
                   }
 
@@ -1501,22 +1490,22 @@
                     if (e.key === 'Escape' && replyingTo) {
                       replyingTo = null;
                       threadPanel.style.display = 'none';
-                      inp.placeholder = 'Message ' + (domainObject.name || '#' + slug) + '...';
+                      inp.placeholder = 'Message ' + (domainObject.name || '#' + channelName) + '...';
                     }
                   });
 
                   // Live messages via Ably
                   try {
                     if (window.ably) {
-                      ablyChannel = window.ably.channels.get('roc:chat:' + slug);
+                      ablyChannel = window.ably.channels.get(channelName);
                       ablyChannel.subscribe('message', function(msg) {
                         var d = msg.data;
                         if (d.handle === myHandle) return; // already rendered locally
                         if (d.parentId && replyingTo === d.parentId) {
-                          renderMsg({ sender_handle: d.handle, message: d.message, created_at: d.createdAt }, threadPanel, true);
+                          renderMsg({ sender_username: d.handle, body: d.message, created_at: d.createdAt }, threadPanel, true);
                           threadPanel.scrollTop = threadPanel.scrollHeight;
                         } else if (!d.parentId) {
-                          renderMsg({ sender_handle: d.handle, message: d.message, created_at: d.createdAt }, body, false);
+                          renderMsg({ sender_username: d.handle, body: d.message, created_at: d.createdAt }, body, false);
                           body.scrollTop = body.scrollHeight;
                         }
                       });
@@ -1938,13 +1927,23 @@
     // =============================================
     // ROC Ably — Presence + Signal Feed
     // =============================================
-    // Ably connection (full key for beta — production will use token auth via Cloudflare Worker)
+    // Ably connection — token auth via Hub API
     var ably = window.ably = new Ably.Realtime({
-      key: 'Hw4N-g.SCRf7w:dw4xkdDeKA_I1TbtBTEVZr2W2PN2hFBBTTcpYsZTuz4',
-      clientId: 'operator-' + Math.random().toString(36).substr(2, 6)
+      authCallback: function(_, cb) {
+        fetch('/api/chat/auth', {
+          method: 'POST',
+          credentials: 'include'
+        })
+        .then(function(r) {
+          if (!r.ok) throw new Error('Auth failed: ' + r.status);
+          return r.json();
+        })
+        .then(function(t) { cb(null, t); })
+        .catch(function(e) { cb(e.message, null); });
+      }
     });
-    var presenceChannel = ably.channels.get('roc:presence');
-    var signalChannel = ably.channels.get('roc:signals');
+    var presenceChannel = ably.channels.get('presence');
+    var signalChannel = ably.channels.get('signals');
     var operatorCount = 0;
 
     // Connection status
@@ -2378,8 +2377,8 @@
       function attachAbly() {
         if (!window.ably) return;
 
-        opsAblyChannel = window.ably.channels.get('roc:ops');
-        opsPresenceChannel = window.ably.channels.get('roc:ops');
+        opsAblyChannel = window.ably.channels.get('ops');
+        opsPresenceChannel = window.ably.channels.get('ops');
 
         // Subscribe to incoming messages
         opsAblyChannel.subscribe('message', function (msg) {
