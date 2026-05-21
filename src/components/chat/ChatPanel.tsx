@@ -32,7 +32,7 @@ function formatTime(ts?: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapHistoryMessage(row: any): InternalMessage {
   return {
-    id: String(row.id),
+    id: row.ably_message_id ?? String(row.id),
     body: row.body,
     sender: row.sender_username,
     senderType: row.sender_type,
@@ -178,24 +178,42 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
 
   const sendMessage = useCallback(async () => {
     const body = inputValue.trim()
-    if (!body || !channelRef.current || !connected) return
+    if (!body || !connected) return
+
+    const clientMsgId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`
 
     setInputValue('')
 
-    const data = {
-      body,
-      sender: clientId,
-      senderType: 'human',
-      timestamp: new Date().toISOString(),
-      parentId: null,
-    }
+    // Optimistic render. The server publishes to Ably with this same id, so the
+    // echo dedupes against this entry instead of duplicating it.
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: clientMsgId,
+        body,
+        sender: clientId,
+        senderType: 'human',
+        timestamp: new Date().toISOString(),
+        parentId: null,
+      },
+    ])
 
     try {
-      await channelRef.current.publish('message', data)
+      const res = await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, body, clientMsgId, parentId: null }),
+      })
+      if (!res.ok) throw new Error('send failed')
     } catch {
+      // Roll back the optimistic message and restore the input.
+      setMessages((prev) => prev.filter((m) => m.id !== clientMsgId))
       setInputValue(body)
     }
-  }, [inputValue, connected, clientId])
+  }, [inputValue, connected, clientId, channel])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       message_type,
       body,
       metadata,
+      ably_message_id,
       parent_id,
       edited,
       created_at
