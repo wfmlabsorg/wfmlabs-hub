@@ -4,6 +4,8 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { ChatPanel } from '@/components/chat'
+import { IncidentAdminActions } from '@/components/incidents/IncidentAdminActions'
+import { IncidentCommunityValidation } from '@/components/incidents/IncidentCommunityValidation'
 
 export const dynamic = 'force-dynamic'
 
@@ -126,6 +128,7 @@ const actionLabels: Record<string, { label: string; color: string; icon: string 
   reopened: { label: 'Incident reopened', color: '#f97316', icon: '\u21ba' },
   community_confirm: { label: 'Community confirmation', color: '#10b981', icon: '\u2714' },
   community_deny: { label: 'Community denial', color: '#ef4444', icon: '\u2718' },
+  escalation_flagged: { label: 'Flagged for escalation', color: '#f97316', icon: '\u2691' },
 }
 
 function domainLabel(domain: string): string {
@@ -181,6 +184,24 @@ export default async function IncidentDetailPage({
   const { rows: timeline } = await neonQuery<TimelineEntry>(
     'SELECT * FROM incident_timeline WHERE incident_id = $1 ORDER BY created_at ASC',
     [incident.id],
+  )
+
+  // Resolve the viewer's member identity (for admin actions + community vote state).
+  const isAdmin = session?.user?.role === 'admin'
+  let username = ''
+  if (session?.user?.payloadMemberId) {
+    const payload = await getPayload({ config })
+    const member = await payload
+      .findByID({
+        collection: 'members',
+        id: Number(session.user.payloadMemberId),
+        overrideAccess: true,
+      })
+      .catch(() => null)
+    username = (member?.username as string) || ''
+  }
+  const hasVoted = !!username && timeline.some(
+    (t) => t.actor === username && (t.action === 'community_confirm' || t.action === 'community_deny'),
   )
 
   // Fetch related signals via Payload
@@ -460,6 +481,17 @@ export default async function IncidentDetailPage({
         )}
       </div>
 
+      {/* ── Community Validation ── */}
+      {!isClosed && (
+        <IncidentCommunityValidation
+          slug={slug}
+          confirmations={incident.community_confirmations}
+          denials={incident.community_denials}
+          loggedIn={!!session?.user}
+          hasVoted={hasVoted}
+        />
+      )}
+
       {/* ── Notes ── */}
       {incident.notes && (
         <div style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border)' }}>
@@ -647,6 +679,11 @@ export default async function IncidentDetailPage({
             ))}
           </div>
         </div>
+      )}
+
+      {/* ── Admin Actions ── */}
+      {isAdmin && (
+        <IncidentAdminActions slug={slug} sevLevel={incident.sev_level} status={incident.status} />
       )}
 
       {/* ── Incident Channel ── */}
