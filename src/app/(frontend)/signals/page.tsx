@@ -13,8 +13,27 @@ interface Signal {
   category?: string
   regionId?: string
   regionName?: string
+  regions?: string[]
   sourceUrl?: string
   createdAt: string
+}
+
+// Surface the multi-region spread of a de-duped signal (e.g. one cyber CVE
+// collapsed across many cities) without re-listing the primary region.
+function extraRegions(sig: Signal): string[] {
+  if (!Array.isArray(sig.regions)) return []
+  const primary = (sig.regionName || '').trim().toLowerCase()
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const r of sig.regions) {
+    const v = (r || '').trim()
+    if (!v) continue
+    const key = v.toLowerCase()
+    if (key === primary || seen.has(key)) continue
+    seen.add(key)
+    out.push(v)
+  }
+  return out
 }
 
 const domainColors: Record<string, string> = {
@@ -164,9 +183,14 @@ export default function SignalsPage() {
         </h1>
         <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
           Operational Intelligence Feed
-          {totalDocs > 0 && (
+          {!loading && totalDocs > 0 && (
             <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', marginLeft: '0.75rem' }}>
-              {totalDocs.toLocaleString()} signals
+              {totalDocs.toLocaleString()} {totalDocs === 1 ? 'signal' : 'signals'}
+              {!activeCategory && !activeSeverity && !activeSource && (
+                <span style={{ marginLeft: '0.5rem', opacity: 0.85 }}>
+                  {'·'} de-duplicated by event
+                </span>
+              )}
             </span>
           )}
         </p>
@@ -353,6 +377,8 @@ export default function SignalsPage() {
             const icon = categoryIcons[sig.category || 'general'] || categoryIcons.general
             const badge = severityBadgeColors[sig.severityLabel || 'info'] || severityBadgeColors.info
             const isExpanded = expandedId === sig.id
+            const regionSpread = extraRegions(sig)
+            const CHIP_PREVIEW = 4
 
             return (
               <div
@@ -462,7 +488,66 @@ export default function SignalsPage() {
                         <span>{sig.regionName}</span>
                       </>
                     )}
+                    {regionSpread.length > 0 && (
+                      <span
+                        style={{
+                          fontSize: '0.6875rem',
+                          fontWeight: 600,
+                          color: 'var(--accent)',
+                          background: 'var(--accent-light)',
+                          border: '1px solid var(--accent)',
+                          borderRadius: '9999px',
+                          padding: '0.0625rem 0.4375rem',
+                          flexShrink: 0,
+                        }}
+                        title={`Spans ${regionSpread.length + (sig.regionName ? 1 : 0)} regions`}
+                      >
+                        +{regionSpread.length} {regionSpread.length === 1 ? 'region' : 'regions'}
+                      </span>
+                    )}
                   </div>
+
+                  {/* Region spread chips \u2014 multi-region de-duped signals */}
+                  {regionSpread.length > 0 && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.25rem',
+                        marginTop: '0.25rem',
+                      }}
+                    >
+                      {(isExpanded ? regionSpread : regionSpread.slice(0, CHIP_PREVIEW)).map(
+                        (region) => (
+                          <span
+                            key={region}
+                            style={{
+                              fontSize: '0.6875rem',
+                              color: 'var(--accent)',
+                              background: 'var(--accent-light)',
+                              border: '1px solid rgba(34, 211, 238, 0.35)',
+                              borderRadius: '9999px',
+                              padding: '0.0625rem 0.5rem',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {region}
+                          </span>
+                        ),
+                      )}
+                      {!isExpanded && regionSpread.length > CHIP_PREVIEW && (
+                        <span
+                          style={{
+                            fontSize: '0.6875rem',
+                            color: 'var(--fg-faint)',
+                            padding: '0.0625rem 0.25rem',
+                          }}
+                        >
+                          +{regionSpread.length - CHIP_PREVIEW} more
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Expandable detail section */}
                   <div
@@ -510,6 +595,14 @@ export default function SignalsPage() {
                           <>
                             <span style={{ fontWeight: 500 }}>Region</span>
                             <span>{sig.regionName}</span>
+                          </>
+                        )}
+                        {regionSpread.length > 0 && (
+                          <>
+                            <span style={{ fontWeight: 500 }}>
+                              Spread ({regionSpread.length + (sig.regionName ? 1 : 0)})
+                            </span>
+                            <span>{regionSpread.join(', ')}</span>
                           </>
                         )}
                         {sig.signalType && (
