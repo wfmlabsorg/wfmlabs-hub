@@ -1,5 +1,6 @@
 import { getPayload } from 'payload'
 import config from '@payload-config'
+import { sql } from '@payloadcms/db-postgres'
 
 /**
  * Signals API — ingest signals from ROC Worker and serve to frontend.
@@ -142,6 +143,37 @@ export async function GET(req: Request) {
     page,
     sort: '-createdAt',
   })
+
+  // Merge the worker-managed `regions` text[] column (added by the cyber CVE
+  // de-dup, roc#10) onto each doc. It is not part of the Payload collection
+  // schema, so `find` does not return it — read it raw and zip it in by id.
+  // A single de-duped CVE carries every affected city in this array.
+  try {
+    const ids = (signals.docs as Array<{ id: number }>).map((d) => d.id)
+    if (ids.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const drizzle = (payload.db as any).drizzle
+      const res = await drizzle.execute(
+        sql`SELECT id, regions FROM signals WHERE id IN (${sql.join(
+          ids.map((id) => sql`${id}`),
+          sql`, `,
+        )})`,
+      )
+      const rows: Array<{ id: number; regions: string[] | null }> = res.rows || res
+      const regionsById = new Map<number, string[]>()
+      for (const r of rows) {
+        if (Array.isArray(r.regions) && r.regions.length > 0) {
+          regionsById.set(Number(r.id), r.regions)
+        }
+      }
+      for (const doc of signals.docs as Array<{ id: number; regions?: string[] }>) {
+        const regions = regionsById.get(doc.id)
+        if (regions) doc.regions = regions
+      }
+    }
+  } catch {
+    // Non-fatal: if the raw read fails, signals still render without regions.
+  }
 
   return Response.json(signals)
 }
