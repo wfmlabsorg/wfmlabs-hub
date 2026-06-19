@@ -538,14 +538,36 @@
     }).join('');
   }
 
+  // Map a scout `labor`-category signal (from /api/roc-signals) into the
+  // news-intel story shape this dashboard renders. Tagging category:'labor'
+  // lets isLaborRelevant/classifyLabor accept and bucket it.
+  function mapLaborSignal(s) {
+    return {
+      title: s.title || '',
+      summary: s.message || '',
+      severity: parseFloat(s.severity) || 0,
+      category: 'labor',
+      trajectory: 'steady',
+      affected_regions: s.region_name || '',
+      first_seen: s.created_at || '',
+    };
+  }
+
   function fetchData() {
-    fetch(NEWS_API + '/stories')
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(data) {
-        var allStories = data.stories || [];
+    Promise.all([
+      // News-intel clustered stories (RSS) — may or may not carry labor topics
+      fetch(NEWS_API + '/stories')
+        .then(function(res) { return res.ok ? res.json() : { stories: [] }; })
+        .catch(function() { return { stories: [] }; }),
+      // Scout `labor` signals (NewsAPI.ai) — Hub same-origin route
+      fetch('/api/roc-signals?category=labor&hours=72&limit=50')
+        .then(function(res) { return res.ok ? res.json() : { signals: [] }; })
+        .catch(function() { return { signals: [] }; })
+    ])
+      .then(function(results) {
+        var data = results[0] || {};
+        var sigs = (results[1] && results[1].signals) || [];
+        var allStories = (data.stories || []).concat(sigs.map(mapLaborSignal));
 
         // Filter to labor-relevant stories, then classify into sub-categories
         var groups = { strikes: [], wage: [], layoffs: [], union: [] };

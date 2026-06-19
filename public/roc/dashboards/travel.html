@@ -299,10 +299,40 @@ function updateMarkers(events){
   }
 }
 
+// Aviation keyword test for scout travel signals
+function isAviationSig(t){return /\b(aviation|flight|flights|airline|airlines|airport|airspace|aircraft|airplane|plane|jet|jets|FAA|carrier)\b/i.test(t||'')}
+// Map a scout `travel`-category signal (from /api/roc-signals) into the
+// dashboard event shape renderCol/updateMarkers expect. Aviation-relevant
+// titles route to the aviation column; everything else to intel.
+function mapTravelSignal(s){
+  var title=s.title||'';
+  return {
+    domain: isAviationSig(title) ? 'aviation' : 'intel',
+    title: title,
+    severity: parseFloat(s.severity)||0,
+    location: s.region_name||'Global',
+    source: s.source||'scout',
+    detail: s.message||'',
+    url: s.source_url||'',
+    _signal: true
+  };
+}
+
 function fetchData(){
   setLoading(true);
-  fetch(API+'/api/travel/scores').then(function(r){if(!r.ok)throw new Error(r.status);return r.json()}).then(function(d){
-    drawGauge(d.composite,d.level);
+  Promise.all([
+    // Live operational feed (TomTom/transit/maritime/aviation) \u2014 travel-intel worker
+    fetch(API+'/api/travel/scores',{signal:AbortSignal.timeout(12000)})
+      .then(function(r){if(!r.ok)throw new Error(r.status);return r.json()})
+      .catch(function(){return {composite:0,level:'NOMINAL',events:[],domains:[]}}),
+    // Scout `travel` signals (NewsAPI.ai) \u2014 Hub same-origin route. These carry
+    // the aviation NEWS (airspace closures, incidents) the live feed misses.
+    fetch('/api/roc-signals?category=travel&hours=48&limit=60',{signal:AbortSignal.timeout(12000)})
+      .then(function(r){return r.ok?r.json():{signals:[]}})
+      .catch(function(){return {signals:[]}})
+  ]).then(function(res){
+    var d=res[0]||{}; var sigs=(res[1]&&res[1].signals)||[];
+    drawGauge(d.composite||0,d.level||'NOMINAL');
     renderBars(d.domains||[]);
     var av=[],rd=[],tr=[],mi=[],il=[];
     (d.events||[]).forEach(function(e){
@@ -311,6 +341,10 @@ function fetchData(){
       else if(e.domain==='transit')tr.push(e);
       else if(e.domain==='maritime')mi.push(e);
       else il.push(e);
+    });
+    // Merge scout travel signals \u2014 fills the aviation column (live feed is sparse)
+    sigs.map(mapTravelSignal).forEach(function(e){
+      if(e.domain==='aviation')av.push(e); else il.push(e);
     });
     renderCol('p-av','n-av',av,'No aviation disruptions.');
     renderCol('p-rd','n-rd',rd,'Normal traffic flow.');
@@ -322,10 +356,10 @@ function fetchData(){
     document.getElementById('c-rd').textContent=rd.length;
     document.getElementById('c-tr').textContent=tr.length;
     document.getElementById('c-mi').textContent=mi.length;
-    document.getElementById('c-tot').textContent=(d.events||[]).length;
-    var lb=document.getElementById('lbdg'),lc=ls(d.level);
-    lb.textContent=d.level;lb.style.color=lc;lb.style.border='1px solid '+lc;
-    document.getElementById('lu').textContent='Updated: '+ts(d.updatedAt)+' | '+(d.domains||[]).map(function(x){return x.domain+':'+x.eventCount}).join(' ');
+    document.getElementById('c-tot').textContent=(d.events||[]).length+sigs.length;
+    var lb=document.getElementById('lbdg'),lc=ls(d.level||'NOMINAL');
+    lb.textContent=d.level||'NOMINAL';lb.style.color=lc;lb.style.border='1px solid '+lc;
+    document.getElementById('lu').textContent='Updated: '+ts(d.updatedAt)+' | '+(d.domains||[]).map(function(x){return x.domain+':'+x.eventCount}).join(' ')+' | scout travel:'+sigs.length;
     if(map)updateMarkers(d.events||[]);
   }).catch(function(err){
     console.error('Travel:',err);drawGauge(0,'NOMINAL');
