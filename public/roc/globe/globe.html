@@ -894,6 +894,124 @@
           .catch(function(e) { log('Disaster fetch failed: ' + e.message); });
       }
 
+      // =============================================
+      // WFM INCIDENTS LAYER — Watchkeeper-declared incidents
+      // Pulls from the Hub's own /api/incidents route (same-origin, raw SQL).
+      // Plots every incident with coords; open are bright + pulsing, closed dim.
+      // Severity ramp avoids orange per the Mission Control design spec.
+      // =============================================
+      var incidentEntities = [];
+
+      function incidentColor(sev) {
+        switch ((sev || '').toUpperCase()) {
+          case 'SEV1': return '#ef4444'; // red — critical
+          case 'SEV2': return '#eab308'; // yellow — high
+          case 'SEV3': return '#22d3ee'; // cyan — moderate
+          case 'SEV4': return '#64748b'; // slate — low
+          default:     return '#22d3ee';
+        }
+      }
+
+      function incidentSize(sev) {
+        switch ((sev || '').toUpperCase()) {
+          case 'SEV1': return 14;
+          case 'SEV2': return 11;
+          case 'SEV3': return 9;
+          case 'SEV4': return 7;
+          default:     return 8;
+        }
+      }
+
+      function clearIncidentMarkers() {
+        incidentEntities.forEach(function(e) { viewer.entities.remove(e); });
+        incidentEntities = [];
+      }
+
+      function addIncidentMarkers(points) {
+        clearIncidentMarkers();
+        var plotted = 0;
+        points.forEach(function(p) {
+          var lat = p.location_lat == null ? null : parseFloat(p.location_lat);
+          var lon = p.location_lon == null ? null : parseFloat(p.location_lon);
+          if (lat == null || lon == null || isNaN(lat) || isNaN(lon)) return; // skip null-coord rows gracefully
+          plotted++;
+          var isOpen = (p.status || '').toLowerCase() !== 'closed';
+          var color = incidentColor(p.sev_level);
+          var baseSize = incidentSize(p.sev_level);
+          var cesColor = Cesium.Color.fromCssColorString(color);
+
+          // Pulsing point for open incidents; static dimmer point for closed.
+          var pixelSize = isOpen
+            ? new Cesium.CallbackProperty(function() {
+                var t = (Date.now() % 1600) / 1600; // 0..1
+                return baseSize + Math.sin(t * Math.PI * 2) * 3;
+              }, false)
+            : baseSize - 1;
+
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat),
+            show: true,
+            point: {
+              pixelSize: pixelSize,
+              color: cesColor.withAlpha(isOpen ? 0.95 : 0.45),
+              outlineColor: cesColor.withAlpha(isOpen ? 0.9 : 0.25),
+              outlineWidth: isOpen ? 2 : 1,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55),
+            },
+            properties: {
+              markerLevel: 'incident',
+              incTitle: p.title || 'Incident',
+              incSlug: p.slug || '',
+              incDomain: p.domain || '',
+              incSev: p.sev_level || '',
+              incStatus: p.status || '',
+              incLocation: p.location_name || '',
+              incLat: lat,
+              incLon: lon,
+            },
+          });
+          incidentEntities.push(entity);
+
+          // Static halo ring for open incidents — extra "live" emphasis.
+          if (isOpen) {
+            var halo = viewer.entities.add({
+              position: Cesium.Cartesian3.fromDegrees(lon, lat),
+              show: true,
+              point: {
+                pixelSize: baseSize * 2.6,
+                color: cesColor.withAlpha(0.08),
+                outlineColor: cesColor.withAlpha(0.35),
+                outlineWidth: 1,
+                disableDepthTestDistance: Number.POSITIVE_INFINITY,
+                scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55),
+              },
+              properties: { markerLevel: 'incident-halo' },
+            });
+            incidentEntities.push(halo);
+          }
+        });
+        log('◆ ' + plotted + ' incidents plotted (' + points.length + ' fetched)');
+      }
+
+      function fetchIncidentMarkers() {
+        // Same-origin Hub API. Two pages cover all 108 incidents (limit cap 100).
+        Promise.all([
+          fetch('/api/incidents?limit=100&offset=0', { signal: AbortSignal.timeout(12000) })
+            .then(function(r) { return r.ok ? r.json() : { docs: [] }; }).catch(function() { return { docs: [] }; }),
+          fetch('/api/incidents?limit=100&offset=100', { signal: AbortSignal.timeout(12000) })
+            .then(function(r) { return r.ok ? r.json() : { docs: [] }; }).catch(function() { return { docs: [] }; }),
+        ]).then(function(pages) {
+          var all = [], seen = {};
+          pages.forEach(function(d) {
+            (d.docs || []).forEach(function(inc) {
+              if (!seen[inc.id]) { seen[inc.id] = true; all.push(inc); }
+            });
+          });
+          addIncidentMarkers(all);
+        }).catch(function(e) { log('Incident fetch failed: ' + e.message); });
+      }
+
       // Disaster panel helpers
       var disasterPanelEl = document.getElementById('disaster-panel');
 
@@ -1982,6 +2100,30 @@
           return;
         }
 
+        // Handle WFM incident marker click — event popup
+        if (level === 'incident') {
+          var incTitle = props.incTitle ? props.incTitle.getValue() : 'Incident';
+          var incSlug = props.incSlug ? props.incSlug.getValue() : '';
+          var incDomain = props.incDomain ? props.incDomain.getValue() : '';
+          var incSev = props.incSev ? props.incSev.getValue() : '';
+          var incStatus = props.incStatus ? props.incStatus.getValue() : '';
+          var incLocation = props.incLocation ? props.incLocation.getValue() : '';
+          var incLat = props.incLat ? props.incLat.getValue() : 0;
+          var incLon = props.incLon ? props.incLon.getValue() : 0;
+          var statusLabel = (incStatus || '').toUpperCase();
+          showEventPopup({
+            type: incSev + (incDomain ? ' · ' + incDomain.toUpperCase() : ''),
+            typeColor: incidentColor(incSev),
+            title: incTitle,
+            detail: 'Status: ' + statusLabel + (incLocation ? '\nLocation: ' + incLocation : ''),
+            source: 'Watchkeeper',
+            lat: incLat, lon: incLon,
+            url: incSlug ? ('/incidents/' + incSlug) : '',
+            severity: incSev,
+          }, click.position);
+          return;
+        }
+
         if (!itemId) return;
 
         var pos = picked.id.position.getValue(Cesium.JulianDate.now());
@@ -2033,6 +2175,13 @@
             var dSource = props.disasterSource ? props.disasterSource.getValue() : '';
             ttName.textContent = disasterTypeLabel(dType || dTitle) + ': ' + (dTitle || 'Unknown event');
             ttSub.textContent = (dSource ? 'Source: ' + dSource : '') + ' · Click for details';
+          } else if (level === 'incident') {
+            // WFM incident hover — title + severity/status
+            var incTitle = props.incTitle ? props.incTitle.getValue() : 'Incident';
+            var incSev = props.incSev ? props.incSev.getValue() : '';
+            var incStatus = props.incStatus ? props.incStatus.getValue() : '';
+            ttName.textContent = incTitle;
+            ttSub.textContent = [incSev, (incStatus || '').toUpperCase()].filter(Boolean).join(' · ') + ' · Click for details';
           } else if (props.isAlertMarker && props.isAlertMarker.getValue()) {
             // Enhancement 4: Alert marker hover shows weather indicator
             var alertEvt = props.alertEvent ? props.alertEvent.getValue() : '';
@@ -2680,6 +2829,9 @@
         // Load disaster markers (wildfire, volcano, flood, storm)
         fetchDisasterMarkers();
         setInterval(fetchDisasterMarkers, 10 * 60 * 1000); // refresh every 10min
+        // Load WFM incidents (Watchkeeper-declared) — visible by default
+        fetchIncidentMarkers();
+        setInterval(fetchIncidentMarkers, 5 * 60 * 1000); // refresh every 5min
 
         // Color markers by OVIX scores
         setTimeout(updateMarkerColors, 3000); // initial delay for markers to render
