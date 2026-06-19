@@ -51,13 +51,22 @@ export async function GET(req: Request) {
                 CASE WHEN (s.metadata->>'lat') ~ '^-?[0-9]+(\\.[0-9]+)?$'
                        AND (s.metadata->>'lon') ~ '^-?[0-9]+(\\.[0-9]+)?$'
                      THEN (s.metadata->>'lon')::double precision
-                     ELSE gd.lon END AS lon
+                     ELSE gd.lon END AS lon,
+                -- Whether the coords above came from precise per-signal metadata
+                -- or fell back to the region centroid in geo_density. Centroid
+                -- coords are imprecise and identical for every signal in a region
+                -- (e.g. all 'US' cyber signals land on the US centroid), so the
+                -- client scatters them deterministically — see jitter below.
+                CASE WHEN (s.metadata->>'lat') ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                       AND (s.metadata->>'lon') ~ '^-?[0-9]+(\\.[0-9]+)?$'
+                     THEN 'precise'
+                     ELSE 'centroid' END AS geo_source
            FROM signals s
            LEFT JOIN geo_density gd ON lower(gd.region_name) = lower(s.region_name)
           WHERE s.created_at > now() - make_interval(mins => $1)
        )
        SELECT sig.id, sig.category, sig.severity, sig.severity_label, sig.title,
-              sig.region_name, sig.created_at, sig.lat, sig.lon,
+              sig.region_name, sig.created_at, sig.lat, sig.lon, sig.geo_source,
               (inc.id IS NOT NULL) AS promoted,
               inc.id   AS incident_id,
               inc.slug AS incident_slug,
@@ -86,6 +95,30 @@ export async function GET(req: Request) {
     const total = totalResult.rows[0]?.total ?? 0
     const resolved = signalsResult.rowCount ?? 0
 
+    // Scatter region-centroid signals so they don't stack on one pixel.
+    // Tier-2 (geo_source='centroid') signals all inherit the same region
+    // centroid — e.g. every 'US' cyber signal lands on (39.8,-98.5) — so the
+    // globe shows a single dot hiding N events. Offset each by a deterministic
+    // amount seeded only by its id: stable across refreshes (no jumping) and
+    // independent of the others (adding/removing a signal never moves the rest).
+    // Precise metadata coords are left exactly as-is.
+    const SPREAD_DEG = 2.5 // ~275km radius; keeps national signals within-region
+    const fract = (x: number) => x - Math.floor(x)
+    const signals = signalsResult.rows.map((s) => {
+      if (s.geo_source !== 'centroid') return s
+      const id = Number(s.id)
+      // sqrt(rand) radius → uniform fill of the disk (not bunched at center)
+      const radius = Math.sqrt(fract(Math.sin(id * 12.9898) * 43758.5453)) * SPREAD_DEG
+      const angle = fract(Math.sin(id * 78.233) * 43758.5453) * 2 * Math.PI
+      // widen E-W by 1/cos(lat) so the scatter reads circular, not squashed
+      const lonScale = Math.min(1 / Math.max(Math.cos((s.lat * Math.PI) / 180), 0.2), 3)
+      return {
+        ...s,
+        lat: s.lat + radius * Math.sin(angle),
+        lon: s.lon + radius * Math.cos(angle) * lonScale,
+      }
+    })
+
     const incidentsResult = await pool.query(
       `SELECT id, title, slug, domain, sev_level, status,
               location_lat, location_lon, related_signal_ids, created_at
@@ -96,7 +129,7 @@ export async function GET(req: Request) {
 
     return Response.json(
       {
-        signals: signalsResult.rows,
+        signals,
         incidents: incidentsResult.rows,
         meta: {
           window_minutes: mins,
