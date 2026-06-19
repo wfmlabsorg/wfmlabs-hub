@@ -95,17 +95,28 @@ export async function GET(req: Request) {
     const total = totalResult.rows[0]?.total ?? 0
     const resolved = signalsResult.rowCount ?? 0
 
-    // Scatter region-centroid signals so they don't stack on one pixel.
-    // Tier-2 (geo_source='centroid') signals all inherit the same region
-    // centroid — e.g. every 'US' cyber signal lands on (39.8,-98.5) — so the
-    // globe shows a single dot hiding N events. Offset each by a deterministic
-    // amount seeded only by its id: stable across refreshes (no jumping) and
-    // independent of the others (adding/removing a signal never moves the rest).
-    // Precise metadata coords are left exactly as-is.
+    // Scatter signals that share an identical coordinate so they don't stack
+    // on one pixel. Coarse region/country-centroid coords collapse many events
+    // onto one point — whether the centroid came from the geo_density fallback
+    // (geo_source='centroid') OR was baked into the scout's metadata as a
+    // country center (geo_source='precise'). Examples seen live: every 'US'
+    // cyber signal at the US centroid (39.8,-98.5), and Polish weather all at
+    // the country center (51.9,19.1). We detect by collision on the final
+    // coordinate, so both paths are covered. Each colliding signal is offset by
+    // a deterministic, id-seeded uniform-disk amount: stable across refreshes
+    // (no jumping) and independent per signal (adding/removing one never moves
+    // the others). Signals with a unique coordinate are left exactly as-is.
     const SPREAD_DEG = 2.5 // ~275km radius; keeps national signals within-region
     const fract = (x: number) => x - Math.floor(x)
+    const coordKey = (s: { lat: number; lon: number }) =>
+      `${Number(s.lat).toFixed(3)},${Number(s.lon).toFixed(3)}`
+    const coordCounts = new Map<string, number>()
+    for (const s of signalsResult.rows) {
+      const k = coordKey(s)
+      coordCounts.set(k, (coordCounts.get(k) ?? 0) + 1)
+    }
     const signals = signalsResult.rows.map((s) => {
-      if (s.geo_source !== 'centroid') return s
+      if ((coordCounts.get(coordKey(s)) ?? 0) < 2) return s // unique point — leave it
       const id = Number(s.id)
       // sqrt(rand) radius → uniform fill of the disk (not bunched at center)
       const radius = Math.sqrt(fract(Math.sin(id * 12.9898) * 43758.5453)) * SPREAD_DEG
