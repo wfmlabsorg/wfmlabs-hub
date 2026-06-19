@@ -346,7 +346,7 @@
   function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
   // ── Transport / Rotation ──
-  var SLIDES = ['/dashboards/weather.html','/dashboards/seismic.html','/dashboards/disaster.html','/dashboards/cyber.html','/dashboards/financial.html','/dashboards/infrastructure.html','/dashboards/health.html','/dashboards/environmental.html','/dashboards/scores.html','/dashboards/feed-health.html'];
+  var SLIDES = ['/roc/dashboards/weather.html','/roc/dashboards/seismic.html','/roc/dashboards/disaster.html','/roc/dashboards/cyber.html','/roc/dashboards/financial.html','/roc/dashboards/infrastructure.html','/roc/dashboards/health.html','/roc/dashboards/environmental.html','/roc/dashboards/scores.html','/roc/dashboards/feed-health.html'];
   var slideIdx = SLIDES.indexOf(location.pathname);
   var playTimer = null;
   var SPEED = parseInt(localStorage.getItem('roc-speed') || '30') * 1000;
