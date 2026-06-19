@@ -60,6 +60,25 @@
     #ovix-legend .composite span:first-child { color: #18BC9C; font-weight: bold; letter-spacing: 0.05em; }
     #ovix-legend .composite .val { color: #18BC9C; font-weight: bold; font-size: 13px; }
 
+    /* Marker-type legend — distinguishes signals / incidents / promoted */
+    #marker-legend {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+      background: rgba(6, 6, 16, 0.9);
+      border: 1px solid rgba(34, 211, 238, 0.2);
+      border-radius: 4px; padding: 8px 14px;
+      font-family: 'JetBrains Mono', 'SF Mono', monospace;
+      font-size: 10px; color: #aab; z-index: 100;
+      user-select: none; display: flex; gap: 18px; align-items: center;
+      transition: opacity 0.3s ease;
+    }
+    #marker-legend.dimmed { opacity: 0.25; pointer-events: none; }
+    #marker-legend .ml-item { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+    #marker-legend .ml-dot { display: inline-block; border-radius: 50%; flex: 0 0 auto; }
+    #marker-legend .ml-dot.signal { width: 7px; height: 7px; background: #38bdf8; opacity: 0.6; }
+    #marker-legend .ml-dot.incident { width: 13px; height: 13px; background: #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,0.18); }
+    #marker-legend .ml-dot.promoted { width: 13px; height: 13px; background: #eab308; box-shadow: 0 0 0 4px rgba(234,179,8,0.18); }
+    #marker-legend .ml-head { color: #22d3ee; font-weight: bold; letter-spacing: 0.12em; }
+
     /* Tooltip */
     #tooltip {
       position: absolute; display: none;
@@ -425,6 +444,14 @@
       </div>
       <div class="slide-selector" id="slide-selector"></div>
     </div>
+  </div>
+
+  <!-- Marker-type legend — signal vs incident vs promoted -->
+  <div id="marker-legend">
+    <span class="ml-head">FEED</span>
+    <span class="ml-item"><span class="ml-dot signal"></span>Signal · &lt;2h, fading</span>
+    <span class="ml-item"><span class="ml-dot incident"></span>Incident · SEV, pulsing</span>
+    <span class="ml-item"><span class="ml-dot promoted"></span>Promoted signal → incident</span>
   </div>
 
   <!-- Rotation stop indicator (visible when rotation active, on any page) -->
@@ -1010,6 +1037,88 @@
           });
           addIncidentMarkers(all);
         }).catch(function(e) { log('Incident fetch failed: ' + e.message); });
+      }
+
+      // =============================================
+      // WFM SIGNALS LAYER — recent scout signals, fading by age
+      // Pulls from the Hub's /api/roc-globe combined feed (same-origin, raw SQL).
+      // Signals = small, category-colored points that fade from full opacity at
+      // t=0 to 0 at 2h, then drop on the next refresh. Promoted signals (already
+      // adopted into an OPEN incident) are SKIPPED here — the incident layer
+      // renders them instead (incident wins: no double-plot, no fade-out).
+      // NO ORANGE — signals use category cyans/blues/greys.
+      // =============================================
+      var SIGNAL_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2h fade window
+      var signalEntities = [];
+
+      var signalCategoryColors = {
+        weather: '#3b82f6', seismic: '#22d3ee', disaster: '#06b6d4',
+        cyber: '#22c55e', infrastructure: '#8b5cf6', health: '#ec4899',
+        financial: '#0ea5e9', environmental: '#14b8a6', geopolitical: '#a78bfa',
+        travel: '#38bdf8', labor: '#818cf8', supply_chain: '#2dd4bf',
+        events: '#64748b', general: '#64748b'
+      };
+      function signalColor(cat) { return signalCategoryColors[(cat || '').toLowerCase()] || '#22d3ee'; }
+
+      function clearSignalMarkers() {
+        signalEntities.forEach(function(e) { viewer.entities.remove(e); });
+        signalEntities = [];
+      }
+
+      function addSignalMarkers(signals) {
+        clearSignalMarkers();
+        var plotted = 0, skippedPromoted = 0;
+        (signals || []).forEach(function(s) {
+          if (s.promoted) { skippedPromoted++; return; } // incident layer owns it
+          var lat = s.lat == null ? null : parseFloat(s.lat);
+          var lon = s.lon == null ? null : parseFloat(s.lon);
+          if (lat == null || lon == null || isNaN(lat) || isNaN(lon)) return;
+          var created = new Date(s.created_at).getTime();
+          if (isNaN(created)) return;
+          if (Date.now() - created > SIGNAL_MAX_AGE_MS) return; // already aged out
+          plotted++;
+          var color = signalColor(s.category);
+          var cesColor = Cesium.Color.fromCssColorString(color);
+          // Age-based opacity, re-evaluated each frame: full at t=0 → 0 at 2h.
+          var ageFill = new Cesium.CallbackProperty(function() {
+            var frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS;
+            return cesColor.withAlpha(Math.max(0, Math.min(0.85, frac * 0.85)));
+          }, false);
+          var ageOutline = new Cesium.CallbackProperty(function() {
+            var frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS;
+            return cesColor.withAlpha(Math.max(0, Math.min(0.6, frac * 0.6)));
+          }, false);
+          var entity = viewer.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat),
+            show: true,
+            point: {
+              pixelSize: 5,
+              color: ageFill,
+              outlineColor: ageOutline,
+              outlineWidth: 1,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.1, 2e7, 0.5),
+            },
+            properties: {
+              markerLevel: 'signal',
+              sigId: s.id,
+              sigTitle: s.title || 'Signal',
+              sigCategory: s.category || '',
+              sigSeverity: s.severity_label || (s.severity != null ? String(s.severity) : ''),
+              sigRegion: s.region_name || '',
+              sigCreated: s.created_at,
+            },
+          });
+          signalEntities.push(entity);
+        });
+        log('• ' + plotted + ' signals plotted (' + skippedPromoted + ' promoted→incident, ' + ((signals || []).length) + ' fetched)');
+      }
+
+      function fetchSignalMarkers() {
+        fetch('/api/roc-globe?mins=150', { signal: AbortSignal.timeout(12000) })
+          .then(function(r) { return r.ok ? r.json() : { signals: [] }; })
+          .then(function(d) { addSignalMarkers(d.signals || []); })
+          .catch(function(e) { log('Signal fetch failed: ' + e.message); });
       }
 
       // Disaster panel helpers
@@ -1932,7 +2041,14 @@
         document.getElementById('ep-meta-rows').innerHTML = metaHtml;
 
         var linkContainer = document.getElementById('ep-link-container');
-        linkContainer.innerHTML = '<span style="color:#888; font-size:10px;">Source: ' + esc(data.source || '') + '</span>';
+        var linkHtml = '<span style="color:#888; font-size:10px;">Source: ' + esc(data.source || '') + '</span>';
+        if (data.url) {
+          var isInternal = String(data.url).charAt(0) === '/';
+          var linkAttrs = isInternal ? '' : ' target="_blank" rel="noopener"';
+          var linkText = data.linkLabel || (isInternal ? 'View details →' : 'Open source →');
+          linkHtml = '<a href="' + esc(data.url) + '"' + linkAttrs + ' style="display:inline-block;margin-bottom:6px;color:#22d3ee;font-size:11px;font-weight:bold;text-decoration:none;">' + esc(linkText) + '</a><br>' + linkHtml;
+        }
+        linkContainer.innerHTML = linkHtml;
 
         // Position near the click point
         eventPopup.style.display = 'block';
@@ -2100,6 +2216,44 @@
           return;
         }
 
+        // Handle WFM signal marker click — event popup → /signals/{id}
+        if (level === 'signal') {
+          var sgId = props.sigId ? props.sigId.getValue() : '';
+          var sgTitle = props.sigTitle ? props.sigTitle.getValue() : 'Signal';
+          var sgCat = props.sigCategory ? props.sigCategory.getValue() : '';
+          var sgSev = props.sigSeverity ? props.sigSeverity.getValue() : '';
+          var sgRegion = props.sigRegion ? props.sigRegion.getValue() : '';
+          var sgCreated = props.sigCreated ? props.sigCreated.getValue() : '';
+          var sgLat = 0, sgLon = 0;
+          var sgPos = picked.id.position ? picked.id.position.getValue(Cesium.JulianDate.now()) : null;
+          if (sgPos) {
+            var sgCarto = Cesium.Cartographic.fromCartesian(sgPos);
+            sgLat = Cesium.Math.toDegrees(sgCarto.latitude);
+            sgLon = Cesium.Math.toDegrees(sgCarto.longitude);
+          }
+          var sgAge = '';
+          if (sgCreated) {
+            var sgDiff = Date.now() - new Date(sgCreated).getTime();
+            var sgMin = Math.floor(sgDiff / 60000);
+            sgAge = sgMin < 60 ? sgMin + 'm ago' : Math.floor(sgMin / 60) + 'h ' + (sgMin % 60) + 'm ago';
+          }
+          showEventPopup({
+            type: 'SIGNAL' + (sgCat ? ' · ' + sgCat.toUpperCase() : ''),
+            typeColor: signalColor(sgCat),
+            title: sgTitle,
+            detail: [
+              sgSev ? 'Severity: ' + sgSev : '',
+              sgRegion ? 'Region: ' + sgRegion : '',
+              sgAge ? 'Detected: ' + sgAge : '',
+            ].filter(Boolean).join('\n'),
+            source: 'Scout',
+            lat: sgLat, lon: sgLon,
+            url: sgId !== '' ? ('/signals/' + sgId) : '',
+            linkLabel: 'View signal →',
+          }, click.position);
+          return;
+        }
+
         // Handle WFM incident marker click — event popup
         if (level === 'incident') {
           var incTitle = props.incTitle ? props.incTitle.getValue() : 'Incident';
@@ -2175,6 +2329,20 @@
             var dSource = props.disasterSource ? props.disasterSource.getValue() : '';
             ttName.textContent = disasterTypeLabel(dType || dTitle) + ': ' + (dTitle || 'Unknown event');
             ttSub.textContent = (dSource ? 'Source: ' + dSource : '') + ' · Click for details';
+          } else if (level === 'signal') {
+            // WFM signal hover — title + category/severity/region/age
+            var sghTitle = props.sigTitle ? props.sigTitle.getValue() : 'Signal';
+            var sghCat = props.sigCategory ? props.sigCategory.getValue() : '';
+            var sghSev = props.sigSeverity ? props.sigSeverity.getValue() : '';
+            var sghRegion = props.sigRegion ? props.sigRegion.getValue() : '';
+            var sghCreated = props.sigCreated ? props.sigCreated.getValue() : '';
+            var sghAge = '';
+            if (sghCreated) {
+              var sghMin = Math.floor((Date.now() - new Date(sghCreated).getTime()) / 60000);
+              sghAge = sghMin < 60 ? sghMin + 'm ago' : Math.floor(sghMin / 60) + 'h ago';
+            }
+            ttName.textContent = sghTitle;
+            ttSub.textContent = [sghCat, sghSev, sghRegion, sghAge].filter(Boolean).join(' · ') + ' · Click for signal';
           } else if (level === 'incident') {
             // WFM incident hover — title + severity/status
             var incTitle = props.incTitle ? props.incTitle.getValue() : 'Incident';
@@ -2832,6 +3000,12 @@
         // Load WFM incidents (Watchkeeper-declared) — visible by default
         fetchIncidentMarkers();
         setInterval(fetchIncidentMarkers, 5 * 60 * 1000); // refresh every 5min
+
+        // Load recent scout signals (fading geo-feed) — visible by default.
+        // Refresh on a 90s cadence so new signals appear and aged ones drop
+        // without a page reload (opacity ramp is animated client-side per frame).
+        fetchSignalMarkers();
+        setInterval(fetchSignalMarkers, 90 * 1000); // refresh every 90s
 
         // Color markers by OVIX scores
         setTimeout(updateMarkerColors, 3000); // initial delay for markers to render
