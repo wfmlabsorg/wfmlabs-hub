@@ -33,6 +33,10 @@ export function middleware(request: NextRequest) {
   // Allow public prefixes (API routes handle their own auth)
   if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next()
 
+  // Public: individual signal detail deep-links (/signals/{id}) — e.g. from the OVIX globe —
+  // while the aggregate /signals feed list stays members-only.
+  if (/^\/signals\/[^/]+$/.test(pathname)) return NextResponse.next()
+
   // Allow static assets
   if (pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff2?|map|html|json)$/)) return NextResponse.next()
 
