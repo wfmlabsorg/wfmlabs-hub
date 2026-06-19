@@ -143,5 +143,7 @@ function updateTransportUI(){var s;try{s=JSON.parse(localStorage.getItem('roc-ro
 updateTransportUI();
 (function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/roc/globe/globe.html',scores:'/roc/dashboards/scores.html',weather:'/roc/dashboards/weather.html',seismic:'/roc/dashboards/seismic.html',disaster:'/roc/dashboards/disaster.html',cyber:'/roc/dashboards/cyber.html',health:'/roc/dashboards/health.html',infrastructure:'/roc/dashboards/infrastructure.html',financial:'/roc/dashboards/financial.html',environmental:'/roc/dashboards/environmental.html',geopolitical:'/roc/dashboards/geopolitical.html',travel:'/roc/dashboards/travel.html',labor:'/roc/dashboards/labor.html','supply-chain':'/roc/dashboards/supply-chain.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
 </script>
+  <script src="/roc/roc-rotation.js"></script>
+
 </body>
 </html>
