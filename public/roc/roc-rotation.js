@@ -22,7 +22,8 @@
 
   // Canonical rotation order (globe first, then domain dashboards).
   var ORDER = ['globe', 'weather', 'seismic', 'disaster', 'cyber', 'health',
-               'infrastructure', 'financial', 'environmental', 'geopolitical', 'travel'];
+               'infrastructure', 'financial', 'environmental', 'geopolitical',
+               'travel', 'labor', 'supply_chain'];
   var ROUTES = {
     globe:          '/roc/globe/globe.html',
     scores:         '/roc/dashboards/scores.html',
@@ -35,9 +36,12 @@
     financial:      '/roc/dashboards/financial.html',
     environmental:  '/roc/dashboards/environmental.html',
     geopolitical:   '/roc/dashboards/geopolitical.html',
-    travel:         '/roc/dashboards/travel.html'
+    travel:         '/roc/dashboards/travel.html',
+    labor:          '/roc/dashboards/labor.html',
+    supply_chain:   '/roc/dashboards/supply-chain.html'
   };
-  var LABELS = { globe: 'Globe', cyber: 'Cyber', health: 'Health', financial: 'Finance', scores: 'Scores' };
+  var LABELS = { globe: 'Globe', cyber: 'Cyber', health: 'Health', financial: 'Finance',
+                 scores: 'Scores', supply_chain: 'Supply', labor: 'Labor' };
 
   var KEY = 'roc-rotation';
   function getState() {
@@ -92,8 +96,8 @@
   function updateUI() {
     var s = getState();
     var active = !!s.active;
-    // Play/pause buttons across both page types
-    ['nav-play', 'bnr-play', 'globe-transport-play'].forEach(function (id) {
+    // Play/pause buttons across both page types (+ injected fallback)
+    ['nav-play', 'bnr-play', 'globe-transport-play', 'roc-fab-play'].forEach(function (id) {
       var b = document.getElementById(id);
       if (!b) return;
       b.innerHTML = active ? '&#9208;' /* ⏸ */ : '&#9654;' /* ▶ */;
@@ -166,8 +170,46 @@
     else if (action === 'toggle') window.toggleRotation();
   };
 
+  // Guarantee a visible play/pause control on every page. If the page's native
+  // control is missing (e.g. feed-health) or hidden (e.g. iframe-hide logic),
+  // inject a consistent floating prev/play/next bar wired to the engine.
+  function ensureControl() {
+    var native = document.getElementById('bnr-play') ||
+                 document.getElementById('nav-play') ||
+                 document.getElementById('globe-transport-play');
+    var visible = native && native.offsetParent !== null;
+    if (visible) return; // native control present and shown — engine drives it
+    if (document.getElementById('roc-rot-fab')) return; // already injected
+    var btn = 'background:rgba(24,188,156,.1);border:1px solid rgba(24,188,156,.35);' +
+              'color:#18BC9C;font-size:13px;width:28px;height:24px;border-radius:3px;' +
+              'cursor:pointer;padding:0;line-height:1;';
+    var bar = document.createElement('div');
+    bar.id = 'roc-rot-fab';
+    bar.style.cssText = 'position:fixed;bottom:14px;right:14px;display:flex;gap:4px;' +
+      'z-index:99999;background:rgba(6,6,16,.88);border:1px solid rgba(24,188,156,.3);' +
+      'border-radius:6px;padding:5px;font-family:system-ui,sans-serif;';
+    bar.innerHTML =
+      '<button title="Previous dashboard" onclick="navPrev()" style="' + btn + '">&#9198;</button>' +
+      '<button id="roc-fab-play" title="Play/Pause rotation" onclick="toggleRotation()" style="' + btn + '">&#9654;</button>' +
+      '<button title="Next dashboard" onclick="navNext()" style="' + btn + '">&#9197;</button>';
+    document.body.appendChild(bar);
+  }
+
+  // One-time migration: ensure newly-added slides (labor, supply_chain) appear in
+  // any pre-existing saved selection without disturbing the user's other choices.
+  function migrate() {
+    var s = getState();
+    if (s.enabledSlides && s.enabledSlides.length) {
+      var changed = false;
+      ['labor', 'supply_chain'].forEach(function (k) {
+        if (s.enabledSlides.indexOf(k) === -1) { s.enabledSlides.push(k); changed = true; }
+      });
+      if (changed) setState(s);
+    }
+  }
+
   // ── On load: resume the relay if active (THE FIX) ──
-  function init() { updateUI(); arm(); }
+  function init() { migrate(); ensureControl(); updateUI(); arm(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
