@@ -79,18 +79,18 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); height:
   var API = 'https://ovix-api.tedlango.workers.dev';
 
   var PANELS = [
-    { key:'weather', url:'/dashboards/weather.html', nav:'/dashboards/weather.html' },
-    { key:'seismic', url:'/dashboards/seismic.html', nav:'/dashboards/seismic.html' },
-    { key:'disaster', url:'/dashboards/disaster.html', nav:'/dashboards/disaster.html' },
-    { key:'cyber', url:'/dashboards/cyber.html', nav:'/dashboards/cyber.html' },
-    { key:'health', url:'/dashboards/health.html', nav:'/dashboards/health.html' },
-    { key:'infrastructure', url:'/dashboards/infrastructure.html', nav:'/dashboards/infrastructure.html' },
-    { key:'financial', url:'/dashboards/financial.html', nav:'/dashboards/financial.html' },
-    { key:'environmental', url:'about:blank', nav:'/dashboards/scores.html' },
-    { key:'geopolitical', url:'/dashboards/geopolitical.html', nav:'/dashboards/geopolitical.html' },
-    { key:'travel', url:'/dashboards/travel.html', nav:'/dashboards/travel.html' },
-    { key:'labor', url:'/dashboards/labor.html', nav:'/dashboards/labor.html' },
-    { key:'supply-chain', url:'/dashboards/supply-chain.html', nav:'/dashboards/supply-chain.html' }
+    { key:'weather', url:'/roc/dashboards/weather.html', nav:'/roc/dashboards/weather.html' },
+    { key:'seismic', url:'/roc/dashboards/seismic.html', nav:'/roc/dashboards/seismic.html' },
+    { key:'disaster', url:'/roc/dashboards/disaster.html', nav:'/roc/dashboards/disaster.html' },
+    { key:'cyber', url:'/roc/dashboards/cyber.html', nav:'/roc/dashboards/cyber.html' },
+    { key:'health', url:'/roc/dashboards/health.html', nav:'/roc/dashboards/health.html' },
+    { key:'infrastructure', url:'/roc/dashboards/infrastructure.html', nav:'/roc/dashboards/infrastructure.html' },
+    { key:'financial', url:'/roc/dashboards/financial.html', nav:'/roc/dashboards/financial.html' },
+    { key:'environmental', url:'about:blank', nav:'/roc/dashboards/scores.html' },
+    { key:'geopolitical', url:'/roc/dashboards/geopolitical.html', nav:'/roc/dashboards/geopolitical.html' },
+    { key:'travel', url:'/roc/dashboards/travel.html', nav:'/roc/dashboards/travel.html' },
+    { key:'labor', url:'/roc/dashboards/labor.html', nav:'/roc/dashboards/labor.html' },
+    { key:'supply-chain', url:'/roc/dashboards/supply-chain.html', nav:'/roc/dashboards/supply-chain.html' }
   ];
 
   var grid = document.getElementById('grid');
@@ -126,7 +126,7 @@ body { background:var(--bg); color:var(--text); font-family:var(--mono); height:
 
 <script>
 window.rocNav = function(a) {
-  ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};
+  ROUTES = {globe:'/roc/globe/globe.html',scores:'/roc/dashboards/scores.html',weather:'/roc/dashboards/weather.html',seismic:'/roc/dashboards/seismic.html',disaster:'/roc/dashboards/disaster.html',cyber:'/roc/dashboards/cyber.html',health:'/roc/dashboards/health.html',infrastructure:'/roc/dashboards/infrastructure.html',financial:'/roc/dashboards/financial.html',environmental:'/roc/dashboards/environmental.html',geopolitical:'/roc/dashboards/geopolitical.html',travel:'/roc/dashboards/travel.html',labor:'/roc/dashboards/labor.html','supply-chain':'/roc/dashboards/supply-chain.html'};
   var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];
   var K = 'roc-rotation';
   function gs() { try { return JSON.parse(localStorage.getItem(K))||{}; } catch(e) { return {}; } }
@@ -141,7 +141,7 @@ window.rocNav = function(a) {
 };
 function updateTransportUI(){var s;try{s=JSON.parse(localStorage.getItem('roc-rotation'))||{};}catch(e){s={};}var b=document.getElementById('bnr-play'),ind=document.getElementById('rotation-indicator');if(b){b.textContent=s.active?'⏸':'▶';b.style.background=s.active?'rgba(24,188,156,0.25)':'rgba(24,188,156,0.08)';}if(ind)ind.style.display=s.active?'block':'none';var sp=document.getElementById('bnr-speed');if(sp&&s.interval)sp.value=String(s.interval);}
 updateTransportUI();
-(function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/globe/globe.html',scores:'/dashboards/scores.html',weather:'/dashboards/weather.html',seismic:'/dashboards/seismic.html',disaster:'/dashboards/disaster.html',cyber:'/dashboards/cyber.html',health:'/dashboards/health.html',infrastructure:'/dashboards/infrastructure.html',financial:'/dashboards/financial.html',environmental:'/dashboards/environmental.html',geopolitical:'/dashboards/geopolitical.html',travel:'/dashboards/travel.html',labor:'/dashboards/labor.html','supply-chain':'/dashboards/supply-chain.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
+(function(){try{var s=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e){return;}if(!s.active)return;var ri=document.getElementById('rotation-indicator');if(ri)ri.style.display='block';ROUTES = {globe:'/roc/globe/globe.html',scores:'/roc/dashboards/scores.html',weather:'/roc/dashboards/weather.html',seismic:'/roc/dashboards/seismic.html',disaster:'/roc/dashboards/disaster.html',cyber:'/roc/dashboards/cyber.html',health:'/roc/dashboards/health.html',infrastructure:'/roc/dashboards/infrastructure.html',financial:'/roc/dashboards/financial.html',environmental:'/roc/dashboards/environmental.html',geopolitical:'/roc/dashboards/geopolitical.html',travel:'/roc/dashboards/travel.html',labor:'/roc/dashboards/labor.html','supply-chain':'/roc/dashboards/supply-chain.html'};var ORDER = ['globe','scores','weather','seismic','disaster','cyber','health','infrastructure','financial','environmental','geopolitical','travel','labor','supply-chain'];var en=s.enabledSlides||ORDER.slice();var cur='scores';var p=window.location.pathname;for(var k in ROUTES){if(p.indexOf(ROUTES[k])!==-1){cur=k;break;}}var i=en.indexOf(cur);if(i===-1)i=0;var nx=en[(i+1)%en.length];setTimeout(function(){try{var c=JSON.parse(localStorage.getItem('roc-rotation')||'{}');}catch(e2){return;}if(!c.active)return;window.location=ROUTES[nx];},(s.interval||30)*1000);})();
 </script>
 </body>
 </html>
