@@ -961,8 +961,10 @@
           var lat = p.location_lat == null ? null : parseFloat(p.location_lat);
           var lon = p.location_lon == null ? null : parseFloat(p.location_lon);
           if (lat == null || lon == null || isNaN(lat) || isNaN(lon)) return; // skip null-coord rows gracefully
+          var status = (p.status || '').toLowerCase();
+          if (status === 'closed' || status === 'resolved') return; // closed/resolved incidents do not belong on the live globe
           plotted++;
-          var isOpen = (p.status || '').toLowerCase() !== 'closed';
+          var isOpen = true; // only open incidents reach this point
           var color = incidentColor(p.sev_level);
           var baseSize = incidentSize(p.sev_level);
           var cesColor = Cesium.Color.fromCssColorString(color);
