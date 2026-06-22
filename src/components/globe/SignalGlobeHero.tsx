@@ -42,6 +42,33 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   const [focusedId, setFocusedId] = useState<number | null>(null)
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
   const nonceRef = useRef(0)
+  const sectionRef = useRef<HTMLElement | null>(null)
+
+  // ── postMessage bridge: the OVIX tape (iframe at /roc/dashboards/scores.html)
+  // posts { type:'wfm:globe-focus', domain } to its parent (this landing). We
+  // validate the origin, re-dispatch as the window CustomEvent the canvas listens
+  // for, and scroll the globe hero into view so the user sees the fly-to.
+  // On mobile no Cesium canvas is mounted, so the CustomEvent no-ops gracefully
+  // and we simply scroll the hero/ticker into view. Same-document native callers
+  // can dispatch the CustomEvent directly (no postMessage needed).
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return // SECURITY: same-origin only
+      const data = event.data
+      if (!data || data.type !== 'wfm:globe-focus') return
+      const detail: Record<string, unknown> = {}
+      if (data.lat != null) detail.lat = data.lat
+      if (data.lon != null) detail.lon = data.lon
+      if (data.title != null) detail.title = data.title
+      if (data.category != null) detail.category = data.category
+      if (data.domain != null) detail.domain = data.domain
+      if (data.signalId != null) detail.signalId = data.signalId
+      window.dispatchEvent(new CustomEvent('wfm:globe-focus', { detail }))
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
 
   // ── live poll ──
   useEffect(() => {
@@ -78,6 +105,7 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   if (!mobile) {
     return (
       <section
+        ref={sectionRef}
         style={{
           position: 'relative',
           width: '100%',
@@ -128,6 +156,7 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   // ── mobile: CSS globe + ticker, no Cesium ──
   return (
     <section
+      ref={sectionRef}
       style={{
         position: 'relative',
         width: '100%',
