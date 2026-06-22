@@ -537,7 +537,7 @@ a.lnk:hover { text-decoration:underline; }
       html += '<div class="evt"><div class="et">' + esc(dom.topEvent) + '</div>' +
         '<div class="em"><span>source: ' + esc(dom.topSource || '—') + '</span>' +
         '<span>' + (dom.eventCount || 0) + ' events in domain</span>' +
-        (dom.geographic ? '<a class="lnk" href="/roc/globe/globe.html" title="Open globe">show on globe ↗</a>' : '') +
+        (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Open globe">show on globe ↗</a>' : '') +
         '</div></div>';
     } else { html += '<div class="muted">No top event reported.</div>'; }
     html += '</div>';
@@ -548,7 +548,7 @@ a.lnk:hover { text-decoration:underline; }
     if (incs.length) {
       html += incs.slice(0, 8).map(function(inc) {
         var sc = sevColor(inc.severity_level);
-        return '<a class="inc-item" href="/incidents/' + esc(inc.slug || '') + '">' +
+        return '<a class="inc-item" target="_top" rel="noopener" href="/incidents/' + esc(inc.slug || '') + '">' +
           '<span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(inc.severity_level || ('SEV' + (inc.severity || '?'))) + '</span> ' +
           '<span class="ii-title">' + esc(inc.title || 'Untitled') + '</span>' +
           '<div class="ii-meta">' + esc((inc.affected_regions || []).slice(0, 3).join(', ') || inc.location_country || '') +
@@ -634,11 +634,11 @@ a.lnk:hover { text-decoration:underline; }
       if (!doc) { h.innerHTML = '<div class="muted">No briefs published.</div>'; return; }
       var title = doc.title || doc.subject || 'Latest brief';
       var snip = (doc.summary || doc.excerpt || doc.preheader || '').toString().slice(0, 240);
-      h.innerHTML = '<div class="brief-snip"><a class="lnk" href="/briefs">' + esc(title) + '</a>' +
+      h.innerHTML = '<div class="brief-snip"><a class="lnk" target="_top" rel="noopener" href="/briefs">' + esc(title) + '</a>' +
         (snip ? '<div style="margin-top:4px">' + esc(snip) + '…</div>' : '') + '</div>';
     }).catch(function() {
       if (state.selected !== key) return;
-      var h = host(); if (h) h.innerHTML = '<div class="muted">Briefs are in the members area — <a class="lnk" href="/briefs">open briefs ↗</a></div>';
+      var h = host(); if (h) h.innerHTML = '<div class="muted">Briefs are in the members area — <a class="lnk" target="_top" rel="noopener" href="/briefs">open briefs ↗</a></div>';
     });
   }
 
