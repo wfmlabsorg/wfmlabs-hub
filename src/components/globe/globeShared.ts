@@ -75,18 +75,21 @@ export function incidentColor(sev: string | null | undefined): string {
   }
 }
 
+// Incidents are the HEADLINE tier — large, dominant. Deliberately sized well
+// above the signal tier (max signal dot = 6px) so the two layers never read as
+// the same kind of thing (hub-014 two-tier model).
 export function incidentSize(sev: string | null | undefined): number {
   switch ((sev || '').toUpperCase()) {
     case 'SEV1':
-      return 14
+      return 20
     case 'SEV2':
-      return 11
+      return 17
     case 'SEV3':
-      return 9
+      return 14
     case 'SEV4':
-      return 7
+      return 12
     default:
-      return 8
+      return 13
   }
 }
 
@@ -96,13 +99,15 @@ export function signalSeverityNum(s: GlobeSignal): number {
   return isNaN(n) ? 0 : n
 }
 
-// Point size scales with severity (4–9px) so big events read larger.
+// Signals are the AMBIENT tier — small fading dots. Kept deliberately small
+// (max 6px) so even a high-severity signal stays visibly subordinate to the
+// smallest incident marker (12px). Severity still nudges size for texture.
 export function signalSize(s: GlobeSignal): number {
   const n = signalSeverityNum(s)
-  if (n >= 8) return 9
-  if (n >= 6) return 7
-  if (n >= 4) return 6
-  return 5
+  if (n >= 8) return 6
+  if (n >= 6) return 5
+  if (n >= 4) return 4
+  return 3
 }
 
 // Short severity chip label, e.g. "7.0" or "SEVERE".
@@ -123,6 +128,61 @@ export function severityChipColor(s: GlobeSignal): string {
 
 export function domainLabel(domain: string | null | undefined): string {
   return (domain || 'general').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// Strip the worker's title scaffold so the human headline shows through.
+// Source titles look like: "[Region] <domain> <sev> — Real headline"
+//   e.g. "[Global] seismic 6.0 — M 5.0 - Drake Passage" → "M 5.0 - Drake Passage"
+//        "[US] cyber 8.0 — AzeoTech DAQFactory"          → "AzeoTech DAQFactory"
+// Mirrors the eventKey pattern in spec §40. Falls back to the raw title if the
+// strip would leave nothing.
+export function cleanTitle(title: string | null | undefined): string {
+  if (!title) return title || ''
+  let t = title.replace(/^\[[^\]]*\]\s*/, '') // drop [Region] tag
+  t = t.replace(/^[a-z_]+\s+\d+(?:\.\d+)?\s*—\s*/i, '') // drop "<domain> <sev> — "
+  return t.trim() || title
+}
+
+// Stable identity for an event regardless of which city point it was fanned to
+// or minor formatting differences ("M 5.0 - Drake Passage" vs "M5.0 — DRAKE
+// PASSAGE"). Category-scoped + heavily normalized so geo-fan-out duplicates and
+// near-identical re-emits collapse to one key. Untitled signals never merge.
+export function eventKey(s: GlobeSignal): string {
+  const norm = cleanTitle(s.title).toLowerCase().replace(/[^a-z0-9]+/g, '')
+  if (!norm) return `id-${s.id}`
+  return `${(s.category || '').toLowerCase()}|${norm}`
+}
+
+function signalHasCoords(s: GlobeSignal): boolean {
+  return !isNaN(Number(s.lat)) && !isNaN(Number(s.lon))
+}
+
+// Rank a representative: plottable (has coords) > precise geo > anything.
+function repRank(s: GlobeSignal): number {
+  return (signalHasCoords(s) ? 2 : 0) + (s.geo_source === 'precise' ? 1 : 0)
+}
+
+// Collapse geo-fan-out duplicates client-side: one real event → one ticker row +
+// one representative point (hub-014 Part 2.3). Picks the most plottable / precise
+// representative per eventKey, then the newest. Returns newest-first.
+export function dedupeSignalsByEvent(list: GlobeSignal[]): GlobeSignal[] {
+  const best = new Map<string, GlobeSignal>()
+  for (const s of list) {
+    const k = eventKey(s)
+    const cur = best.get(k)
+    if (!cur) {
+      best.set(k, s)
+      continue
+    }
+    const dr = repRank(s) - repRank(cur)
+    if (dr > 0) best.set(k, s)
+    else if (dr === 0 && new Date(s.created_at).getTime() > new Date(cur.created_at).getTime()) {
+      best.set(k, s)
+    }
+  }
+  return Array.from(best.values()).sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  )
 }
 
 export function timeAgo(date: string): string {

@@ -242,7 +242,7 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>📍 {regions}</span>
                   {hasCoords && (
-                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} />
+                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} incidentSlug={inc.slug} />
                   )}
                 </div>
               </a>

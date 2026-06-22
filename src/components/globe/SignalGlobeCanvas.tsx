@@ -24,13 +24,19 @@ import {
   incidentSize,
   signalSize,
   signalSeverityNum,
+  cleanTitle,
+  domainLabel,
+  timeAgo,
   CESIUM_CDN_BASE,
   CESIUM_VERSION,
   OVIX_API_BASE,
 } from './globeShared'
 
+// A ticker-row click carries the row's OWN signal object so the canvas flies to
+// exactly that point — never a lookup in the (possibly refreshed/aged-out)
+// current set, which used to silently no-op (hub-014 Part 2.1).
 interface FocusRequest {
-  id: number
+  signal: GlobeSignal
   nonce: number
 }
 
@@ -45,11 +51,49 @@ interface Props {
 interface PopupState {
   kind: 'signal' | 'incident'
   title: string
+  domain: string
   sevText: string
   sevColor: string
   region: string
+  timeText: string
+  approximate: boolean
+  status: string | null
   incidentSlug: string | null
   signalId: number | null
+}
+
+// ── popup builders (fresh relative time each open) ──
+function buildSignalPopup(s: GlobeSignal): PopupState {
+  const n = signalSeverityNum(s)
+  return {
+    kind: 'signal',
+    title: cleanTitle(s.title) || 'Signal',
+    domain: domainLabel(s.category),
+    sevText: n > 0 ? n.toFixed(1) : (s.severity_label || '').toUpperCase() || 'SIGNAL',
+    sevColor: signalColor(s.category),
+    region: s.region_name || 'Global',
+    timeText: timeAgo(s.created_at),
+    approximate: !!s.geo_source && s.geo_source !== 'precise',
+    status: null,
+    incidentSlug: s.incident_slug,
+    signalId: s.id,
+  }
+}
+
+function buildIncidentPopup(p: GlobeIncident): PopupState {
+  return {
+    kind: 'incident',
+    title: p.title || 'Incident',
+    domain: domainLabel(p.domain),
+    sevText: (p.sev_level || '').toUpperCase() || 'INCIDENT',
+    sevColor: incidentColor(p.sev_level),
+    region: domainLabel(p.domain),
+    timeText: p.created_at ? timeAgo(p.created_at) : '',
+    approximate: false,
+    status: p.status || null,
+    incidentSlug: p.slug,
+    signalId: null,
+  }
 }
 
 // Tuning
@@ -130,6 +174,7 @@ export default function SignalGlobeCanvas({
 
   // latest props mirrored into refs for use inside the persistent render loop
   const signalsRef = useRef<GlobeSignal[]>(signals)
+  const incidentsRef = useRef<GlobeIncident[]>(incidents)
   const onFocusRef = useRef(onFocus)
   useEffect(() => {
     onFocusRef.current = onFocus
@@ -214,7 +259,11 @@ export default function SignalGlobeCanvas({
             return
           }
           popupPosRef.current = pos
-          setPopup(meta.popup)
+          setPopup(
+            meta.kind === 'incident'
+              ? buildIncidentPopup(meta.incident)
+              : buildSignalPopup(meta.signal),
+          )
           onFocusRef.current(meta.focusId)
         }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
         handlers.push(clickHandler)
@@ -332,9 +381,11 @@ export default function SignalGlobeCanvas({
       if (isNaN(created) || Date.now() - created > SIGNAL_MAX_AGE_MS) return
       const css = signalColor(s.category)
       const base = Cesium.Color.fromCssColorString(css)
+      // Ambient tier: fade harder with age (cap 0.7) so live signals read as
+      // faint, transient texture — never competing with the incident headlines.
       const fill = new Cesium.CallbackProperty(() => {
         const frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS
-        return base.withAlpha(Math.max(0.1, Math.min(0.85, frac * 0.85)))
+        return base.withAlpha(Math.max(0.08, Math.min(0.7, frac * 0.7)))
       }, false)
       const eid = `sig-${s.id}`
       const entity = viewer.entities.add({
@@ -343,24 +394,13 @@ export default function SignalGlobeCanvas({
         point: {
           pixelSize: signalSize(s),
           color: fill,
-          outlineColor: base.withAlpha(0.5),
+          outlineColor: base.withAlpha(0.35),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e6, 1.1, 2e7, 0.5),
         },
       })
-      metaRef.current.set(eid, {
-        focusId: s.id,
-        popup: {
-          kind: 'signal' as const,
-          title: s.title || 'Signal',
-          sevText: signalSeverityNum(s) > 0 ? signalSeverityNum(s).toFixed(1) : (s.severity_label || '').toUpperCase(),
-          sevColor: css,
-          region: s.region_name || 'Global',
-          incidentSlug: s.incident_slug,
-          signalId: s.id,
-        },
-      })
+      metaRef.current.set(eid, { kind: 'signal' as const, focusId: s.id, signal: s })
       signalEntitiesRef.current.push(entity)
     })
   }
@@ -382,48 +422,81 @@ export default function SignalGlobeCanvas({
       const css = incidentColor(p.sev_level)
       const ces = Cesium.Color.fromCssColorString(css)
       const baseSize = incidentSize(p.sev_level)
+      const position = Cesium.Cartesian3.fromDegrees(lon, lat)
       const eid = `inc-${p.id}`
+
+      // Headline tier: large SEV-colored core that breathes.
       const entity = viewer.entities.add({
         id: eid,
-        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        position,
         point: {
           pixelSize: new Cesium.CallbackProperty(() => {
             const t = (Date.now() % 1600) / 1600
             return baseSize + Math.sin(t * Math.PI * 2) * 3
           }, false),
           color: ces.withAlpha(0.95),
-          outlineColor: ces.withAlpha(0.9),
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55),
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
+        },
+        // Always-on label so incidents are self-identifying headlines.
+        label: {
+          text: `${(p.sev_level || '').toUpperCase()} · ${truncate(p.title || 'Incident', 38)}`,
+          font: "600 12px 'IBM Plex Sans', system-ui, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString('#e2e8f0'),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString('#060a16').withAlpha(0.82),
+          backgroundPadding: new Cesium.Cartesian2(8, 5),
+          outlineColor: ces.withAlpha(0.6),
+          style: Cesium.LabelStyle.FILL,
+          horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(baseSize + 8, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Fade the label out when the marker is far/small to avoid clutter.
+          translucencyByDistance: new Cesium.NearFarScalar(4e6, 1.0, 1.6e7, 0.0),
         },
       })
-      // static halo
+
+      // Continuously expanding pulse ring — the signature "live incident" beat.
+      const ring = viewer.entities.add({
+        id: `inc-ring-${p.id}`,
+        position,
+        point: {
+          pixelSize: new Cesium.CallbackProperty(() => {
+            const t = (Date.now() % 2200) / 2200
+            return baseSize * 1.4 + t * baseSize * 2.6
+          }, false),
+          color: Cesium.Color.TRANSPARENT,
+          outlineColor: new Cesium.CallbackProperty(() => {
+            const t = (Date.now() % 2200) / 2200
+            return ces.withAlpha((1 - t) * 0.6)
+          }, false),
+          outlineWidth: 2,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
+        },
+      })
+
+      // Static halo glow underneath.
       const halo = viewer.entities.add({
         id: `inc-halo-${p.id}`,
-        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        position,
         point: {
-          pixelSize: baseSize * 2.6,
-          color: ces.withAlpha(0.08),
-          outlineColor: ces.withAlpha(0.35),
+          pixelSize: baseSize * 3,
+          color: ces.withAlpha(0.1),
+          outlineColor: ces.withAlpha(0.3),
           outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55),
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
         },
       })
-      metaRef.current.set(eid, {
-        focusId: -p.id, // negative space so it never collides with signal ids
-        popup: {
-          kind: 'incident' as const,
-          title: p.title || 'Incident',
-          sevText: (p.sev_level || '').toUpperCase(),
-          sevColor: css,
-          region: domainPretty(p.domain),
-          incidentSlug: p.slug,
-          signalId: null,
-        },
-      })
-      incidentEntitiesRef.current.push(entity, halo)
+
+      // focusId in negative space so it never collides with signal ids; the core
+      // entity carries the click meta (ring/halo aren't in metaRef → not picked).
+      metaRef.current.set(eid, { kind: 'incident' as const, focusId: -p.id, incident: p })
+      incidentEntitiesRef.current.push(entity, ring, halo)
     })
   }
 
@@ -502,15 +575,7 @@ export default function SignalGlobeCanvas({
     onFocusRef.current(s.id)
     if (showPopup) {
       popupPosRef.current = Cesium.Cartesian3.fromDegrees(lon, lat)
-      setPopup({
-        kind: 'signal',
-        title: s.title || 'Signal',
-        sevText: signalSeverityNum(s) > 0 ? signalSeverityNum(s).toFixed(1) : (s.severity_label || '').toUpperCase(),
-        sevColor: signalColor(s.category),
-        region: s.region_name || 'Global',
-        incidentSlug: s.incident_slug,
-        signalId: s.id,
-      })
+      setPopup(buildSignalPopup(s))
     }
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
@@ -543,14 +608,46 @@ export default function SignalGlobeCanvas({
       popupPosRef.current = Cesium.Cartesian3.fromDegrees(lon, lat)
       setPopup({
         kind: 'signal',
-        title: opts.title,
+        title: cleanTitle(opts.title),
+        domain: opts.category ? domainLabel(opts.category) : 'Signal',
         sevText: 'SIGNAL',
         sevColor: css,
         region: opts.region || 'Located',
+        timeText: '',
+        approximate: false,
+        status: null,
         incidentSlug: null,
         signalId: opts.signalId ?? null,
       })
     }
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
+      duration: FLY_DURATION,
+      complete: () => {
+        settle()
+        idleResumeRef.current = Date.now() + DWELL_MS
+      },
+      cancel: () => {
+        settle()
+      },
+    })
+  }
+
+  // Fly to an incident (the headline tier) → rich popup with "view incident →".
+  // Used by in-globe incident clicks resolving through the focus hook.
+  function flyToIncident(p: GlobeIncident) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer) return
+    const lat = p.location_lat == null ? NaN : parseFloat(String(p.location_lat))
+    const lon = p.location_lon == null ? NaN : parseFloat(String(p.location_lon))
+    if (isNaN(lat) || isNaN(lon)) return
+    const settle = beginFlight()
+    idleResumeRef.current = Date.now() + FLY_DURATION * 1000 + DWELL_MS
+    pulseAt(lon, lat, incidentColor(p.sev_level))
+    onFocusRef.current(-p.id)
+    popupPosRef.current = Cesium.Cartesian3.fromDegrees(lon, lat)
+    setPopup(buildIncidentPopup(p))
     viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
       duration: FLY_DURATION,
@@ -572,6 +669,22 @@ export default function SignalGlobeCanvas({
     const handler = (e: Event) => {
       if (!readyRef.current) return
       const detail = (e as CustomEvent).detail || {}
+
+      // 0) incident identity → headline tier: fly + rich popup (Part 3). Checked
+      // before raw coords so an incident "show on globe" never degrades to a
+      // generic coordinate popup even when lat/lon are also supplied.
+      if (detail.incidentSlug != null || detail.incidentId != null) {
+        const inc = incidentsRef.current.find(
+          (x) =>
+            (detail.incidentSlug != null && x.slug === String(detail.incidentSlug)) ||
+            (detail.incidentId != null && x.id === Number(detail.incidentId)),
+        )
+        if (inc) {
+          flyToIncident(inc)
+          return
+        }
+        // Incident not in current feed — fall through to coords if provided.
+      }
 
       // 1) explicit coordinates
       const lat = detail.lat != null ? Number(detail.lat) : NaN
@@ -659,15 +772,18 @@ export default function SignalGlobeCanvas({
   }, [signals])
 
   useEffect(() => {
+    incidentsRef.current = incidents
     if (!readyRef.current) return
     plotIncidents(incidents)
   }, [incidents])
 
   // ── react to ticker-row clicks (focusRequest) ──
+  // Flies using the clicked row's OWN signal object (carried in focusRequest), so
+  // it ALWAYS flies + pops — never a lookup that could miss an aged-out/refreshed
+  // signal and silently no-op (hub-014 Part 2.1).
   useEffect(() => {
     if (!focusRequest || !readyRef.current) return
-    const s = signalsRef.current.find((x) => x.id === focusRequest.id)
-    if (s) flyToSignal(s, true)
+    flyToSignal(focusRequest.signal, true)
   }, [focusRequest])
 
   return (
@@ -714,7 +830,7 @@ export default function SignalGlobeCanvas({
               fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
               <span
                 style={{
                   fontSize: '0.6rem',
@@ -727,11 +843,31 @@ export default function SignalGlobeCanvas({
                   padding: '0.05rem 0.35rem',
                 }}
               >
-                {popup.kind === 'incident' ? popup.sevText || 'INCIDENT' : popup.sevText || 'SIGNAL'}
+                {popup.sevText}
               </span>
-              <span style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {popup.kind}
-              </span>
+              {popup.kind === 'incident' ? (
+                <span
+                  style={{
+                    fontSize: '0.55rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    color: '#ef4444',
+                  }}
+                >
+                  ● Incident
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.6rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {popup.domain}
+                </span>
+              )}
+              {popup.kind === 'incident' && popup.status && (
+                <span style={{ fontSize: '0.58rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  {popup.status}
+                </span>
+              )}
               <button
                 onClick={() => {
                   setPopup(null)
@@ -747,9 +883,16 @@ export default function SignalGlobeCanvas({
             <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#e2e8f0', lineHeight: 1.35, marginBottom: '0.3rem' }}>
               {popup.title}
             </div>
-            <div style={{ fontSize: '0.66rem', color: '#94a3b8', marginBottom: popup.incidentSlug ? '0.45rem' : 0 }}>
-              📍 {popup.region}
+            <div style={{ fontSize: '0.66rem', color: '#94a3b8', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.3rem' }}>
+              <span>📍 {popup.region}</span>
+              {popup.kind === 'signal' && <span>{popup.domain}</span>}
+              {popup.timeText && <span>🕑 {popup.timeText} ago</span>}
             </div>
+            {popup.approximate && (
+              <div style={{ fontSize: '0.6rem', color: '#eab308', marginBottom: '0.3rem', fontFamily: "'IBM Plex Mono', monospace" }}>
+                ≈ approximate location
+              </div>
+            )}
             {popup.incidentSlug && (
               <a
                 href={`/incidents/${popup.incidentSlug}`}
@@ -773,8 +916,8 @@ export default function SignalGlobeCanvas({
   )
 }
 
-function domainPretty(domain: string | null | undefined): string {
-  return (domain || 'general').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+function truncate(text: string, max: number): string {
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text
 }
 
 // Lightweight CSS sphere — placeholder while Cesium boots / on error.

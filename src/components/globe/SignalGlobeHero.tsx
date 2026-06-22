@@ -15,6 +15,8 @@ import {
   severityChip,
   severityChipColor,
   domainLabel,
+  cleanTitle,
+  dedupeSignalsByEvent,
   timeAgo,
   ROC_GLOBE_FEED,
 } from './globeShared'
@@ -32,7 +34,7 @@ const POLL_MS = 30_000
 const TICKER_CAP = 30
 
 interface FocusRequest {
-  id: number
+  signal: GlobeSignal
   nonce: number
 }
 
@@ -63,6 +65,8 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
       if (data.category != null) detail.category = data.category
       if (data.domain != null) detail.domain = data.domain
       if (data.signalId != null) detail.signalId = data.signalId
+      if (data.incidentSlug != null) detail.incidentSlug = data.incidentSlug
+      if (data.incidentId != null) detail.incidentId = data.incidentId
       window.dispatchEvent(new CustomEvent('wfm:globe-focus', { detail }))
       sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
@@ -93,13 +97,19 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
     }
   }, [])
 
-  const handleRowClick = useCallback((id: number) => {
-    setFocusedId(id)
+  // Clicking a ticker row flies using the row's OWN signal object — never an id
+  // lookup the canvas would have to re-resolve against a refreshed/aged set
+  // (which silently no-op'd). Always fly + popup (hub-014 Part 2.1).
+  const handleRowClick = useCallback((s: GlobeSignal) => {
+    setFocusedId(s.id)
     nonceRef.current += 1
-    setFocusRequest({ id, nonce: nonceRef.current })
+    setFocusRequest({ signal: s, nonce: nonceRef.current })
   }, [])
 
-  const tickerSignals = signals.slice(0, TICKER_CAP)
+  // Collapse geo-fan-out duplicates before they reach BOTH the ticker and the
+  // globe: one real event = one row + one representative point (hub-014 Part 2.3).
+  const dedupedSignals = dedupeSignalsByEvent(signals)
+  const tickerSignals = dedupedSignals.slice(0, TICKER_CAP)
 
   // ── desktop: full-bleed Cesium hero + overlaid ticker ──
   if (!mobile) {
@@ -116,13 +126,13 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
         }}
       >
         <SignalGlobeCanvas
-          signals={signals}
+          signals={dedupedSignals}
           incidents={incidents}
           focusRequest={focusRequest}
           onFocus={setFocusedId}
         />
 
-        <HeroOverlayHeader incidentCount={incidents.length} signalCount={signals.length} />
+        <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} />
 
         {/* ticker rail (right) */}
         <div
@@ -169,7 +179,7 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <InlineGlobePlaceholder />
         </div>
-        <HeroOverlayHeader incidentCount={incidents.length} signalCount={signals.length} compact />
+        <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} compact />
         <a
           href="/roc/globe/globe.html"
           target="_blank"
@@ -199,7 +209,7 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
           <TickerRows
             rows={tickerSignals.slice(0, 14)}
             focusedId={focusedId}
-            onRowClick={(id) => setFocusedId(id)}
+            onRowClick={(s) => setFocusedId(s.id)}
           />
         </div>
       </div>
@@ -330,7 +340,7 @@ function TickerRows({
 }: {
   rows: GlobeSignal[]
   focusedId: number | null
-  onRowClick: (id: number) => void
+  onRowClick: (s: GlobeSignal) => void
 }) {
   if (rows.length === 0) {
     return (
@@ -347,7 +357,7 @@ function TickerRows({
         return (
           <button
             key={s.id}
-            onClick={() => onRowClick(s.id)}
+            onClick={() => onRowClick(s)}
             style={{
               animation: 'tickerIn 0.45s ease',
               display: 'block',
@@ -388,10 +398,13 @@ function TickerRows({
               </span>
             </div>
             <div style={{ fontSize: '0.74rem', fontWeight: 500, color: '#e2e8f0', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-              {s.title}
+              {cleanTitle(s.title)}
             </div>
             <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: '0.15rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               📍 {s.region_name || 'Global'}
+              {s.geo_source && s.geo_source !== 'precise' && (
+                <span style={{ color: '#eab308' }}> · ≈ approx</span>
+              )}
             </div>
           </button>
         )
