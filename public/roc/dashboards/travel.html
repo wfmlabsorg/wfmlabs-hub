@@ -332,7 +332,9 @@ function fetchData(){
       .catch(function(){return {signals:[]}})
   ]).then(function(res){
     var d=res[0]||{}; var sigs=(res[1]&&res[1].signals)||[];
-    drawGauge(d.composite||0,d.level||'NOMINAL');
+    var __tl = d.level||'NOMINAL'; window.__travelLevel = __tl;
+    drawGauge(window.rocCanonical ? window.rocCanonical(d.composite||0) : (d.composite||0), __tl);
+    window.__rocApplyCanonical = function (s) { try { drawGauge(s, window.__travelLevel || 'NOMINAL'); } catch (e) {} };
     renderBars(d.domains||[]);
     var av=[],rd=[],tr=[],mi=[],il=[];
     (d.events||[]).forEach(function(e){
@@ -402,6 +404,7 @@ var en=s.enabledSlides||O.slice(),p=window.location.pathname,c='travel';for(var 
 setTimeout(function(){var x;try{x=JSON.parse(localStorage.getItem('roc-rotation')||'{}')}catch(e){return}if(!x.active)return;window.location=R[n]},(s.interval||30)*1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

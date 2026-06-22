@@ -138,4 +138,8 @@ export function timeAgo(date: string): string {
 export const CESIUM_VERSION = '1.124'
 export const CESIUM_CDN_BASE = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VERSION}/Build/Cesium/`
 export const OVIX_API_BASE = 'https://ovix-api.tedlango.workers.dev'
-export const ROC_GLOBE_FEED = '/api/roc-globe?mins=150'
+// Poll the feed at the endpoint's max window (360 min). The default 150 returns
+// only ~6 signals, which starved the globe + ticker and left auto-fly with no
+// material; 360 returns ~40+ resolved/coord-bearing signals so the ticker is
+// populated and every ticker row is flyable (hub-013).
+export const ROC_GLOBE_FEED = '/api/roc-globe?mins=360'

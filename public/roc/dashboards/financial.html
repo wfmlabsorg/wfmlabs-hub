@@ -706,7 +706,8 @@
     if (badgeLabel) { badgeLabel.textContent = lvl.label; badgeLabel.style.color = lvl.color; badgeLabel.style.border = '1px solid ' + lvl.color; }
 
     // Draw gauge
-    drawGauge(fsiScore);
+    drawGauge(window.rocCanonical ? window.rocCanonical(fsiScore) : fsiScore);
+    window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
 
     // Factor bars
     renderFactorBars(factors, fsiScore);
@@ -986,6 +987,7 @@ updateTransportUI();
   }, (s.interval || 30) * 1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

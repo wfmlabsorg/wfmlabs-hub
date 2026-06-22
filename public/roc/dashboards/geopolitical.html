@@ -672,7 +672,8 @@
 
         // Compute risk index from stories
         var result = computeGeopoliticalIndex(stories);
-        drawGauge(result.score);
+        drawGauge(window.rocCanonical ? window.rocCanonical(result.score) : result.score);
+        window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
         renderFactors(result.factors, result.score);
 
         var lvl = indexLevel(result.score);
@@ -777,6 +778,7 @@ updateTransportUI();
   }, (s.interval || 30) * 1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

@@ -235,7 +235,8 @@
 
     // Gauge + factors
     var score = Math.min(10, maxSev);
-    drawGauge(score);
+    drawGauge(window.rocCanonical ? window.rocCanonical(score) : score);
+    window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
     renderFactors([
       {label: 'NWS', value: nws.length > 0 ? Math.min(10, Math.max.apply(null, nws.map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '40%'},
       {label: 'MeteoAlarm', value: eu.length > 0 ? Math.min(10, Math.max.apply(null, eu.map(function(e){return parseFloat(e.severity)||0;}))) : 0, weight: '30%'},
@@ -370,6 +371,7 @@
 
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

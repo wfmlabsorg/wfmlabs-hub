@@ -566,7 +566,8 @@ function computeScore(isps, iodaEvts, power, cfEvts, spaceEvts, signals) {
 
   var composite = Math.min(10, Math.round((ispScore * 0.30 + iodaScore * 0.25 + pwrScore * 0.25 + cfScore * 0.20) * 10) / 10);
 
-  drawGauge(composite);
+  drawGauge(window.rocCanonical ? window.rocCanonical(composite) : composite);
+  window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
   renderFactors([
     {label: 'ISP', value: ispScore, weight: '30%'},
     {label: 'IODA', value: iodaScore, weight: '25%'},
@@ -615,6 +616,7 @@ if (window.parent !== window) {
   if (t) t.style.display = 'none';
 }
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

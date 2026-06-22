@@ -120,6 +120,7 @@ export default function SignalGlobeCanvas({
   const firstLoadRef = useRef(true)
   const flyQueueRef = useRef<GlobeSignal[]>([])
   const flyingRef = useRef(false)
+  const flightIdRef = useRef(0) // monotonic token: only the latest flight may clear flyingRef
   const lastFlyRef = useRef(0)
   const idleResumeRef = useRef(0)
 
@@ -463,6 +464,31 @@ export default function SignalGlobeCanvas({
     }, DURATION + 200)
   }
 
+  // Start a guarded flight. Bumps a monotonic token, marks flying, and returns a
+  // settle() that only clears flyingRef if THIS is still the latest flight.
+  // Issuing a new flyTo makes Cesium fire the previous flight's `cancel`
+  // synchronously — the token guard stops that stale cancel from clearing the
+  // NEW flight's state (which would let the queue pump mid-flight / whiplash).
+  // A watchdog guarantees flyingRef always clears even if Cesium drops the
+  // complete/cancel callback, so the auto-fly queue can never deadlock.
+  function beginFlight(): () => void {
+    const myId = ++flightIdRef.current
+    flyingRef.current = true
+    lastFlyRef.current = Date.now()
+    window.setTimeout(
+      () => {
+        if (flightIdRef.current === myId && flyingRef.current) flyingRef.current = false
+      },
+      FLY_DURATION * 1000 + 2500,
+    )
+    return () => {
+      if (flightIdRef.current === myId) {
+        flyingRef.current = false
+        lastFlyRef.current = Date.now()
+      }
+    }
+  }
+
   function flyToSignal(s: GlobeSignal, showPopup: boolean) {
     const Cesium = cesiumRef.current
     const viewer = viewerRef.current
@@ -470,8 +496,7 @@ export default function SignalGlobeCanvas({
     const lat = Number(s.lat)
     const lon = Number(s.lon)
     if (isNaN(lat) || isNaN(lon)) return
-    flyingRef.current = true
-    lastFlyRef.current = Date.now()
+    const settle = beginFlight()
     idleResumeRef.current = Date.now() + FLY_DURATION * 1000 + DWELL_MS
     pulseAt(lon, lat, signalColor(s.category))
     onFocusRef.current(s.id)
@@ -491,12 +516,11 @@ export default function SignalGlobeCanvas({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
       duration: FLY_DURATION,
       complete: () => {
-        flyingRef.current = false
-        lastFlyRef.current = Date.now()
+        settle()
         idleResumeRef.current = Date.now() + DWELL_MS
       },
       cancel: () => {
-        flyingRef.current = false
+        settle()
       },
     })
   }
@@ -512,8 +536,7 @@ export default function SignalGlobeCanvas({
     if (!Cesium || !viewer) return
     if (isNaN(lat) || isNaN(lon)) return
     const css = signalColor(opts?.category)
-    flyingRef.current = true
-    lastFlyRef.current = Date.now()
+    const settle = beginFlight()
     idleResumeRef.current = Date.now() + FLY_DURATION * 1000 + DWELL_MS
     pulseAt(lon, lat, css)
     if (opts?.title) {
@@ -532,12 +555,11 @@ export default function SignalGlobeCanvas({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
       duration: FLY_DURATION,
       complete: () => {
-        flyingRef.current = false
-        lastFlyRef.current = Date.now()
+        settle()
         idleResumeRef.current = Date.now() + DWELL_MS
       },
       cancel: () => {
-        flyingRef.current = false
+        settle()
       },
     })
   }
@@ -602,6 +624,25 @@ export default function SignalGlobeCanvas({
     if (firstLoadRef.current) {
       signals.forEach((s) => seenRef.current.add(s.id))
       firstLoadRef.current = false
+      // First load: visibly "land" on real activity (highest-severity, tie →
+      // most recent) instead of idling, so the globe demonstrates live data.
+      const landing = signals
+        .filter((s) => {
+          if (s.promoted) return false
+          const la = Number(s.lat)
+          const lo = Number(s.lon)
+          return !isNaN(la) && !isNaN(lo)
+        })
+        .sort((a, b) => {
+          const sev = signalSeverityNum(b) - signalSeverityNum(a)
+          if (sev !== 0) return sev
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })[0]
+      if (landing) {
+        window.setTimeout(() => {
+          if (readyRef.current) flyToSignal(landing, true)
+        }, 1400)
+      }
     } else {
       const fresh = signals.filter((s) => !seenRef.current.has(s.id) && !s.promoted)
       fresh.forEach((s) => seenRef.current.add(s.id))
