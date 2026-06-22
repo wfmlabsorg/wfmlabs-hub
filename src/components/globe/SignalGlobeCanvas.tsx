@@ -501,6 +501,100 @@ export default function SignalGlobeCanvas({
     })
   }
 
+  // Fly to arbitrary coordinates (external focus with explicit lat/lon).
+  function flyToCoords(
+    lat: number,
+    lon: number,
+    opts?: { title?: string; category?: string; region?: string; signalId?: number | null },
+  ) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer) return
+    if (isNaN(lat) || isNaN(lon)) return
+    const css = signalColor(opts?.category)
+    flyingRef.current = true
+    lastFlyRef.current = Date.now()
+    idleResumeRef.current = Date.now() + FLY_DURATION * 1000 + DWELL_MS
+    pulseAt(lon, lat, css)
+    if (opts?.title) {
+      popupPosRef.current = Cesium.Cartesian3.fromDegrees(lon, lat)
+      setPopup({
+        kind: 'signal',
+        title: opts.title,
+        sevText: 'SIGNAL',
+        sevColor: css,
+        region: opts.region || 'Located',
+        incidentSlug: null,
+        signalId: opts.signalId ?? null,
+      })
+    }
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, FLY_HEIGHT),
+      duration: FLY_DURATION,
+      complete: () => {
+        flyingRef.current = false
+        lastFlyRef.current = Date.now()
+        idleResumeRef.current = Date.now() + DWELL_MS
+      },
+      cancel: () => {
+        flyingRef.current = false
+      },
+    })
+  }
+
+  // ── external focus hook: window CustomEvent('wfm:globe-focus', { detail }) ──
+  // detail is one of: { lat, lon, title?, category? } | { signalId } | { domain }.
+  // Lets the OVIX tape (via the page.tsx postMessage bridge) and native sections
+  // drive the globe without navigating. Auto-rotate pauses (flyTo* sets the dwell).
+  useEffect(() => {
+    const handler = (e: Event) => {
+      if (!readyRef.current) return
+      const detail = (e as CustomEvent).detail || {}
+
+      // 1) explicit coordinates
+      const lat = detail.lat != null ? Number(detail.lat) : NaN
+      const lon = detail.lon != null ? Number(detail.lon) : NaN
+      if (!isNaN(lat) && !isNaN(lon)) {
+        flyToCoords(lat, lon, { title: detail.title, category: detail.category })
+        return
+      }
+
+      // 2) explicit signal id → fly to that plotted signal
+      if (detail.signalId != null) {
+        const s = signalsRef.current.find((x) => x.id === Number(detail.signalId))
+        if (s) flyToSignal(s, true)
+        return
+      }
+
+      // 3) domain key → highest-severity, most-recent currently-plotted signal.
+      // Normalize key (OVIX uses 'supply-chain', globe categories use 'supply_chain').
+      if (detail.domain) {
+        const cat = String(detail.domain).toLowerCase().replace(/-/g, '_')
+        const now = Date.now()
+        const candidates = signalsRef.current.filter((s) => {
+          if (s.promoted) return false
+          if (String(s.category || '').toLowerCase().replace(/-/g, '_') !== cat) return false
+          const la = Number(s.lat)
+          const lo = Number(s.lon)
+          if (isNaN(la) || isNaN(lo)) return false
+          const created = new Date(s.created_at).getTime()
+          return !isNaN(created) && now - created <= SIGNAL_MAX_AGE_MS
+        })
+        if (candidates.length) {
+          candidates.sort((a, b) => {
+            const sev = signalSeverityNum(b) - signalSeverityNum(a)
+            if (sev !== 0) return sev
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          })
+          flyToSignal(candidates[0], true)
+        }
+        return
+      }
+    }
+    window.addEventListener('wfm:globe-focus', handler as EventListener)
+    return () => window.removeEventListener('wfm:globe-focus', handler as EventListener)
+  }, [])
+
   // ── react to new signal data: detect new ids, enqueue, re-plot ──
   useEffect(() => {
     signalsRef.current = signals

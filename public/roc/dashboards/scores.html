@@ -507,6 +507,22 @@ a.lnk:hover { text-decoration:underline; }
     renderRows();
   };
 
+  // "Show on globe" — when this dashboard is embedded as an IFRAME on the
+  // landing (window.parent !== window), focus the NATIVE landing globe via
+  // postMessage (no navigation). When opened standalone, fall through to the
+  // <a href> so the standalone /roc/globe/globe.html still works.
+  // The tape only knows the domain key (no event coords), so we pass `domain`.
+  window.showOnGlobe = function(ev, key) {
+    try {
+      if (window.parent && window.parent !== window) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        window.parent.postMessage({ type: 'wfm:globe-focus', domain: key }, location.origin);
+        return false; // embedded: handled locally, do not navigate
+      }
+    } catch (e) { /* parent inaccessible — fall through to navigate */ }
+    return true; // standalone: let the anchor open globe.html (_top)
+  };
+
   function renderDrill() {
     var key = state.selected; if (!key) return;
     var dom = domainObj(key); if (!dom) return;
@@ -537,7 +553,7 @@ a.lnk:hover { text-decoration:underline; }
       html += '<div class="evt"><div class="et">' + esc(dom.topEvent) + '</div>' +
         '<div class="em"><span>source: ' + esc(dom.topSource || '—') + '</span>' +
         '<span>' + (dom.eventCount || 0) + ' events in domain</span>' +
-        (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Open globe">show on globe ↗</a>' : '') +
+        (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Show on globe" onclick="return showOnGlobe(event, \'' + esc(key) + '\')">show on globe ↗</a>' : '') +
         '</div></div>';
     } else { html += '<div class="muted">No top event reported.</div>'; }
     html += '</div>';
