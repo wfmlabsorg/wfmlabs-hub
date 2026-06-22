@@ -19,16 +19,21 @@ interface ShowOnGlobeButtonProps {
   lon: number
   title: string
   domain: string
+  // When this affordance is on an INCIDENT card, pass the slug so the globe
+  // resolves to the headline incident marker (rich popup + "view incident →")
+  // rather than a generic coordinate popup (hub-014 Part 3). Coords are still
+  // sent as a fallback in case the incident isn't in the current globe feed.
+  incidentSlug?: string
 }
 
-export default function ShowOnGlobeButton({ lat, lon, title, domain }: ShowOnGlobeButtonProps) {
+export default function ShowOnGlobeButton({ lat, lon, title, domain, incidentSlug }: ShowOnGlobeButtonProps) {
   const handleClick = (e: React.MouseEvent) => {
     // Don't let the click bubble to the surrounding card link.
     e.preventDefault()
     e.stopPropagation()
     if (typeof window === 'undefined') return
     window.postMessage(
-      { type: 'wfm:globe-focus', lat, lon, title, category: domain },
+      { type: 'wfm:globe-focus', lat, lon, title, category: domain, incidentSlug },
       window.location.origin,
     )
   }

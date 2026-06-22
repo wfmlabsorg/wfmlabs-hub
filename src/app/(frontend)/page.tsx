@@ -222,30 +222,34 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
             const lon = inc.location_lon == null ? NaN : Number(inc.location_lon)
             const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
             return (
-              <a
+              <article
                 key={inc.id}
-                href={`/incidents/${inc.slug}`}
                 className="card"
-                style={{ minWidth: '17rem', maxWidth: '20rem', padding: '0.875rem 1rem', textDecoration: 'none', color: 'inherit', borderLeft: `3px solid ${sc.color}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+                style={{ minWidth: '17rem', maxWidth: '20rem', padding: '0.875rem 1rem', color: 'inherit', borderLeft: `3px solid ${sc.color}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.625rem', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: sc.bg, border: `1px solid ${sc.borderColor}`, color: sc.color }}>
-                    {sc.pulse && <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: sc.color, animation: 'pulse 2s ease-in-out infinite' }} />}
-                    {sc.label}
-                  </span>
-                  <span style={{ fontSize: '0.625rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: dc.bg, color: dc.fg }}>
-                    {domainLabel(inc.domain)}
-                  </span>
-                  <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>{timeAgo(inc.declared_at)}</span>
-                </div>
-                <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35 }}>{inc.title}</div>
+                <a
+                  href={`/incidents/${inc.slug}`}
+                  style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.625rem', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: sc.bg, border: `1px solid ${sc.borderColor}`, color: sc.color }}>
+                      {sc.pulse && <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: sc.color, animation: 'pulse 2s ease-in-out infinite' }} />}
+                      {sc.label}
+                    </span>
+                    <span style={{ fontSize: '0.625rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: dc.bg, color: dc.fg }}>
+                      {domainLabel(inc.domain)}
+                    </span>
+                    <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>{timeAgo(inc.declared_at)}</span>
+                  </div>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35 }}>{inc.title}</div>
+                </a>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>📍 {regions}</span>
                   {hasCoords && (
-                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} />
+                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} incidentSlug={inc.slug} />
                   )}
                 </div>
-              </a>
+              </article>
             )
           })}
         </div>
