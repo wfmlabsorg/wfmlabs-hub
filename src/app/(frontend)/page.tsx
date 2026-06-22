@@ -5,11 +5,14 @@ import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
+import { MemberAvatar } from '@/components/MemberAvatar'
 
-// ── Score → color ──
+export const dynamic = 'force-dynamic'
+
+// ── Color helpers ──
 function sevColor(s: number): string {
   if (s >= 8) return '#ef4444'
-  if (s >= 6) return '#f97316'
+  if (s >= 6) return '#f59e0b'
   if (s >= 4) return '#eab308'
   if (s >= 2) return '#22d3ee'
   return '#10b981'
@@ -18,7 +21,7 @@ function sevColor(s: number): string {
 function levelColor(l: string): string {
   switch (l) {
     case 'CRITICAL': return '#ef4444'
-    case 'SEVERE': return '#f97316'
+    case 'SEVERE': return '#f59e0b'
     case 'SIGNIFICANT': return '#eab308'
     case 'ELEVATED': return '#22d3ee'
     default: return '#10b981'
@@ -29,419 +32,665 @@ const trajectoryArrows: Record<string, string> = {
   escalating: '↑', peak: '⬆', steady: '→', declining: '↓', emerging: '↗', resolved: '✓',
 }
 
-export const dynamic = 'force-dynamic'
+// ── Incident design tokens (mirrors /incidents/page.tsx) ──
+const sevConfig: Record<string, { label: string; color: string; bg: string; borderColor: string; pulse?: boolean }> = {
+  SEV1: { label: 'SEV1', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', borderColor: '#ef4444', pulse: true },
+  SEV2: { label: 'SEV2', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', borderColor: '#f59e0b' },
+  SEV3: { label: 'SEV3', color: '#eab308', bg: 'transparent', borderColor: '#eab308' },
+  SEV4: { label: 'SEV4', color: '#64748b', bg: 'transparent', borderColor: '#475569' },
+}
+
+const domainColors: Record<string, { bg: string; fg: string; border: string }> = {
+  weather: { bg: 'rgba(59,130,246,0.08)', fg: '#60a5fa', border: '#3b82f6' },
+  seismic: { bg: 'rgba(239,68,68,0.08)', fg: '#f87171', border: '#ef4444' },
+  disaster: { bg: 'rgba(245,158,11,0.08)', fg: '#fbbf24', border: '#f59e0b' },
+  cyber: { bg: 'rgba(34,197,94,0.08)', fg: '#4ade80', border: '#22c55e' },
+  health: { bg: 'rgba(236,72,153,0.08)', fg: '#f472b6', border: '#ec4899' },
+  infrastructure: { bg: 'rgba(139,92,246,0.08)', fg: '#a78bfa', border: '#8b5cf6' },
+  financial: { bg: 'rgba(245,158,11,0.08)', fg: '#fbbf24', border: '#f59e0b' },
+  environmental: { bg: 'rgba(20,184,166,0.08)', fg: '#2dd4bf', border: '#14b8a6' },
+  geopolitical: { bg: 'rgba(99,102,241,0.08)', fg: '#818cf8', border: '#6366f1' },
+  labor: { bg: 'rgba(168,85,247,0.08)', fg: '#c084fc', border: '#a855f7' },
+  supply_chain: { bg: 'rgba(234,179,8,0.08)', fg: '#facc15', border: '#eab308' },
+  travel: { bg: 'rgba(6,182,212,0.08)', fg: '#22d3ee', border: '#06b6d4' },
+  general: { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' },
+}
+const defaultDomain = { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' }
+
+function domainLabel(domain: string): string {
+  return (domain || 'general').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function timeAgo(date: string): string {
+  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86400)}d ago`
+}
+
+function briefDate(date: string): string {
+  return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+}
+
+// ── Neon HTTP query (mirrors /incidents/page.tsx) ──
+const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
+
+interface HomeIncident {
+  id: number
+  title: string
+  slug: string
+  domain: string
+  severity: number
+  sev_level: string
+  status: string
+  declared_at: string
+  affected_regions: string[] | null
+  location_name: string | null
+  location_country: string | null
+  event_count: number | null
+}
+
+async function fetchOpenIncidents(): Promise<HomeIncident[]> {
+  const connStr = process.env.DATABASE_URI || ''
+  if (!connStr) return []
+  try {
+    const resp = await fetch(NEON_SQL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
+      body: JSON.stringify({
+        query:
+          `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, event_count
+           FROM incidents
+           WHERE status NOT IN ('closed','resolved')
+           ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
+           LIMIT 6`,
+      }),
+      next: { revalidate: 300 },
+    })
+    if (!resp.ok) return []
+    const json = await resp.json()
+    return (json.rows || []) as HomeIncident[]
+  } catch {
+    return []
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  Section components (shared across auth states + desktop/mobile)
+// ──────────────────────────────────────────────────────────────────────────
+
+// 1 — HERO: OVIX Volatility Tape (iframe, eager)
+function HeroTape({ mobile }: { mobile: boolean }) {
+  return (
+    <section
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderTop: '3px solid #22d3ee',
+        borderRadius: 'var(--radius-lg)',
+        overflow: 'hidden',
+        marginBottom: '1rem',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          padding: mobile ? '0.625rem 0.75rem' : '0.75rem 1.125rem',
+          borderBottom: '1px solid var(--border)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: mobile ? '0.6875rem' : '0.8125rem', fontWeight: 700, color: 'var(--fg)' }}>
+            Operational Volatility Index
+          </span>
+          {!mobile && (
+            <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
+              — live · 28 feeds · updates ~5 min
+            </span>
+          )}
+        </div>
+        <a href="/roc" style={{ fontSize: mobile ? '0.6875rem' : '0.75rem', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
+          Open full ROC ↗
+        </a>
+      </div>
+      <iframe
+        src="/roc/dashboards/scores.html"
+        title="OVIX Volatility Tape"
+        loading="eager"
+        allow="clipboard-write"
+        style={{
+          display: 'block',
+          width: '100%',
+          height: mobile ? '520px' : '750px',
+          border: 'none',
+          background: 'var(--bg)',
+        }}
+      />
+    </section>
+  )
+}
+
+// Section header helper
+function SectionHead({ icon, title, count, href, linkLabel }: { icon?: string; title: string; count?: number | string; href?: string; linkLabel?: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', gap: '0.5rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+        {icon && <span style={{ fontSize: '0.9375rem' }}>{icon}</span>}
+        <span style={{ fontSize: '0.9375rem', fontWeight: 700 }}>{title}</span>
+        {count !== undefined && (
+          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.0625rem 0.5rem' }}>{count}</span>
+        )}
+      </div>
+      {href && (
+        <a href={href} style={{ fontSize: '0.75rem', color: 'var(--accent)', textDecoration: 'none', flexShrink: 0, fontWeight: 600 }}>
+          {linkLabel || 'View all →'}
+        </a>
+      )}
+    </div>
+  )
+}
+
+// 3 — Live Incidents
+function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <SectionHead icon="🚨" title="Live Incidents" count={incidents.length || undefined} href="/incidents" linkLabel="View all incidents →" />
+      {incidents.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)' }}>
+          <p style={{ fontSize: '0.9375rem', fontWeight: 500, margin: '0 0 0.25rem' }}>No active incidents</p>
+          <p style={{ fontSize: '0.8125rem', margin: 0, color: 'var(--fg-faint)' }}>Watchkeeper will declare incidents when severity thresholds are met.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
+          {incidents.map((inc) => {
+            const dc = domainColors[inc.domain] || defaultDomain
+            const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
+            const regions = Array.isArray(inc.affected_regions) && inc.affected_regions.length > 0
+              ? inc.affected_regions.join(', ')
+              : [inc.location_name, inc.location_country].filter(Boolean).join(', ') || 'Global'
+            return (
+              <a
+                key={inc.id}
+                href={`/incidents/${inc.slug}`}
+                className="card"
+                style={{ minWidth: '17rem', maxWidth: '20rem', padding: '0.875rem 1rem', textDecoration: 'none', color: 'inherit', borderLeft: `3px solid ${sc.color}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.625rem', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: sc.bg, border: `1px solid ${sc.borderColor}`, color: sc.color }}>
+                    {sc.pulse && <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: sc.color, animation: 'pulse 2s ease-in-out infinite' }} />}
+                    {sc.label}
+                  </span>
+                  <span style={{ fontSize: '0.625rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: dc.bg, color: dc.fg }}>
+                    {domainLabel(inc.domain)}
+                  </span>
+                  <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>{timeAgo(inc.declared_at)}</span>
+                </div>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35 }}>{inc.title}</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {regions}</div>
+              </a>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 4 — Latest Compass Brief
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BriefSection({ brief }: { brief: any | null }) {
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <SectionHead icon="🧭" title="Latest Compass Brief" href="/compass" linkLabel="All briefs →" />
+      {!brief ? (
+        <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)' }}>
+          <p style={{ fontSize: '0.9375rem', fontWeight: 500, margin: '0 0 0.25rem' }}>No briefs published yet</p>
+          <p style={{ fontSize: '0.8125rem', margin: 0, color: 'var(--fg-faint)' }}>Compass publishes operational briefs as events develop.</p>
+        </div>
+      ) : (() => {
+        const excerptRaw: string = brief.summary || brief.description || ''
+        const excerpt = excerptRaw.length > 180 ? excerptRaw.slice(0, 180) + '…' : excerptRaw
+        const dateStr = brief.publishDate || brief.publishedAt || brief.createdAt
+        return (
+          <a
+            href={`/compass/${brief.slug}`}
+            className="card"
+            style={{ display: 'block', padding: '1.25rem 1.5rem', textDecoration: 'none', color: 'inherit', borderTop: '2px solid #14b8a6' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.625rem', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.5rem', borderRadius: '4px', background: 'rgba(20,184,166,0.1)', color: '#2dd4bf', border: '1px solid rgba(20,184,166,0.2)' }}>
+                Compass{brief.issueNumber ? ` · Issue #${brief.issueNumber}` : ''}
+              </span>
+              {dateStr && <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>{briefDate(dateStr)}</span>}
+            </div>
+            <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.3, margin: '0 0 0.5rem' }}>{brief.title}</h3>
+            {excerpt && <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', lineHeight: 1.6, margin: '0 0 0.625rem' }}>{excerpt}</p>}
+            <span style={{ fontSize: '0.8125rem', color: 'var(--accent)', fontWeight: 600 }}>Read full →</span>
+          </a>
+        )
+      })()}
+    </div>
+  )
+}
+
+// 5 — Signals Globe (iframe, LAZY) — link card on mobile to avoid Cesium on phones
+function GlobeSection({ mobile }: { mobile: boolean }) {
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <SectionHead icon="🌍" title="Live Signal Globe" href="/roc" linkLabel="Open ROC ↗" />
+      {mobile ? (
+        <a
+          href="/roc/globe/globe.html"
+          target="_blank"
+          rel="noopener"
+          className="card"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '2rem 1rem', textDecoration: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: '0.9375rem', borderTop: '2px solid #22d3ee' }}
+        >
+          🌍 View Signal Globe →
+        </a>
+      ) : (
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderTop: '2px solid #22d3ee', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
+            Geospatial risk in real time
+          </div>
+          <iframe
+            src="/roc/globe/globe.html"
+            title="Live Signal Globe"
+            loading="lazy"
+            style={{ display: 'block', width: '100%', height: '600px', border: 'none', background: 'var(--bg)' }}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 6 — Live Signals + Geopolitical Intel (keeps the SignalFeed)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function IntelSection({ stories }: { stories: any[] }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      {/* Live Signals (SignalFeed) */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #22d3ee', overflow: 'hidden' }}>
+        <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span style={{ fontSize: '0.875rem' }}>{'◆'}</span>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Live Signals</span>
+          </div>
+          <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>View all →</a>
+        </div>
+        <div style={{ padding: '0 1rem 1rem' }}>
+          <SignalFeed limit={6} compact />
+        </div>
+      </div>
+
+      {/* Geopolitical Intel */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #f59e0b', overflow: 'hidden' }}>
+        <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+            <span style={{ fontSize: '0.875rem' }}>{'🌐'}</span>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Geopolitical Intel</span>
+          </div>
+          <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>All stories →</a>
+        </div>
+        <div style={{ padding: '0 1rem 1rem' }}>
+          {stories.length === 0 ? (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '1rem 0', textAlign: 'center' }}>No active stories</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+              {stories.map((s: { title: string; severity: number; trajectory: string; affected_regions?: string | string[] }, i: number) => (
+                <div key={i} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${sevColor(s.severity)}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.1875rem' }}>
+                    <span style={{ fontSize: '0.625rem', fontWeight: 700, color: '#fff', background: sevColor(s.severity), padding: '0.0625rem 0.375rem', borderRadius: '3px', flexShrink: 0 }}>{s.severity}</span>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>{trajectoryArrows[s.trajectory] || '→'}</span>
+                  </div>
+                  <div style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
+                    {Array.isArray(s.affected_regions) ? s.affected_regions.join(', ') : s.affected_regions || 'Global'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 7 — Tools strip
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ToolsSection({ tools }: { tools: any[] }) {
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <SectionHead icon={'🛠'} title="WFM Tools" count={tools.length || undefined} href="/tools" linkLabel="Browse all →" />
+      {tools.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
+          Tools coming soon.
+        </div>
+      ) : (
+        <div className="tools-grid">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          {tools.map((tool: any) => (
+            <AssetCard
+              key={tool.id}
+              title={tool.title}
+              description={tool.description}
+              slug={tool.slug}
+              assetType="tool"
+              category={tool.category || null}
+              status={tool.status}
+              tier={tool.tier}
+              stats={tool.stats}
+              primaryContributor={tool.primaryContributor}
+              isFeatured={tool.isFeatured}
+              updatedAt={tool.updatedAt}
+              createdAt={tool.createdAt}
+              href={`/tools/${tool.slug}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// 8 — Community & Research band
+function CommunitySection({
+  papers, members, memberTotal, discussions,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  papers: any[]; members: any[]; memberTotal: number; discussions: any[]
+}) {
+  const assetPathMap: Record<string, string> = {
+    papers: '/research', articles: '/articles', tools: '/tools', 'newsletter-issues': '/compass', 'wiki-entries': '/wiki',
+  }
+  return (
+    <div style={{ marginBottom: '1.5rem' }}>
+      <SectionHead icon="🤝" title="Community & Research" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(18rem, 1fr))', gap: '1rem' }}>
+
+        {/* Latest Research */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>🔬 Latest Research</span>
+            <a href="/research" style={{ fontSize: '0.6875rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>All →</a>
+          </div>
+          {papers.length === 0 ? (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '0.75rem 0', textAlign: 'center' }}>No papers yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {papers.map((p: any) => (
+                <a key={p.id} href={`/research/${p.slug}`} style={{ display: 'block', padding: '0.625rem 0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit' }}>
+                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35, marginBottom: '0.25rem' }}>{p.title}</div>
+                  <div style={{ fontSize: '0.625rem', color: 'var(--fg-faint)' }}>
+                    {p.sourceName || (p.authors && p.authors[0]?.name) || 'Research'}{p.createdAt ? ` · ${timeAgo(p.createdAt)}` : ''}
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Builder Members */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>👥 Builder Members</span>
+            <a href="/members" style={{ fontSize: '0.6875rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>All →</a>
+          </div>
+          {members.length === 0 ? (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '0.75rem 0', textAlign: 'center' }}>No members yet</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                {members.map((m: any) => (
+                  <a key={m.id} href={`/member/${m.username}`} title={m.displayName} style={{ textDecoration: 'none' }}>
+                    <MemberAvatar member={m} size="2.5rem" fontSize="1rem" />
+                  </a>
+                ))}
+              </div>
+              <a href="/members" style={{ fontSize: '0.8125rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
+                {memberTotal.toLocaleString()} member{memberTotal === 1 ? '' : 's'} in the community →
+              </a>
+            </>
+          )}
+        </div>
+
+        {/* Hot Discussions */}
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+            <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>💬 Hot Discussions</span>
+            <a href="/discussions" style={{ fontSize: '0.6875rem', color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>All →</a>
+          </div>
+          {discussions.length === 0 ? (
+            <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '0.75rem 0', textAlign: 'center' }}>No discussions yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              {discussions.map((d: any) => {
+                const author = typeof d.author === 'object' && d.author !== null ? d.author : null
+                const rel = d.asset?.relationTo || ''
+                const assetVal = typeof d.asset?.value === 'object' ? d.asset.value : null
+                const assetSlug = assetVal?.slug || ''
+                const href = assetSlug ? `${assetPathMap[rel] || ''}/${assetSlug}` : '/discussions'
+                const title = assetVal?.title || assetVal?.name || 'Community discussion'
+                return (
+                  <a key={d.id} href={href} style={{ display: 'block', padding: '0.625rem 0.75rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit' }}>
+                    <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35, marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</div>
+                    <div style={{ fontSize: '0.625rem', color: 'var(--fg-faint)' }}>
+                      {author?.displayName || 'Member'}{d.createdAt ? ` · ${timeAgo(d.createdAt)}` : ''}
+                    </div>
+                  </a>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// 9 — Join / Pricing CTA
+function JoinCTA({ authed }: { authed: boolean }) {
+  return (
+    <div
+      style={{
+        background: 'linear-gradient(135deg, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0.02) 100%)',
+        border: '1px solid rgba(34,211,238,0.25)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '2rem 1.5rem',
+        textAlign: 'center',
+        marginBottom: '1.5rem',
+      }}
+    >
+      <h2 style={{ fontSize: 'clamp(1.25rem, 3vw, 1.75rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>
+        {authed ? 'Unlock the full builder community' : 'Join the builder community'}
+      </h2>
+      <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', maxWidth: '36rem', margin: '0 auto 1.25rem', lineHeight: 1.6 }}>
+        Where WFM practitioners and purpose-built AI agents collaborate on live operational data — tools, research, and intelligence built by practitioners, for practitioners.
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+        {authed ? (
+          <a href="/pricing" className="btn btn-primary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>View plans</a>
+        ) : (
+          <>
+            <a href="/login" className="btn btn-primary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>Get started</a>
+            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>View pricing</a>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 10 — Quick links footer
+function QuickLinks() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
+      {[
+        { title: 'Research', desc: 'Curated papers and analysis', href: '/research', icon: '🔬' },
+        { title: 'APIs', desc: 'Live data feeds', href: '/data-sources', icon: '📡' },
+        { title: 'Discussions', desc: 'Community Q&A', href: '/discussions', icon: '💬' },
+        { title: 'Docs', desc: 'Wiki & guides', href: '/wiki', icon: '📖' },
+      ].map((link) => (
+        <a key={link.href} href={link.href} className="card" style={{ padding: '1rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span style={{ fontSize: '1.25rem' }}>{link.icon}</span>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{link.title}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>{link.desc}</div>
+          </div>
+        </a>
+      ))}
+    </div>
+  )
+}
+
+// Compact status strip (2)
+function StatusStrip({
+  healthy, totalFeeds, travelComposite, travelLevel, storiesCount, highSevStories, totalSignals,
+}: {
+  healthy: number; totalFeeds: number; travelComposite: number; travelLevel: string; storiesCount: number; highSevStories: number; totalSignals: number
+}) {
+  return (
+    <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.5rem 0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <span style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--accent)' }}>Mission Control</span>
+        <span style={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite' }} />
+        <span style={{ fontSize: '0.625rem', color: '#22c55e', fontWeight: 600 }}>LIVE</span>
+      </div>
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+          <span style={{ color: totalFeeds > 0 && healthy === totalFeeds ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>OVIX</span> {healthy}/{totalFeeds} feeds
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+          <span style={{ color: levelColor(travelLevel), fontWeight: 600 }}>TRAVEL</span> {travelComposite.toFixed(1)} {travelLevel}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+          <span style={{ color: highSevStories > 0 ? '#ef4444' : 'var(--accent)', fontWeight: 600 }}>INTEL</span> {storiesCount} stories{highSevStories > 0 ? ` | ${highSevStories} critical` : ''}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
+          <span style={{ color: 'var(--accent)', fontWeight: 600 }}>SIGNALS</span> {totalSignals.toLocaleString()} total
+        </span>
+      </div>
+      <span style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
+        {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} UTC
+      </span>
+    </div>
+  )
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+//  Page
+// ──────────────────────────────────────────────────────────────────────────
 export default async function HomePage() {
   const session = await auth()
-
-  // ── Unauthenticated → marketing landing ──
-  if (!session?.user) {
-    return (
-      <div>
-        <section style={{ textAlign: 'center', padding: '6rem 1rem 4rem', borderBottom: '1px solid var(--border)' }}>
-          <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 800, lineHeight: 1.15, marginBottom: '1.5rem' }}>
-            Human Expertise Meets<br />
-            <span style={{ color: 'var(--accent)' }}>Agent Intelligence</span>
-          </h1>
-          <p style={{ fontSize: '1.125rem', color: 'var(--fg-muted)', maxWidth: '40rem', margin: '0 auto 2rem', lineHeight: 1.7 }}>
-            The platform where WFM practitioners and purpose-built AI agents collaborate on live operational data — creating workforce intelligence that neither could build alone.
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <a href="/login" className="btn btn-primary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Get Started</a>
-            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>View Pricing</a>
-          </div>
-        </section>
-        <section style={{ maxWidth: '72rem', margin: '0 auto', padding: '4rem 1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '2rem' }}>
-            {[
-              { icon: '\u25C6', title: 'OVIX — Operational Intelligence', desc: '28 live data feeds scored every 5 minutes across 38 global regions. Weather, seismic, disaster, cyber, health, financial, infrastructure — correlated to your workforce locations.' },
-              { icon: '\uD83E\uDD16', title: 'AI Agent Team', desc: 'Beacon surfaces emerging WFM topics. Sentinel monitors for operational incidents. Purpose-built agents that understand workforce management — not generic AI.' },
-              { icon: '\uD83D\uDEE0', title: 'Interactive Tools & Research', desc: 'Erlang calculators, capacity planners, Monte Carlo simulations, and a curated research library. Built by practitioners, for practitioners.' },
-            ].map((p) => (
-              <div key={p.title} style={{ padding: '2rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>{p.icon}</div>
-                <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>{p.title}</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--fg-muted)', lineHeight: 1.6 }}>{p.desc}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section style={{ textAlign: 'center', padding: '3rem 1rem 4rem', borderTop: '1px solid var(--border)' }}>
-          <p style={{ fontSize: '0.875rem', color: 'var(--fg-faint)', marginBottom: '1rem' }}>
-            Built for WFM practitioners managing contact centers, back offices, and knowledge worker operations worldwide.
-          </p>
-          <a href="/pricing" style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>See pricing {'\u2192'}</a>
-        </section>
-      </div>
-    )
-  }
-
-  // ── Authenticated → Mission Control Dashboard ──
+  const isAuthed = !!session?.user
   const userAgent = (await headers()).get('user-agent') || ''
   const isMobile = /iPhone|iPad|Android|Mobile|webOS|BlackBerry|Opera Mini/i.test(userAgent)
 
   const payload = await getPayload({ config })
 
-  // Parallel data fetches
-  const [feedHealth, travelScores, newsStories, signalsResult, toolsResult] = await Promise.all([
-    fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', { next: { revalidate: 300 } })
-      .then(r => r.json()).catch(() => null),
-    fetch('https://travel-intel.tedlango.workers.dev/api/travel/scores', { next: { revalidate: 300 } })
-      .then(r => r.json()).catch(() => null),
-    fetch('https://news-intel.tedlango.workers.dev/stories', { next: { revalidate: 300 } })
-      .then(r => r.json()).catch(() => null),
-    payload.find({ collection: 'signals', limit: 5, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
+  // All fetches run in parallel; every one degrades to an empty/null fallback.
+  const [
+    feedHealth, travelScores, newsStories, signalsResult, toolsResult,
+    incidents, briefResult, papersResult, membersResult, discussionsResult,
+  ] = await Promise.all([
+    fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
+    fetch('https://travel-intel.tedlango.workers.dev/api/travel/scores', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
+    fetch('https://news-intel.tedlango.workers.dev/stories', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
+    payload.find({ collection: 'signals', limit: 1, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'tools', limit: 8, sort: '-updatedAt', depth: 1, overrideAccess: true, where: { publishedAt: { exists: true } } }).catch(() => ({ docs: [] })),
+    fetchOpenIncidents(),
+    payload.find({ collection: 'newsletter-issues', limit: 1, sort: '-publishDate', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
+    payload.find({ collection: 'papers', limit: 3, sort: '-createdAt', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
+    payload.find({ collection: 'members', limit: 6, sort: '-createdAt', depth: 1, overrideAccess: true, where: { and: [{ 'visibility.showInDirectory': { not_equals: false } }, { type: { not_equals: 'agent' } }] } }).catch(() => ({ docs: [], totalDocs: 0 })),
+    payload.find({ collection: 'discussions', limit: 3, sort: '-createdAt', depth: 2, overrideAccess: true, where: { parentDiscussion: { exists: false } } }).catch(() => ({ docs: [] })),
   ])
 
-  // Extract data
+  // Derive status-strip data
   const healthy = feedHealth?.healthy || 0
   const totalFeeds = feedHealth?.totalFeeds || 0
   const travelComposite = travelScores?.composite || 0
   const travelLevel = travelScores?.level || 'NOMINAL'
-  const travelDomains = travelScores?.domains || []
-  const travelEvents = travelScores?.events || []
-  const stories = (newsStories?.stories || []).slice(0, 4)
+  const stories = (newsStories?.stories || []).slice(0, 6)
   const highSevStories = stories.filter((s: { severity: number }) => s.severity >= 7).length
-  const signals = signalsResult?.docs || []
   const totalSignals = signalsResult?.totalDocs || 0
-  const tools = toolsResult?.docs || []
 
-  // Shuffle tools for variety
-  const shuffled = [...tools]
+  // Tools — shuffle for variety, feature 6
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allTools = (toolsResult?.docs || []) as any[]
+  const shuffled = [...allTools]
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
   const featuredTools = shuffled.slice(0, 6)
 
-  // ── Mobile View ──
+  const latestBrief = briefResult?.docs?.[0] || null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const papers = (papersResult?.docs || []) as any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const members = (membersResult?.docs || []) as any[]
+  const memberTotal = membersResult?.totalDocs || members.length
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const discussions = (discussionsResult?.docs || []) as any[]
+
+  const statusProps = { healthy, totalFeeds, travelComposite, travelLevel, storiesCount: stories.length, highSevStories, totalSignals }
+
+  const sharedSections = (mobile: boolean) => (
+    <>
+      <IncidentsSection incidents={incidents} />
+      <BriefSection brief={latestBrief} />
+      <GlobeSection mobile={mobile} />
+      <IntelSection stories={stories} />
+      <ToolsSection tools={featuredTools} />
+      <CommunitySection papers={papers} members={members} memberTotal={memberTotal} discussions={discussions} />
+      <JoinCTA authed={isAuthed} />
+      <QuickLinks />
+    </>
+  )
+
+  // ── Mobile ──
   if (isMobile) {
     return (
       <div style={{ padding: '0.75rem' }}>
-        {/* Status header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', padding: '0.5rem 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--accent)' }}>Mission Control</span>
-            <span style={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
-          </div>
-          <span style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
-            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-          </span>
-        </div>
-
-        {/* OVIX + Travel composite scores */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.5625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: healthy === totalFeeds ? '#22c55e' : '#f59e0b', marginBottom: '0.25rem' }}>OVIX Feeds</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{healthy}/{totalFeeds}</div>
-            <div style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>healthy</div>
-          </div>
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.5625rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: levelColor(travelLevel), marginBottom: '0.25rem' }}>Travel</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: levelColor(travelLevel) }}>{travelComposite.toFixed(1)}</div>
-            <div style={{ fontSize: '0.5625rem', color: levelColor(travelLevel) }}>{travelLevel}</div>
-          </div>
-        </div>
-
-        {/* Travel domain bars — compact */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
-          <div style={{ fontSize: '0.6875rem', fontWeight: 700, marginBottom: '0.5rem' }}>Travel Disruption Index</div>
-          {travelDomains.map((d: { domain: string; score: number }) => (
-            <div key={d.domain} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem', fontSize: '0.6875rem' }}>
-              <span style={{ width: '4rem', color: 'var(--fg-muted)', textTransform: 'capitalize' }}>{d.domain}</span>
-              <div style={{ flex: 1, height: '0.3rem', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${Math.min(d.score * 10, 100)}%`, background: sevColor(d.score), borderRadius: '2px' }} />
-              </div>
-              <span style={{ width: '1.5rem', textAlign: 'right', fontWeight: 600, color: sevColor(d.score), fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.625rem' }}>{d.score.toFixed(1)}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Signals — compact list */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span style={{ fontSize: '0.6875rem', fontWeight: 700 }}>Latest Signals</span>
-            <a href="/signals" style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All →</a>
-          </div>
-          <SignalFeed limit={4} compact />
-        </div>
-
-        {/* Intel stories — compact */}
-        {stories.length > 0 && (
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-              <span style={{ fontSize: '0.6875rem', fontWeight: 700 }}>Geopolitical Intel</span>
-              <a href="/signals" style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All →</a>
-            </div>
-            {stories.slice(0, 3).map((s: { title: string; severity: number; trajectory: string }, i: number) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.375rem 0', borderBottom: i < 2 ? '1px solid var(--border)' : 'none', fontSize: '0.6875rem' }}>
-                <span style={{ fontSize: '0.5625rem', fontWeight: 700, color: '#fff', background: sevColor(s.severity), padding: '0.0625rem 0.25rem', borderRadius: '3px', flexShrink: 0 }}>{s.severity}</span>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
-                <span style={{ color: 'var(--fg-faint)', flexShrink: 0 }}>{trajectoryArrows[s.trajectory] || '→'}</span>
-              </div>
-            ))}
+        <HeroTape mobile />
+        <StatusStrip {...statusProps} />
+        {!isAuthed && (
+          <div style={{ textAlign: 'center', padding: '0 0.25rem 1rem' }}>
+            <a href="/login" className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', fontSize: '0.875rem' }}>Get started</a>
           </div>
         )}
-
-        {/* OVIX dashboards — 2-col tap grid */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0.75rem', marginBottom: '0.75rem' }}>
-          <div style={{ fontSize: '0.6875rem', fontWeight: 700, marginBottom: '0.5rem' }}>Dashboards</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.375rem' }}>
-            {[
-              { icon: '⛈', label: 'Weather', path: 'weather-intel', color: '#3b82f6' },
-              { icon: '🌋', label: 'Seismic', path: 'seismic-activity', color: '#ef4444' },
-              { icon: '🔥', label: 'Disaster', path: 'disaster-monitor', color: '#f97316' },
-              { icon: '🛡', label: 'Cyber', path: 'cyber-threat-intel', color: '#22c55e' },
-              { icon: '🏥', label: 'Health', path: 'health-surveillance', color: '#ec4899' },
-              { icon: '📈', label: 'Financial', path: 'financial-markets', color: '#f59e0b' },
-              { icon: '🌐', label: 'Geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
-              { icon: '✈', label: 'Travel', path: 'feed-health', color: '#06b6d4' },
-              { icon: '⚙', label: 'Labor', path: 'labor', color: '#f43f5e' },
-              { icon: '🚢', label: 'Supply Chain', path: 'supply-chain', color: '#8b5cf6' },
-            ].map(d => (
-              <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}?tc.mode=local&tc.startDelta=1800000&tc.endDelta=30000&tc.timeSystem=utc&view=roc.dashboard.view`} target="_blank" rel="noopener"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `2px solid ${d.color}`, textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', fontWeight: 600 }}>
-                <span>{d.icon}</span>
-                <span>{d.label}</span>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick nav */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.375rem' }}>
-          {[
-            { label: 'Tools', href: '/tools', icon: '🛠' },
-            { label: 'Research', href: '/research', icon: '🔬' },
-            { label: 'Discuss', href: '/discussions', icon: '💬' },
-            { label: 'Docs', href: '/wiki', icon: '📖' },
-          ].map(l => (
-            <a key={l.href} href={l.href} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.25rem', padding: '0.625rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit', fontSize: '0.625rem', fontWeight: 600 }}>
-              <span style={{ fontSize: '1.25rem' }}>{l.icon}</span>
-              {l.label}
-            </a>
-          ))}
-        </div>
+        {sharedSections(true)}
+        <PulseStyle />
       </div>
     )
   }
 
-  // ── Desktop View ──
+  // ── Desktop ──
   return (
-    <div>
-      {/* ── Status Bar ── */}
-      <div style={{
-        background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border)',
-        padding: '0.625rem 1rem',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--accent)' }}>
-            Mission Control
-          </span>
-          <span style={{ width: '0.375rem', height: '0.375rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite' }} />
-          <span style={{ fontSize: '0.625rem', color: '#22c55e', fontWeight: 600 }}>LIVE</span>
-        </div>
-
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          {/* OVIX feeds */}
-          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
-            <span style={{ color: healthy === totalFeeds ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>OVIX</span> {healthy}/{totalFeeds} feeds
-          </span>
-          {/* Travel */}
-          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
-            <span style={{ color: levelColor(travelLevel), fontWeight: 600 }}>TRAVEL</span> {travelComposite.toFixed(1)} {travelLevel}
-          </span>
-          {/* Intel */}
-          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
-            <span style={{ color: highSevStories > 0 ? '#ef4444' : 'var(--accent)', fontWeight: 600 }}>INTEL</span> {stories.length} stories {highSevStories > 0 && `| ${highSevStories} critical`}
-          </span>
-          {/* Signals */}
-          <span style={{ fontSize: '0.6875rem', color: 'var(--fg-muted)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.1875rem 0.625rem' }}>
-            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>SIGNALS</span> {totalSignals.toLocaleString()} total
-          </span>
-        </div>
-
-        <span style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
-          {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} UTC
-        </span>
-      </div>
-
-      <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
-
-        {/* ── Live Panels — OVIX first, then Operational Risk ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
-
-          {/* Panel A: OVIX Dashboard Index with scores */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #22d3ee', overflow: 'hidden' }}>
-            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                <span style={{ fontSize: '0.875rem' }}>📊</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>OVIX Dashboard Index</span>
-              </div>
-              <a href="/roc" target="_blank" rel="noopener" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Open ROC →</a>
-            </div>
-            <div style={{ padding: '0 1rem 1rem' }}>
-              {(() => {
-                // Aggregate feed data by domain
-                const feeds = feedHealth?.feeds || []
-                const domainMap: Record<string, { maxSev: number; avgSev: number; events: number; status: string }> = {}
-                for (const f of feeds) {
-                  const domain = (f.domain || '').toLowerCase()
-                  if (!domain) continue
-                  if (!domainMap[domain]) domainMap[domain] = { maxSev: 0, avgSev: 0, events: 0, status: 'LIVE' }
-                  domainMap[domain].maxSev = Math.max(domainMap[domain].maxSev, parseFloat(f.max_severity) || 0)
-                  domainMap[domain].avgSev = Math.max(domainMap[domain].avgSev, parseFloat(f.avg_severity) || 0)
-                  domainMap[domain].events += parseInt(f.total_events) || 0
-                  if (f.status !== 'LIVE') domainMap[domain].status = f.status
-                }
-                const dashboards = [
-                  { icon: '⛈', label: 'Weather', domain: 'weather', path: 'weather-intel', color: '#3b82f6' },
-                  { icon: '🌋', label: 'Seismic', domain: 'seismic', path: 'seismic-activity', color: '#ef4444' },
-                  { icon: '🔥', label: 'Disaster', domain: 'disaster', path: 'disaster-monitor', color: '#f97316' },
-                  { icon: '🛡', label: 'Cyber', domain: 'cyber', path: 'cyber-threat-intel', color: '#22c55e' },
-                  { icon: '🏥', label: 'Health', domain: 'health', path: 'health-surveillance', color: '#ec4899' },
-                  { icon: '🏗', label: 'Infrastructure', domain: 'infrastructure', path: 'infrastructure-status', color: '#8b5cf6' },
-                  { icon: '📈', label: 'Financial', domain: 'financial', path: 'financial-markets', color: '#f59e0b' },
-                  { icon: '🌿', label: 'Environmental', domain: 'environmental', path: 'environmental-monitor', color: '#14b8a6' },
-                  { icon: '🌐', label: 'Geopolitical', domain: 'geopolitical', path: 'geopolitical-risk', color: '#6366f1' },
-                  { icon: '✈', label: 'Travel', domain: 'travel', path: 'feed-health', color: '#06b6d4' },
-                  { icon: '⚙', label: 'Labor', domain: 'labor', path: 'labor', color: '#f43f5e' },
-                  { icon: '🚢', label: 'Supply Chain', domain: 'supply_chain', path: 'supply-chain', color: '#8b5cf6' },
-                ]
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
-                    {dashboards.map(d => {
-                      const data = domainMap[d.domain]
-                      const score = data?.maxSev || 0
-                      return (
-                        <a key={d.path} href={`/roc#/browse/roc-dashboards:root/roc-dashboards:${d.path}?tc.mode=local&tc.startDelta=1800000&tc.endDelta=30000&tc.timeSystem=utc&view=roc.dashboard.view`} target="_blank" rel="noopener"
-                          style={{ display: 'grid', gridTemplateColumns: '1.5rem 5.5rem 1fr 2.5rem', alignItems: 'center', gap: '0.375rem', padding: '0.375rem 0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', textDecoration: 'none', color: 'inherit', fontSize: '0.6875rem', transition: 'background 0.2s' }}>
-                          <span style={{ fontSize: '0.875rem' }}>{d.icon}</span>
-                          <span style={{ fontWeight: 600 }}>{d.label}</span>
-                          <div style={{ height: '0.3rem', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${Math.min(score * 10, 100)}%`, background: sevColor(score), borderRadius: '2px' }} />
-                          </div>
-                          <span style={{ textAlign: 'right', fontWeight: 700, color: sevColor(score), fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.75rem' }}>
-                            {score > 0 ? score.toFixed(1) : '—'}
-                          </span>
-                        </a>
-                      )
-                    })}
-                  </div>
-                )
-              })()}
-            </div>
-          </div>
-
-          {/* Panel B: Operational Risk (scrolling signals) */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #ef4444', overflow: 'hidden' }}>
-            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                <span style={{ fontSize: '0.875rem' }}>{'\u25C6'}</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Operational Risk</span>
-              </div>
-              <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>View all →</a>
-            </div>
-            <div style={{ padding: '0 1rem 1rem' }}>
-              <SignalFeed limit={6} compact />
-            </div>
-          </div>
-        </div>
-
-        {/* ── Intelligence Panel (full width below) ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginBottom: '1.25rem' }}>
-          {/* Panel C: Intelligence */}
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', borderTop: '2px solid #f59e0b', overflow: 'hidden' }}>
-            <div style={{ padding: '0.875rem 1rem 0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                <span style={{ fontSize: '0.875rem' }}>{'\uD83C\uDF10'}</span>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>Geopolitical Intel</span>
-              </div>
-              <a href="/signals" style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>All stories →</a>
-            </div>
-            <div style={{ padding: '0 1rem 1rem' }}>
-              {stories.length === 0 ? (
-                <div style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', padding: '1rem 0', textAlign: 'center' }}>No active stories</div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '0.5rem' }}>
-                  {stories.map((s: { title: string; severity: number; trajectory: string; affected_regions: string | string[]; slug?: string }, i: number) => (
-                    <div key={i} style={{ padding: '0.5rem', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', borderLeft: `3px solid ${sevColor(s.severity)}` }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
-                        <span style={{ fontSize: '0.625rem', fontWeight: 700, color: '#fff', background: sevColor(s.severity), padding: '0.0625rem 0.375rem', borderRadius: '3px' }}>{s.severity}</span>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>{trajectoryArrows[s.trajectory] || '→'}</span>
-                      </div>
-                      <div style={{ fontSize: '0.5625rem', color: 'var(--fg-faint)' }}>
-                        {Array.isArray(s.affected_regions) ? s.affected_regions.join(', ') : s.affected_regions || 'Global'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ── Tools Strip ── */}
-        <div style={{ marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.875rem' }}>{'\uD83D\uDEE0'}</span>
-              <span style={{ fontSize: '0.9375rem', fontWeight: 700 }}>WFM Tools</span>
-              <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '999px', padding: '0.0625rem 0.5rem' }}>{tools.length}</span>
-            </div>
-            <a href="/tools" style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', textDecoration: 'none' }}>Browse all →</a>
-          </div>
-          <div className="tools-grid">
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            {featuredTools.map((tool: any) => (
-              <AssetCard
-                key={tool.id}
-                title={tool.title}
-                description={tool.description}
-                slug={tool.slug}
-                assetType="tool"
-                category={tool.category || null}
-                status={tool.status}
-                tier={tool.tier}
-                stats={tool.stats}
-                primaryContributor={tool.primaryContributor}
-                isFeatured={tool.isFeatured}
-                updatedAt={tool.updatedAt}
-                createdAt={tool.createdAt}
-                href={`/tools/${tool.slug}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* ── Quick Links ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))', gap: '0.75rem', marginBottom: '2rem' }}>
-          {[
-            { title: 'Research', desc: 'Curated papers and analysis', href: '/research', icon: '\uD83D\uDD2C' },
-            { title: 'APIs', desc: 'Live data feeds', href: '/data-sources', icon: '\uD83D\uDCE1' },
-            { title: 'Discussions', desc: 'Community Q&A', href: '/discussions', icon: '\uD83D\uDCAC' },
-            { title: 'Docs', desc: 'Wiki & guides', href: '/wiki', icon: '\uD83D\uDCD6' },
-          ].map((link) => (
-            <a key={link.href} href={link.href} className="card" style={{ padding: '1rem', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ fontSize: '1.25rem' }}>{link.icon}</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: '0.875rem' }}>{link.title}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)' }}>{link.desc}</div>
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
-
-      {/* Pulse animation */}
-      <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @media (max-width: 768px) {
-          div[style*="grid-template-columns: repeat(3"] { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+    <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
+      <HeroTape mobile={false} />
+      <StatusStrip {...statusProps} />
+      {sharedSections(false)}
+      <PulseStyle />
     </div>
+  )
+}
+
+function PulseStyle() {
+  return (
+    <style>{`
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    `}</style>
   )
 }
