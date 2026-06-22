@@ -12,7 +12,7 @@ import config from '@payload-config'
  *
  * Behaviour:
  *  - Deduplicates against existing papers by canonical sourceUrl (arXiv abs URL or doi.org URL).
- *  - Creates new papers as status 'proposed' (curator reviews before publish), primaryContributor = beacon.
+ *  - Creates new papers as status 'published' (live on /research immediately), primaryContributor = beacon.
  *  - Returns a per-run summary: { created, skipped, failed, results[] }.
  *
  * The worker does the fetching + Claude summarisation; this route owns the Payload
@@ -193,9 +193,9 @@ export async function POST(req: Request) {
           ...(p.summary?.trim() ? { curatorSummary: markdownToLexical(p.summary) } : {}),
           ...(p.whyItMatters?.trim() ? { whyItMatters: markdownToLexical(p.whyItMatters) } : {}),
           description: p.abstract?.trim()?.slice(0, 280) || undefined,
-          status: 'proposed',
+          status: 'published',
           tier: 'free',
-          ...(p.publicationDate ? { publishedAt: p.publicationDate } : {}),
+          publishedAt: p.publicationDate || new Date().toISOString(),
         },
         overrideAccess: true,
       })
