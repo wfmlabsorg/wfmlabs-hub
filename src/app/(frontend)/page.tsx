@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
+import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
 
 export const dynamic = 'force-dynamic'
 
@@ -275,38 +276,6 @@ function BriefSection({ brief }: { brief: any | null }) {
           </a>
         )
       })()}
-    </div>
-  )
-}
-
-// 5 — Signals Globe (iframe, LAZY) — link card on mobile to avoid Cesium on phones
-function GlobeSection({ mobile }: { mobile: boolean }) {
-  return (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <SectionHead icon="🌍" title="Live Signal Globe" href="/roc" linkLabel="Open ROC ↗" />
-      {mobile ? (
-        <a
-          href="/roc/globe/globe.html"
-          target="_blank"
-          rel="noopener"
-          className="card"
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '2rem 1rem', textDecoration: 'none', color: 'var(--accent)', fontWeight: 600, fontSize: '0.9375rem', borderTop: '2px solid #22d3ee' }}
-        >
-          🌍 View Signal Globe →
-        </a>
-      ) : (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderTop: '2px solid #22d3ee', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-          <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
-            Geospatial risk in real time
-          </div>
-          <iframe
-            src="/roc/globe/globe.html"
-            title="Live Signal Globe"
-            loading="lazy"
-            style={{ display: 'block', width: '100%', height: '600px', border: 'none', background: 'var(--bg)' }}
-          />
-        </div>
-      )}
     </div>
   )
 }
@@ -646,11 +615,10 @@ export default async function HomePage() {
 
   const statusProps = { healthy, totalFeeds, travelComposite, travelLevel, storiesCount: stories.length, highSevStories, totalSignals }
 
-  const sharedSections = (mobile: boolean) => (
+  const sharedSections = () => (
     <>
       <IncidentsSection incidents={incidents} />
       <BriefSection brief={latestBrief} />
-      <GlobeSection mobile={mobile} />
       <IntelSection stories={stories} />
       <ToolsSection tools={featuredTools} />
       <CommunitySection papers={papers} members={members} memberTotal={memberTotal} discussions={discussions} />
@@ -662,28 +630,34 @@ export default async function HomePage() {
   // ── Mobile ──
   if (isMobile) {
     return (
-      <div style={{ padding: '0.75rem' }}>
-        <HeroTape mobile />
-        <StatusStrip {...statusProps} />
-        {!isAuthed && (
-          <div style={{ textAlign: 'center', padding: '0 0.25rem 1rem' }}>
-            <a href="/login" className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', fontSize: '0.875rem' }}>Get started</a>
-          </div>
-        )}
-        {sharedSections(true)}
-        <PulseStyle />
-      </div>
+      <>
+        <SignalGlobeHero mobile />
+        <div style={{ padding: '0.75rem' }}>
+          <HeroTape mobile />
+          <StatusStrip {...statusProps} />
+          {!isAuthed && (
+            <div style={{ textAlign: 'center', padding: '0 0.25rem 1rem' }}>
+              <a href="/login" className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', fontSize: '0.875rem' }}>Get started</a>
+            </div>
+          )}
+          {sharedSections()}
+          <PulseStyle />
+        </div>
+      </>
     )
   }
 
   // ── Desktop ──
   return (
-    <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
-      <HeroTape mobile={false} />
-      <StatusStrip {...statusProps} />
-      {sharedSections(false)}
-      <PulseStyle />
-    </div>
+    <>
+      <SignalGlobeHero mobile={false} />
+      <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
+        <HeroTape mobile={false} />
+        <StatusStrip {...statusProps} />
+        {sharedSections()}
+        <PulseStyle />
+      </div>
+    </>
   )
 }
 
