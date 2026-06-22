@@ -727,7 +727,8 @@
         renderQuakeList(events);
         renderMagDist(events);
         renderSignificant(events);
-        drawGauge(result.score);
+        drawGauge(window.rocCanonical ? window.rocCanonical(result.score) : result.score);
+        window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
         updateBanner(events, result);
       })
       .catch(function(err) {
@@ -822,6 +823,7 @@ updateTransportUI();
   }, (s.interval || 30) * 1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

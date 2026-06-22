@@ -840,7 +840,8 @@
         renderWHO(whoEvents);
         renderCDC(cdcEvents);
         renderPathogenSummary(whoEvents, cdcEvents, allEvents);
-        drawGauge(score);
+        drawGauge(window.rocCanonical ? window.rocCanonical(score) : score);
+        window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
         updateBanner(whoEvents, cdcEvents, allEvents, score);
       })
       .catch(function(err) {
@@ -934,6 +935,7 @@ updateTransportUI();
   }, (s.interval || 30) * 1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

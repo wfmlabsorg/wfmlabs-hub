@@ -20,8 +20,11 @@
   if (window.__rocRotationEngine) return; // idempotent — never double-init
   window.__rocRotationEngine = true;
 
-  // Canonical rotation order (globe first, then domain dashboards).
-  var ORDER = ['globe', 'weather', 'seismic', 'disaster', 'cyber', 'health',
+  // Canonical rotation order (domain dashboards only). 'globe' was removed
+  // (hub-013): the landing now has a native Cesium globe hero, so the rotation
+  // must NOT cycle to a second standalone /roc/globe/globe.html slide. ROUTES.globe
+  // is kept below for back-compat (direct navDomain('globe') callers).
+  var ORDER = ['weather', 'seismic', 'disaster', 'cyber', 'health',
                'infrastructure', 'financial', 'environmental', 'geopolitical',
                'travel', 'labor', 'supply_chain'];
   var ROUTES = {

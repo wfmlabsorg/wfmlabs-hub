@@ -225,7 +225,8 @@
 
     // Weighted composite: AQ 35%, Heat 30%, Fire 20%, UV/Dust 15%
     var score = Math.min(10, Math.round((aqScore * 0.35 + heatScore * 0.30 + fireScore * 0.20 + uvdustScore * 0.15) * 10) / 10);
-    drawGauge(score);
+    drawGauge(window.rocCanonical ? window.rocCanonical(score) : score);
+    window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
     renderFactors([
       {label: 'Air Quality', value: Math.round(aqScore * 10) / 10, weight: '35%'},
       {label: 'Extreme Heat', value: Math.round(heatScore * 10) / 10, weight: '30%'},
@@ -290,6 +291,7 @@
   setInterval(fetchAll, 300000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>

@@ -597,7 +597,8 @@
 
         // Compute labor risk index
         var result = computeLaborIndex(groups);
-        drawGauge(result.score);
+        drawGauge(window.rocCanonical ? window.rocCanonical(result.score) : result.score);
+        window.__rocApplyCanonical = function (s) { try { drawGauge(s); } catch (e) {} };
 
         var lvl = indexLevel(result.score);
         var lb = document.getElementById('labor-level-badge');
@@ -694,6 +695,7 @@ updateTransportUI();
   }, (s.interval || 30) * 1000);
 })();
 </script>
+  <script src="/roc/roc-canonical-score.js"></script>
   <script src="/roc/roc-rotation.js"></script>
 
 </body>
