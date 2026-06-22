@@ -7,6 +7,7 @@ import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
 import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
+import ShowOnGlobeButton from '@/components/globe/ShowOnGlobeButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -89,6 +90,8 @@ interface HomeIncident {
   affected_regions: string[] | null
   location_name: string | null
   location_country: string | null
+  location_lat: number | string | null
+  location_lon: number | string | null
   event_count: number | null
 }
 
@@ -101,7 +104,7 @@ async function fetchOpenIncidents(): Promise<HomeIncident[]> {
       headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
       body: JSON.stringify({
         query:
-          `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, event_count
+          `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
            FROM incidents
            WHERE status NOT IN ('closed','resolved')
            ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
@@ -215,6 +218,9 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
             const regions = Array.isArray(inc.affected_regions) && inc.affected_regions.length > 0
               ? inc.affected_regions.join(', ')
               : [inc.location_name, inc.location_country].filter(Boolean).join(', ') || 'Global'
+            const lat = inc.location_lat == null ? NaN : Number(inc.location_lat)
+            const lon = inc.location_lon == null ? NaN : Number(inc.location_lon)
+            const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
             return (
               <a
                 key={inc.id}
@@ -233,7 +239,12 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
                   <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>{timeAgo(inc.declared_at)}</span>
                 </div>
                 <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35 }}>{inc.title}</div>
-                <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📍 {regions}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>📍 {regions}</span>
+                  {hasCoords && (
+                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} />
+                  )}
+                </div>
               </a>
             )
           })}
