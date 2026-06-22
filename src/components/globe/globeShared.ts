@@ -139,7 +139,7 @@ export function domainLabel(domain: string | null | undefined): string {
 export function cleanTitle(title: string | null | undefined): string {
   if (!title) return title || ''
   let t = title.replace(/^\[[^\]]*\]\s*/, '') // drop [Region] tag
-  t = t.replace(/^[a-z_]+\s+\d+(?:\.\d+)?\s*—\s*/i, '') // drop "<domain> <sev> — "
+  t = t.replace(/^[a-z0-9_-]+\s+\d+(?:\.\d+)?\s*—\s*/i, '') // drop "<domain> <sev> — "
   return t.trim() || title
 }
 
@@ -150,7 +150,8 @@ export function cleanTitle(title: string | null | undefined): string {
 export function eventKey(s: GlobeSignal): string {
   const norm = cleanTitle(s.title).toLowerCase().replace(/[^a-z0-9]+/g, '')
   if (!norm) return `id-${s.id}`
-  return `${(s.category || '').toLowerCase()}|${norm}`
+  const category = (s.category || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  return `${category}|${norm}`
 }
 
 function signalHasCoords(s: GlobeSignal): boolean {

@@ -334,7 +334,7 @@ export default function SignalGlobeCanvas({
 
         // plot whatever data we already have
         plotSignals(signalsRef.current)
-        plotIncidents(incidents)
+        plotIncidents(incidentsRef.current)
       })
       .catch(() => {
         if (!cancelled) setStatus('error')
@@ -594,7 +594,13 @@ export default function SignalGlobeCanvas({
   function flyToCoords(
     lat: number,
     lon: number,
-    opts?: { title?: string; category?: string; region?: string; signalId?: number | null },
+    opts?: {
+      title?: string
+      category?: string
+      region?: string
+      signalId?: number | null
+      incidentSlug?: string | null
+    },
   ) {
     const Cesium = cesiumRef.current
     const viewer = viewerRef.current
@@ -616,7 +622,7 @@ export default function SignalGlobeCanvas({
         timeText: '',
         approximate: false,
         status: null,
-        incidentSlug: null,
+        incidentSlug: opts.incidentSlug ?? null,
         signalId: opts.signalId ?? null,
       })
     }
@@ -690,7 +696,12 @@ export default function SignalGlobeCanvas({
       const lat = detail.lat != null ? Number(detail.lat) : NaN
       const lon = detail.lon != null ? Number(detail.lon) : NaN
       if (!isNaN(lat) && !isNaN(lon)) {
-        flyToCoords(lat, lon, { title: detail.title, category: detail.category })
+        flyToCoords(lat, lon, {
+          title: detail.title,
+          category: detail.category ?? detail.domain,
+          signalId: detail.signalId != null ? Number(detail.signalId) : null,
+          incidentSlug: detail.incidentSlug != null ? String(detail.incidentSlug) : null,
+        })
         return
       }
 
@@ -774,7 +785,7 @@ export default function SignalGlobeCanvas({
   useEffect(() => {
     incidentsRef.current = incidents
     if (!readyRef.current) return
-    plotIncidents(incidents)
+    plotIncidents(incidentsRef.current)
   }, [incidents])
 
   // ── react to ticker-row clicks (focusRequest) ──
@@ -886,7 +897,9 @@ export default function SignalGlobeCanvas({
             <div style={{ fontSize: '0.66rem', color: '#94a3b8', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.3rem' }}>
               <span>📍 {popup.region}</span>
               {popup.kind === 'signal' && <span>{popup.domain}</span>}
-              {popup.timeText && <span>🕑 {popup.timeText} ago</span>}
+              {popup.timeText && (
+                <span>🕑 {popup.timeText === 'now' ? 'now' : `${popup.timeText} ago`}</span>
+              )}
             </div>
             {popup.approximate && (
               <div style={{ fontSize: '0.6rem', color: '#eab308', marginBottom: '0.3rem', fontFamily: "'IBM Plex Mono', monospace" }}>
