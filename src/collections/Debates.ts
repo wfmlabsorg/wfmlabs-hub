@@ -1,14 +1,23 @@
 import type { CollectionConfig } from 'payload'
 
+/**
+ * Debates — ARCHIVED (retired 2026-06-23, WFM-74).
+ * The debate engine has been decommissioned in favour of Beacon's Community Knowledge &
+ * Research Agent role. This collection is kept read-only for historical data and to preserve
+ * polymorphic relationships (discussions/reactions referencing debates); no new debates are
+ * generated and the public /debates routes redirect to /research. Do not re-enable generation.
+ */
 export const Debates: CollectionConfig = {
   slug: 'debates',
   admin: {
     useAsTitle: 'title',
     defaultColumns: ['title', 'status', 'category', 'advocateVotes', 'challengerVotes', 'winner'],
+    description: 'ARCHIVED — debate engine retired 2026-06-23 (WFM-74). Read-only historical data.',
+    group: 'Archived',
   },
   access: {
     read: () => true,
-    create: ({ req: { user } }) => user?.role === 'admin',
+    create: () => false, // retired — no new debates (was: admin-only)
     update: ({ req: { user } }) => user?.role === 'admin',
     delete: ({ req: { user } }) => user?.role === 'admin',
   },

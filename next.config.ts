@@ -3,6 +3,11 @@ import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ['sharp'],
+  // Debates retired 2026-06-23 (WFM-74) — old debate URLs redirect to the research surface.
+  redirects: async () => [
+    { source: '/debates', destination: '/research', permanent: true },
+    { source: '/debates/:slug*', destination: '/research', permanent: true },
+  ],
   rewrites: async () => ({
     beforeFiles: [
       // Serve ROC OpenMCT at /roc (static HTML from public/roc/index.html)

@@ -17,7 +17,7 @@ const navLinks = [
   { href: '/discussions', label: 'Discussions' },
   { href: '/wiki', label: 'Docs' },
   { href: '/pricing', label: 'Pricing' },
-  // Suspended: /debates, /articles — reactivate when content strategy is ready
+  // /debates retired 2026-06-23 (WFM-74) → redirects to /research. /articles suspended — reactivate when content strategy is ready.
 ]
 
 export function GlobalNav() {
