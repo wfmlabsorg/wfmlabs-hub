@@ -338,9 +338,23 @@ export default function SignalGlobeCanvas({
             if (next) flyToSignal(next, false)
           }
 
-          // idle auto-rotation
+          // idle auto-rotation — ABSOLUTE longitude increment, not a relative
+          // world-axis rotate. The auto-fly (flyToSignal/flyToCoords) leaves the
+          // camera at an arbitrary tilt/roll; a relative camera.rotate resumed
+          // from that orientation accumulates roll/pitch error across fly-tos and
+          // the spin visually drifts/reverses after a few minutes. setView with an
+          // explicit north-up/look-down orientation each tick normalizes the
+          // camera so the spin is always one constant eastward direction (hub-016).
           if (!flyingRef.current && now >= idleResumeRef.current) {
-            viewer.camera.rotate(Cesium.Cartesian3.UNIT_Z, ROTATE_RATE)
+            const c = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC)
+            viewer.camera.setView({
+              destination: Cesium.Cartesian3.fromRadians(
+                c.longitude + ROTATE_RATE,
+                c.latitude,
+                c.height,
+              ),
+              orientation: { heading: 0, pitch: -Cesium.Math.PI_OVER_TWO, roll: 0 },
+            })
           }
 
           // track popup to its world position
