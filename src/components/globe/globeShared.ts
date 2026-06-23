@@ -1,7 +1,12 @@
 // Shared types + presentation helpers for the native Signal Globe hero (hub-010).
 // Mirrors the color / sizing scheme from public/roc/globe/globe.html so the
 // landing hero and the standalone ROC globe stay visually consistent.
-// NO ORANGE — signals use category cyans/blues/greys per the Mission Control spec.
+// NO ORANGE — signals use the canonical domain palette per the Mission Control spec.
+// Domain colors + labels are delegated to the single source of truth in
+// src/lib/domainColors.ts (hub-017) so the globe, signals page and landing all
+// share one map.
+
+import { domainColor, domainLabel as canonicalDomainLabel } from '@/lib/domainColors'
 
 export interface GlobeSignal {
   id: number
@@ -37,26 +42,10 @@ export interface GlobeFeed {
   incidents: GlobeIncident[]
 }
 
-// Category → point color (matches globe.html signalCategoryColors).
-const SIGNAL_CATEGORY_COLORS: Record<string, string> = {
-  weather: '#3b82f6',
-  seismic: '#22d3ee',
-  disaster: '#06b6d4',
-  cyber: '#22c55e',
-  infrastructure: '#8b5cf6',
-  health: '#ec4899',
-  financial: '#0ea5e9',
-  environmental: '#14b8a6',
-  geopolitical: '#a78bfa',
-  travel: '#38bdf8',
-  labor: '#818cf8',
-  supply_chain: '#2dd4bf',
-  events: '#64748b',
-  general: '#64748b',
-}
-
+// Category → point color. Delegated to the canonical domain map (hub-017) so the
+// globe dots match the signals page + landing badges exactly.
 export function signalColor(category: string | null | undefined): string {
-  return SIGNAL_CATEGORY_COLORS[(category || '').toLowerCase()] || '#22d3ee'
+  return domainColor(category)
 }
 
 // Incident severity ramp (matches globe.html incidentColor — no orange).
@@ -126,9 +115,9 @@ export function severityChipColor(s: GlobeSignal): string {
   return '#64748b'
 }
 
-export function domainLabel(domain: string | null | undefined): string {
-  return (domain || 'general').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
+// Re-exported from the canonical domain module (hub-017) so existing globe
+// importers keep working off one definition.
+export const domainLabel = canonicalDomainLabel
 
 // Strip the worker's title scaffold so the human headline shows through.
 // Source titles look like: "[Region] <domain> <sev> — Real headline"
