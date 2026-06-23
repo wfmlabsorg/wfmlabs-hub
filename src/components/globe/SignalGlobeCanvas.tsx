@@ -496,21 +496,37 @@ export default function SignalGlobeCanvas({
       if (isNaN(created) || Date.now() - created > SIGNAL_MAX_AGE_MS) return
       const css = signalColor(s.category)
       const base = Cesium.Color.fromCssColorString(css)
+      // Tier 3 (hub-018): region/country-centroid resolutions are only an
+      // APPROXIMATE location. Render them hollow — a transparent core with a
+      // brighter domain-colored ring — so a glance distinguishes them from the
+      // solid precise/centroid dots. Still domain-colored (canonical palette),
+      // still clickable, and the popup adds the "≈ approximate location" note.
+      const approximate = s.geo_source === 'approximate'
       // Ambient tier: fade harder with age (cap 0.7) so live signals read as
       // faint, transient texture — never competing with the incident headlines.
       const fill = new Cesium.CallbackProperty(() => {
         const frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS
-        return base.withAlpha(Math.max(0.08, Math.min(0.7, frac * 0.7)))
+        const a = Math.max(0.08, Math.min(0.7, frac * 0.7))
+        // Hollow look for approximate dots: near-transparent core (the ring
+        // carries the color), so they read as "fuzzy" without disappearing.
+        return base.withAlpha(approximate ? a * 0.18 : a)
+      }, false)
+      const outline = new Cesium.CallbackProperty(() => {
+        const frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS
+        const a = Math.max(0.08, Math.min(0.7, frac * 0.7))
+        // Brighter ring on approximate dots so the hollow center reads as a ring.
+        return base.withAlpha(approximate ? Math.min(0.85, a + 0.25) : 0.35)
       }, false)
       const eid = `sig-${s.id}`
       const entity = viewer.entities.add({
         id: eid,
         position: Cesium.Cartesian3.fromDegrees(lon, lat),
         point: {
-          pixelSize: signalSize(s),
+          // Nudge approximate dots a touch larger so the hollow ring is legible.
+          pixelSize: signalSize(s) + (approximate ? 1 : 0),
           color: fill,
-          outlineColor: base.withAlpha(0.35),
-          outlineWidth: 1,
+          outlineColor: outline,
+          outlineWidth: approximate ? 1.6 : 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e6, 1.1, 2e7, 0.5),
         },
