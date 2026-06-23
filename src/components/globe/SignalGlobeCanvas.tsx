@@ -24,6 +24,8 @@ import {
   incidentSize,
   signalSize,
   signalSeverityNum,
+  clusterPoints,
+  densityColor,
   cleanTitle,
   domainLabel,
   timeAgo,
@@ -107,6 +109,38 @@ const FLY_HEIGHT = 2_600_000
 const SIGNAL_MAX_AGE_MS = 2 * 60 * 60 * 1000
 const MAX_FLY_QUEUE = 12
 
+// ── Density heat-glow layer (hub-015) ──
+// A soft background texture beneath the signal dots showing WHERE activity
+// concentrates. Tuned subtle so it can never wash out incident headlines.
+const DENSITY_CELL_DEG = 4 // grid bin size for clustering
+const DENSITY_MIN_COUNT = 2 // only glow real concentrations (≥2 in a cell)
+const DENSITY_MIN_PX = 64 // glow diameter at the low end of the count range
+const DENSITY_MAX_PX = 210 // glow diameter at the busiest cluster
+const DENSITY_MIN_ALPHA = 0.1 // center opacity, low end
+const DENSITY_MAX_ALPHA = 0.32 // center opacity, busiest (kept well below incidents)
+const DENSITY_HEIGHT = 6000 // lift just off the surface to avoid z-fighting
+
+// One reusable radial-gradient sprite (white→transparent). Cesium tints it per
+// cluster via billboard.color, so a single texture serves every glow blob.
+let glowTexture: string | null = null
+function getGlowTexture(): string {
+  if (glowTexture) return glowTexture
+  const size = 128
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return ''
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.45, 'rgba(255,255,255,0.5)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  glowTexture = canvas.toDataURL()
+  return glowTexture
+}
+
 // ── Load Cesium from CDN exactly once (module-level singleton) ──
 let cesiumPromise: Promise<any> | null = null
 function loadCesium(): Promise<any> {
@@ -154,6 +188,7 @@ export default function SignalGlobeCanvas({
   const readyRef = useRef(false)
 
   // entity bookkeeping
+  const densityEntitiesRef = useRef<any[]>([]) // heat-glow billboards (beneath dots)
   const signalEntitiesRef = useRef<any[]>([])
   const incidentEntitiesRef = useRef<any[]>([])
   const pulseEntitiesRef = useRef<any[]>([])
@@ -332,7 +367,8 @@ export default function SignalGlobeCanvas({
         setStatus('ready')
         onReady?.()
 
-        // plot whatever data we already have
+        // plot whatever data we already have (density first → drawn beneath)
+        plotDensity(signalsRef.current)
         plotSignals(signalsRef.current)
         plotIncidents(incidentsRef.current)
       })
@@ -358,10 +394,73 @@ export default function SignalGlobeCanvas({
       viewerRef.current = null
       readyRef.current = false
       metaRef.current.clear()
+      densityEntitiesRef.current = []
     }
   }, [])
 
   // ── plotting ──
+
+  // Background heat-glow tier (hub-015): soft translucent radial blobs at the
+  // centroids of signal density clusters. Size + intensity scale with the
+  // cluster's signal count, so busier regions glow larger/brighter. Sits BENEATH
+  // the signal dots and incidents — those use disableDepthTestDistance:∞ and so
+  // always draw on top; these glow billboards keep normal depth testing, so they
+  // hug the surface and never wash out the headline tier. Recomputed (full
+  // teardown + replace) on every feed refresh — static entities, no per-frame
+  // CallbackProperty churn.
+  function plotDensity(list: GlobeSignal[]) {
+    const Cesium = cesiumRef.current
+    const viewer = viewerRef.current
+    if (!Cesium || !viewer) return
+    densityEntitiesRef.current.forEach((e) => viewer.entities.remove(e))
+    densityEntitiesRef.current = []
+
+    // Cluster the same set that plotSignals actually plots (skip promoted, bad
+    // coords, and aged-out) so the heat matches the visible dots.
+    const now = Date.now()
+    const points: { lat: number; lon: number }[] = []
+    list.forEach((s) => {
+      if (s.promoted) return
+      const lat = Number(s.lat)
+      const lon = Number(s.lon)
+      if (isNaN(lat) || isNaN(lon)) return
+      const created = new Date(s.created_at).getTime()
+      if (isNaN(created) || now - created > SIGNAL_MAX_AGE_MS) return
+      points.push({ lat, lon })
+    })
+    if (points.length === 0) return
+
+    const clusters = clusterPoints(points, DENSITY_CELL_DEG).filter(
+      (c) => c.count >= DENSITY_MIN_COUNT,
+    )
+    if (clusters.length === 0) return
+    const maxCount = clusters.reduce((m, c) => Math.max(m, c.count), 1)
+    const denom = Math.max(1, maxCount - DENSITY_MIN_COUNT)
+    const image = getGlowTexture()
+    if (!image) return
+
+    clusters.forEach((c) => {
+      const t = (c.count - DENSITY_MIN_COUNT) / denom // 0 (sparse) → 1 (busiest)
+      const sizePx = DENSITY_MIN_PX + t * (DENSITY_MAX_PX - DENSITY_MIN_PX)
+      const alpha = DENSITY_MIN_ALPHA + t * (DENSITY_MAX_ALPHA - DENSITY_MIN_ALPHA)
+      const color = Cesium.Color.fromCssColorString(densityColor(t)).withAlpha(alpha)
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(c.lon, c.lat, DENSITY_HEIGHT),
+        billboard: {
+          image,
+          color,
+          width: sizePx,
+          height: sizePx,
+          // Shrinks when zoomed out so glows don't smear into one blob.
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2.4e7, 0.45),
+          // No disableDepthTestDistance → depth-tested against the globe, so the
+          // glow stays a background texture under the always-on-top dots.
+        },
+      })
+      densityEntitiesRef.current.push(entity)
+    })
+  }
+
   function plotSignals(list: GlobeSignal[]) {
     const Cesium = cesiumRef.current
     const viewer = viewerRef.current
@@ -779,6 +878,7 @@ export default function SignalGlobeCanvas({
         }
       }
     }
+    plotDensity(signals)
     plotSignals(signals)
   }, [signals])
 
