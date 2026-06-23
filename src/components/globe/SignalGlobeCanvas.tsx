@@ -349,7 +349,9 @@ export default function SignalGlobeCanvas({
             const c = Cesium.Cartographic.fromCartesian(viewer.camera.positionWC)
             viewer.camera.setView({
               destination: Cesium.Cartesian3.fromRadians(
-                c.longitude + ROTATE_RATE,
+                // normalize to [-π, π) so the wrap at the antimeridian is explicit
+                // (fromRadians doesn't canonicalize longitude) — CodeRabbit hub-016
+                Cesium.Math.convertLongitudeRange(c.longitude + ROTATE_RATE),
                 c.latitude,
                 c.height,
               ),
