@@ -186,6 +186,57 @@ export function dedupeSignalsByEvent(list: GlobeSignal[]): GlobeSignal[] {
   )
 }
 
+// ── Density / heat-glow layer (hub-015) ─────────────────────────────────────
+// Aggregate the plotted signal set into coarse geographic clusters so we can
+// render a soft heat glow where activity concentrates. This is VOLUME, not
+// severity — the color ramp below is deliberately NOT the incident red.
+
+export interface DensityCluster {
+  lat: number // centroid latitude
+  lon: number // centroid longitude
+  count: number // signals in this cell
+}
+
+// Bin points onto a coarse lat/lon grid and return one cluster per occupied
+// cell with its signal count + centroid. Cheap (single pass, ~50 points) so it
+// can recompute on every feed refresh. Caller pre-filters (promoted/age/coords).
+export function clusterPoints(
+  points: { lat: number; lon: number }[],
+  cellDeg = 4,
+): DensityCluster[] {
+  const cells = new Map<string, { latSum: number; lonSum: number; count: number }>()
+  for (const p of points) {
+    if (isNaN(p.lat) || isNaN(p.lon)) continue
+    const key = `${Math.floor(p.lat / cellDeg)}:${Math.floor(p.lon / cellDeg)}`
+    const c = cells.get(key)
+    if (c) {
+      c.latSum += p.lat
+      c.lonSum += p.lon
+      c.count++
+    } else {
+      cells.set(key, { latSum: p.lat, lonSum: p.lon, count: 1 })
+    }
+  }
+  const out: DensityCluster[] = []
+  for (const c of cells.values()) {
+    out.push({ lat: c.latSum / c.count, lon: c.lonSum / c.count, count: c.count })
+  }
+  return out
+}
+
+// Density intensity ramp: low → high activity, cyan (#22d3ee) → amber (#f59e0b).
+// Mission Control palette, deliberately distinct from the incident severity red
+// so "busy" never reads as "severe". t is clamped to [0,1]. NO ORANGE (#f97316).
+export function densityColor(t: number): string {
+  const c = Math.max(0, Math.min(1, t))
+  const from = [0x22, 0xd3, 0xee] // cyan
+  const to = [0xf5, 0x9e, 0x0b] // amber
+  const r = Math.round(from[0] + (to[0] - from[0]) * c)
+  const g = Math.round(from[1] + (to[1] - from[1]) * c)
+  const b = Math.round(from[2] + (to[2] - from[2]) * c)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
 export function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
   if (seconds < 60) return 'now'
