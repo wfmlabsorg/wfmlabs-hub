@@ -7,7 +7,7 @@ import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
 import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
-import ShowOnGlobeButton from '@/components/globe/ShowOnGlobeButton'
+import LiveIncidentCard from '@/components/globe/LiveIncidentCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,26 +42,8 @@ const sevConfig: Record<string, { label: string; color: string; bg: string; bord
   SEV4: { label: 'SEV4', color: '#64748b', bg: 'transparent', borderColor: '#475569' },
 }
 
-const domainColors: Record<string, { bg: string; fg: string; border: string }> = {
-  weather: { bg: 'rgba(59,130,246,0.08)', fg: '#60a5fa', border: '#3b82f6' },
-  seismic: { bg: 'rgba(239,68,68,0.08)', fg: '#f87171', border: '#ef4444' },
-  disaster: { bg: 'rgba(245,158,11,0.08)', fg: '#fbbf24', border: '#f59e0b' },
-  cyber: { bg: 'rgba(34,197,94,0.08)', fg: '#4ade80', border: '#22c55e' },
-  health: { bg: 'rgba(236,72,153,0.08)', fg: '#f472b6', border: '#ec4899' },
-  infrastructure: { bg: 'rgba(139,92,246,0.08)', fg: '#a78bfa', border: '#8b5cf6' },
-  financial: { bg: 'rgba(245,158,11,0.08)', fg: '#fbbf24', border: '#f59e0b' },
-  environmental: { bg: 'rgba(20,184,166,0.08)', fg: '#2dd4bf', border: '#14b8a6' },
-  geopolitical: { bg: 'rgba(99,102,241,0.08)', fg: '#818cf8', border: '#6366f1' },
-  labor: { bg: 'rgba(168,85,247,0.08)', fg: '#c084fc', border: '#a855f7' },
-  supply_chain: { bg: 'rgba(234,179,8,0.08)', fg: '#facc15', border: '#eab308' },
-  travel: { bg: 'rgba(6,182,212,0.08)', fg: '#22d3ee', border: '#06b6d4' },
-  general: { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' },
-}
-const defaultDomain = { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' }
-
-function domainLabel(domain: string): string {
-  return (domain || 'general').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
+// Domain colors + labels now come from the canonical map (hub-017): the Live
+// Incident card (LiveIncidentCard) resolves them via domainBadge()/domainLabel().
 
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
@@ -213,7 +195,6 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
       ) : (
         <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
           {incidents.map((inc) => {
-            const dc = domainColors[inc.domain] || defaultDomain
             const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
             const regions = Array.isArray(inc.affected_regions) && inc.affected_regions.length > 0
               ? inc.affected_regions.join(', ')
@@ -222,34 +203,18 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
             const lon = inc.location_lon == null ? NaN : Number(inc.location_lon)
             const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
             return (
-              <article
+              <LiveIncidentCard
                 key={inc.id}
-                className="card"
-                style={{ minWidth: '17rem', maxWidth: '20rem', padding: '0.875rem 1rem', color: 'inherit', borderLeft: `3px solid ${sc.color}`, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-              >
-                <a
-                  href={`/incidents/${inc.slug}`}
-                  style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.625rem', fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: sc.bg, border: `1px solid ${sc.borderColor}`, color: sc.color }}>
-                      {sc.pulse && <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: sc.color, animation: 'pulse 2s ease-in-out infinite' }} />}
-                      {sc.label}
-                    </span>
-                    <span style={{ fontSize: '0.625rem', fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", textTransform: 'uppercase', letterSpacing: '0.05em', padding: '0.125rem 0.375rem', borderRadius: '4px', background: dc.bg, color: dc.fg }}>
-                      {domainLabel(inc.domain)}
-                    </span>
-                    <span style={{ fontSize: '0.625rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>{timeAgo(inc.declared_at)}</span>
-                  </div>
-                  <div style={{ fontSize: '0.8125rem', fontWeight: 600, lineHeight: 1.35 }}>{inc.title}</div>
-                </a>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>📍 {regions}</span>
-                  {hasCoords && (
-                    <ShowOnGlobeButton lat={lat} lon={lon} title={inc.title} domain={inc.domain} incidentSlug={inc.slug} />
-                  )}
-                </div>
-              </article>
+                slug={inc.slug}
+                title={inc.title}
+                domain={inc.domain}
+                regions={regions}
+                time={timeAgo(inc.declared_at)}
+                lat={lat}
+                lon={lon}
+                hasCoords={hasCoords}
+                sev={sc}
+              />
             )
           })}
         </div>

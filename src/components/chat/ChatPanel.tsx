@@ -59,10 +59,24 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
+  // Gates the auto-scroll so the INITIAL history fetch never scrolls (which would
+  // jump the whole incident page to the bottom on load — hub-017 Fix A). Armed
+  // only after history lands; reset on channel change.
+  const initializedRef = useRef(false)
+  // Last message id we've already scrolled to — lets us distinguish a genuinely
+  // NEW in-session message (scroll) from a prepend of older history (don't).
+  const lastSeenIdRef = useRef<string | null>(null)
 
-  // Auto-scroll on new messages
+  // Auto-scroll the CHAT'S OWN container (never scrollIntoView, which would move
+  // the document) — and only for a new message after the initial load.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (!initializedRef.current) return
+    const lastId = messages.length > 0 ? messages[messages.length - 1].id : null
+    if (lastId && lastId !== lastSeenIdRef.current) {
+      lastSeenIdRef.current = lastId
+      const el = scrollContainerRef.current
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    }
   }, [messages])
 
   // Load initial history
@@ -71,6 +85,9 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
     setOldestTimestamp(null)
     setHasMore(true)
     setLoadingHistory(true)
+    // New channel → disarm auto-scroll until its history lands.
+    initializedRef.current = false
+    lastSeenIdRef.current = null
 
     fetch(`/api/chat/history?channel=${encodeURIComponent(channel)}&limit=50`)
       .then((r) => r.json())
@@ -84,6 +101,11 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
         if ((data.messages ?? []).length < 50) {
           setHasMore(false)
         }
+        // Seed the last-seen id to the bottom of the initial batch so the effect
+        // fired by THIS setMessages does not scroll, then arm for live messages.
+        lastSeenIdRef.current =
+          historyMsgs.length > 0 ? historyMsgs[historyMsgs.length - 1].id : null
+        initializedRef.current = true
       })
       .catch(() => {})
       .finally(() => setLoadingHistory(false))

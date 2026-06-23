@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useCallback } from 'react'
+import { domainColor } from '@/lib/domainColors'
 
 interface Signal {
   id: number
@@ -36,20 +37,7 @@ function extraRegions(sig: Signal): string[] {
   return out
 }
 
-const domainColors: Record<string, string> = {
-  weather: '#3b82f6',
-  seismic: '#ef4444',
-  disaster: '#f97316',
-  infrastructure: '#8b5cf6',
-  cyber: '#22c55e',
-  health: '#ec4899',
-  financial: '#f59e0b',
-  environmental: '#14b8a6',
-  geopolitical: '#dc2626',
-  general: '#64748b',
-  events: '#64748b',
-}
-
+// Domain dot colors come from the canonical map (hub-017) — see domainColor().
 const domainLabels: Record<string, string> = {
   weather: 'Weather',
   seismic: 'Seismic',
@@ -222,7 +210,7 @@ export default function SignalsPage() {
           All
         </button>
         {filterCategories.map((cat) => {
-          const color = domainColors[cat]
+          const color = domainColor(cat)
           const isActive = activeCategory === cat
           return (
             <button
@@ -373,7 +361,7 @@ export default function SignalsPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {signals.map((sig) => {
-            const color = domainColors[sig.category || 'general'] || domainColors.general
+            const color = domainColor(sig.category || 'general')
             const icon = categoryIcons[sig.category || 'general'] || categoryIcons.general
             const badge = severityBadgeColors[sig.severityLabel || 'info'] || severityBadgeColors.info
             const isExpanded = expandedId === sig.id
