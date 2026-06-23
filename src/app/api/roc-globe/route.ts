@@ -1,4 +1,5 @@
 import { getPool } from '@/lib/db'
+import { regionCentroid } from '@/lib/regionCentroids'
 
 /**
  * ROC Globe geo-feed — combined signal + open-incident feed for the Cesium globe.
@@ -7,14 +8,23 @@ import { getPool } from '@/lib/db'
  *
  * SIGNALS: recent signals (default last 150 min — a small buffer past the
  * client's 2h fade window so the globe can animate the fading tail) that
- * resolve to coordinates via a two-tier lookup:
+ * resolve to coordinates via a three-tier lookup:
  *   Tier 1 — precise metadata->>'lat' / metadata->>'lon' when present & numeric
- *            (EONET / weather feeds, ~75% of recent signals).
+ *            (EONET / weather feeds, ~75% of recent signals). geo_source='precise'.
  *   Tier 2 — EXACT, case-insensitive match of signals.region_name against
  *            geo_density.region_name (no fuzzy/substring matching — that is the
  *            bug being fixed in agents-017). region_name is unique
  *            case-insensitively in geo_density, so this never fans out.
- * Signals that resolve to neither tier are dropped (reported via meta.unresolved).
+ *            geo_source='centroid'.
+ *   Tier 3 — APPROXIMATE region/country-centroid fallback (hub-018), applied in
+ *            JS after the query for any row Tier 1+2 missed. Resolves the bare
+ *            place name in region_name ("London", "Campania", "Italy", "US
+ *            Midwest") to an approximate centroid via src/lib/regionCentroids.
+ *            geo_source='approximate'. Recovered ~half the previously-dropped set
+ *            (live: 44 dropped → ~8 dropped). The client renders these with an
+ *            explicit "≈ approximate" treatment so they never read as precise.
+ * Only signals with NO logical geography ("Global"/empty/unmappable) are now
+ * dropped — reported via meta.signals_no_geo.
  *
  * PROMOTION: a LATERAL join flags any signal whose id is in an OPEN incident's
  * related_signal_ids (status NOT IN ('closed','resolved')). Promoted signals
@@ -80,20 +90,37 @@ export async function GET(req: Request) {
             ORDER BY i.created_at DESC
             LIMIT 1
          ) inc ON true
-        WHERE sig.lat IS NOT NULL AND sig.lon IS NOT NULL
         ORDER BY sig.created_at DESC`,
       [mins],
     )
 
-    // Coverage: how many in-window signals could not be resolved to coords.
-    const totalResult = await pool.query(
-      `SELECT count(*)::int AS total
-         FROM signals
-        WHERE created_at > now() - make_interval(mins => $1)`,
-      [mins],
-    )
-    const total = totalResult.rows[0]?.total ?? 0
-    const resolved = signalsResult.rowCount ?? 0
+    // Coverage: total in-window signals (resolved + unresolved). We no longer
+    // drop unresolved rows in SQL — Tier 3 (below) tries an approximate centroid
+    // before anything is excluded.
+    const total = signalsResult.rowCount ?? 0
+
+    // ── Tier 3: approximate region/country-centroid fallback (hub-018) ──────
+    // Tier 1+2 leave lat/lon NULL for any signal whose place name isn't a precise
+    // coord and isn't an exact geo_density metro. Resolve the bare region_name to
+    // an approximate centroid (world cities, sub-national regions, all countries,
+    // OVIX US macro-regions — see src/lib/regionCentroids). Rows that resolve are
+    // tagged geo_source='approximate'; rows with no logical geography ("Global",
+    // empty, unmappable) stay coordless and are counted as signals_no_geo.
+    const resolvedRows: typeof signalsResult.rows = []
+    let signalsNoGeo = 0
+    for (const s of signalsResult.rows) {
+      if (s.lat != null && s.lon != null) {
+        resolvedRows.push(s)
+        continue
+      }
+      const c = regionCentroid(s.region_name)
+      if (c) {
+        resolvedRows.push({ ...s, lat: c.lat, lon: c.lon, geo_source: 'approximate' })
+      } else {
+        signalsNoGeo++
+      }
+    }
+    const resolved = resolvedRows.length
 
     // Scatter signals that share an identical coordinate so they don't stack
     // on one pixel. Coarse region/country-centroid coords collapse many events
@@ -111,11 +138,11 @@ export async function GET(req: Request) {
     const coordKey = (s: { lat: number; lon: number }) =>
       `${Number(s.lat).toFixed(3)},${Number(s.lon).toFixed(3)}`
     const coordCounts = new Map<string, number>()
-    for (const s of signalsResult.rows) {
+    for (const s of resolvedRows) {
       const k = coordKey(s)
       coordCounts.set(k, (coordCounts.get(k) ?? 0) + 1)
     }
-    const signals = signalsResult.rows.map((s) => {
+    const signals = resolvedRows.map((s) => {
       if ((coordCounts.get(coordKey(s)) ?? 0) < 2) return s // unique point — leave it
       const id = Number(s.id)
       // sqrt(rand) radius → uniform fill of the disk (not bunched at center)
@@ -146,7 +173,15 @@ export async function GET(req: Request) {
           window_minutes: mins,
           signals_total: total,
           signals_resolved: resolved,
-          signals_unresolved: total - resolved,
+          // Genuinely place-less signals (no logical geography) — the only ones
+          // we still drop after the Tier 3 approximate fallback (hub-018).
+          signals_no_geo: signalsNoGeo,
+          // Back-compat alias (was: anything not plotted).
+          signals_unresolved: signalsNoGeo,
+          // Resolution tier breakdown for observability.
+          signals_precise: signals.filter((s) => s.geo_source === 'precise').length,
+          signals_centroid: signals.filter((s) => s.geo_source === 'centroid').length,
+          signals_approximate: signals.filter((s) => s.geo_source === 'approximate').length,
           incidents_open: incidentsResult.rowCount ?? 0,
         },
       },
