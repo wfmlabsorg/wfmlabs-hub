@@ -5,140 +5,53 @@ import { getPool } from '@/lib/db'
 import { Rest } from 'ably'
 import { randomUUID } from 'crypto'
 import { BEACON_COMMISSIONED_PROMPT } from '@/lib/beacon/commissioned-prompt'
+import { callClaude } from '@/lib/beacon/claude'
+import { embedQuery } from '@/lib/beacon/embed'
+import {
+  semanticCandidates,
+  keywordCandidates,
+  mergeCandidates,
+  searchWiki,
+  type RetrievedPaper,
+} from '@/lib/beacon/retrieval'
+import { deepRead, deepSourcesBlock } from '@/lib/beacon/deepread'
 
 /**
- * POST /api/beacon/respond  — drive one turn of a commissioned Beacon session (WFM-71).
+ * POST /api/beacon/respond — drive one turn of a commissioned Beacon session (WFM-71, v2 WFM-82).
  *
- * Beacon is a member of type 'agent'. A member runs a commissioned research session in a
- * private DM channel `dm:beacon:<memberId>` (sent via the normal /api/chat/send). After the
- * member posts, the client calls this route; it loads the thread, runs the commissioned
- * session (retrieval over the Research Library + WFMWiki, then Claude with the commissioned
- * instruction set), and posts Beacon's reply back into the channel as an agent message.
+ * Beacon is a member of type 'agent'. A member runs a commissioned research session in a private DM
+ * channel `dm:beacon:<memberId>` (sent via /api/chat/send). After the member posts, the client calls
+ * this route; it loads the thread and drives one of two phases:
  *
- * Body: { channel: string }   — must be `dm:beacon:<sessionMemberId>`.
+ *   INTAKE (unchanged behavior) — one Claude call with the commissioned prompt sharpens the question
+ *     and asks at most two clarifying questions. When the question is finally sharp, instead of
+ *     writing the brief it emits a `<<<READY>>>` control token + the sharpened question.
+ *   RESEARCH — semantic kNN over the existing pgvector index (paper_chunks, all-MiniLM-L6-v2 384-dim)
+ *     surfaces ~8 candidates; Beacon deep-reads them in ONE structured pass (genuine-fit + specific
+ *     finding + A–V grade), selects 3–4 that carry the argument (rest → "considered but not used"),
+ *     then drafts the Defensible Position Brief synthesized from those deep reads.
+ *
+ * Keyword `LIKE` is now only a fallback/recall supplement. Premium gate, auth, the `dm:beacon:` check,
+ * Ably publish-back, and the ON CONFLICT (ably_message_id) partial-index insert (hub#31) are unchanged.
+ *
+ * Body: { channel: string }  — must be `dm:beacon:<sessionMemberId>`.
  * Env:  ANTHROPIC_API_KEY (required), ABLY_API_KEY (required), WFMWIKI_API_URL (optional).
- *
- * v1 retrieval is keyword-based (Payload `like` over title/abstract); it swaps to semantic
- * pgvector retrieval when WFM-70 lands. Privacy: the thread is the member's; nothing here
- * publishes to community canon (the propose→wiki gate is a separate, human-ratified step).
  */
 
-const MODEL = 'claude-sonnet-4-6'
+export const runtime = 'nodejs'
+// A brief turn runs three sequential Claude calls (planner→READY, deep-read scoring, brief draft);
+// the draft alone is ~60s, so the whole turn lands ~75–90s. Needs a Pro-level function ceiling
+// (Hobby caps at 60s). Intake turns are a single short call (~5–10s). The "Beacon is researching…"
+// UI indicator covers the wait. v1 already made a ~60s single brief-writing call.
+export const maxDuration = 300
+
+const READY = '<<<READY>>>'
+const CANDIDATE_CAP = 8
 
 interface ChatRow {
   sender_username: string
   sender_type: string
   body: string
-}
-
-interface PaperSource {
-  title: string
-  authors: string[]
-  abstract: string
-  sourceType: string
-  sourceName: string
-  category: string
-  url: string
-}
-
-const STOPWORDS = new Set([
-  'the', 'and', 'for', 'are', 'but', 'not', 'you', 'with', 'this', 'that', 'have', 'from', 'your',
-  'how', 'what', 'why', 'when', 'should', 'would', 'could', 'about', 'into', 'them', 'they', 'our',
-  'can', 'will', 'has', 'was', 'were', 'their', 'which', 'than', 'then', 'need', 'want', 'defend',
-])
-
-function keywords(text: string, max = 8): string[] {
-  const seen = new Set<string>()
-  for (const w of text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)) {
-    if (w.length > 3 && !STOPWORDS.has(w)) seen.add(w)
-    if (seen.size >= max) break
-  }
-  return [...seen]
-}
-
-// ── retrieval: Research Library (Payload, keyword/v1) ──
-async function searchPapers(
-  payload: Awaited<ReturnType<typeof getPayload>>,
-  query: string,
-): Promise<PaperSource[]> {
-  const kws = keywords(query)
-  if (kws.length === 0) return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const or: any[] = kws.flatMap((k) => [{ title: { like: k } }, { abstract: { like: k } }])
-  const res = await payload.find({
-    collection: 'papers',
-    where: { or },
-    limit: 12,
-    depth: 0,
-    overrideAccess: true,
-  })
-  return res.docs.map((d) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = d as any
-    return {
-      title: String(p.title || ''),
-      authors: Array.isArray(p.authors) ? p.authors.map((a: { name?: string }) => a?.name).filter(Boolean) : [],
-      abstract: String(p.abstract || '').slice(0, 600),
-      sourceType: String(p.sourceType || 'unknown'),
-      sourceName: String(p.sourceName || ''),
-      category: String(p.category || ''),
-      url: String(p.sourceUrl || ''),
-    }
-  })
-}
-
-// ── retrieval: WFMWiki canon (MediaWiki search, optional) ──
-async function searchWiki(query: string): Promise<{ title: string; snippet: string; url: string }[]> {
-  const base = process.env.WFMWIKI_API_URL // e.g. https://wiki.wfmlabs.org/api.php
-  if (!base) return []
-  try {
-    const u = `${base}?action=query&list=search&srsearch=${encodeURIComponent(query)}&srlimit=5&format=json`
-    const resp = await fetch(u, { headers: { 'User-Agent': 'wfmlabs-beacon/1.0' } })
-    if (!resp.ok) return []
-    const data = (await resp.json()) as { query?: { search?: { title: string; snippet?: string }[] } }
-    const origin = base.replace(/\/api\.php.*$/, '')
-    return (data.query?.search || []).map((s) => ({
-      title: s.title,
-      snippet: (s.snippet || '').replace(/<[^>]+>/g, '').slice(0, 300),
-      url: `${origin}/wiki/${encodeURIComponent(s.title.replace(/ /g, '_'))}`,
-    }))
-  } catch {
-    return []
-  }
-}
-
-function sourcesBlock(papers: PaperSource[], wiki: { title: string; snippet: string; url: string }[]): string {
-  if (papers.length === 0 && wiki.length === 0) {
-    return '# SOURCES AVAILABLE THIS TURN\n(none retrieved — the library returned nothing for this query; treat the evidence as Absent (—) unless the member supplied facts directly.)'
-  }
-  const lines: string[] = ['# SOURCES AVAILABLE THIS TURN', 'Cite ONLY these (plus the member’s own statements). Do not recall citations from memory.', '']
-  if (wiki.length) {
-    lines.push('## WFMWiki canon')
-    wiki.forEach((w, i) => lines.push(`[W${i + 1}] ${w.title} — ${w.snippet} (${w.url})`))
-    lines.push('')
-  }
-  if (papers.length) {
-    lines.push('## Research Library')
-    papers.forEach((p, i) => {
-      const auth = p.authors.slice(0, 4).join(', ') || 'n/a'
-      lines.push(`[P${i + 1}] "${p.title}" — ${auth}. type=${p.sourceType}${p.sourceName ? `/${p.sourceName}` : ''}; category=${p.category}. ${p.url}\n    abstract: ${p.abstract || '(none)'}`)
-    })
-  }
-  return lines.join('\n')
-}
-
-// ── Claude ──
-async function callClaude(system: string, messages: { role: 'user' | 'assistant'; content: string }[]): Promise<string> {
-  const key = process.env.ANTHROPIC_API_KEY
-  if (!key) throw new Error('ANTHROPIC_API_KEY not set')
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODEL, max_tokens: 3200, system, messages }),
-  })
-  if (!resp.ok) throw new Error(`Claude ${resp.status}: ${(await resp.text()).slice(0, 200)}`)
-  const data = (await resp.json()) as { content?: { text?: string }[] }
-  return data.content?.[0]?.text?.trim() || ''
 }
 
 // Merge consecutive same-role messages (Anthropic wants clean alternation).
@@ -153,6 +66,72 @@ function toMessages(rows: ChatRow[]): { role: 'user' | 'assistant'; content: str
     else out.push({ role, content: text })
   }
   return out
+}
+
+// Concise coverage hint for the intake call: lets Beacon gauge whether the library has material
+// without dumping abstracts (intake does not search/cite — §2 of the prompt).
+function coverageHint(candidates: RetrievedPaper[]): string {
+  if (candidates.length === 0) {
+    return '# LIBRARY COVERAGE\n(no obviously-matching papers surfaced yet — keep sharpening; the deep search runs once the question is sharp.)'
+  }
+  const lines = candidates
+    .slice(0, CANDIDATE_CAP)
+    .map((p) => `- "${p.title}" (${p.sourceType}${p.category ? '/' + p.category : ''})`)
+  return `# LIBRARY COVERAGE (titles only — do NOT cite yet; full deep-read happens after the question is sharp)\n${lines.join('\n')}`
+}
+
+// Surface candidates for a query: semantic kNN primary, keyword LIKE as recall supplement / fallback.
+async function surface(
+  pool: ReturnType<typeof getPool>,
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  query: string,
+): Promise<RetrievedPaper[]> {
+  const vec = await embedQuery(query)
+  if (vec) {
+    const semantic = await semanticCandidates(pool, payload, vec, { paperK: CANDIDATE_CAP })
+    const keyword = await keywordCandidates(payload, query, 6)
+    return mergeCandidates(semantic, keyword, CANDIDATE_CAP)
+  }
+  // Embedding unavailable → degrade gracefully to keyword retrieval (v1 behavior).
+  return keywordCandidates(payload, query, CANDIDATE_CAP)
+}
+
+async function publishReply(
+  pool: ReturnType<typeof getPool>,
+  channel: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  beacon: any,
+  reply: string,
+  metadata: Record<string, unknown>,
+) {
+  const ablyId = randomUUID()
+  const ins = await pool.query<{ id: number; created_at: string }>(
+    `INSERT INTO chat_messages
+       (channel, sender_id, sender_username, sender_type, sender_display_name, message_type, body, metadata, ably_message_id, parent_id)
+     VALUES ($1, $2, $3, 'agent', $4, 'text', $5, $6, $7, NULL)
+     ON CONFLICT (ably_message_id) WHERE ably_message_id IS NOT NULL DO NOTHING
+     RETURNING id, created_at`,
+    [channel, beacon.id, beacon.username, beacon.displayName || 'Beacon', reply, metadata, ablyId],
+  )
+  const row = ins.rows[0]
+  if (row) {
+    const ably = new Rest(process.env.ABLY_API_KEY!)
+    await ably.channels.get(channel).publish({
+      id: ablyId,
+      name: 'message',
+      data: {
+        id: row.id,
+        body: reply,
+        sender: beacon.username,
+        senderType: 'agent',
+        senderDisplayName: beacon.displayName || 'Beacon',
+        messageType: 'text',
+        metadata,
+        parentId: null,
+        timestamp: row.created_at,
+      },
+    })
+  }
 }
 
 export async function POST(request: Request) {
@@ -191,57 +170,79 @@ export async function POST(request: Request) {
   )
   const rows = hist.rows
   if (rows.length === 0 || rows[rows.length - 1].sender_type === 'agent') {
-    // Nothing new from the member to respond to.
     return Response.json({ ok: true, skipped: 'no pending member message' })
   }
 
-  // Retrieval from the most recent member turns (richest once intake has sharpened the question).
-  const memberText = rows.filter((r) => r.sender_type !== 'agent').slice(-4).map((r) => r.body).join(' ')
-  const [papers, wiki] = await Promise.all([searchPapers(payload, memberText), searchWiki(memberText)])
-
-  const system = `${BEACON_COMMISSIONED_PROMPT}\n\nToday is ${new Date().toISOString().slice(0, 10)}. The commissioning member is @${member.username}.\n\n${sourcesBlock(papers, wiki)}`
   const messages = toMessages(rows)
   if (messages.length === 0 || messages[messages.length - 1].role !== 'user') {
     return Response.json({ ok: true, skipped: 'no user turn' })
   }
 
+  const today = new Date().toISOString().slice(0, 10)
+  const base = `${BEACON_COMMISSIONED_PROMPT}\n\nToday is ${today}. The commissioning member is @${member.username}.`
+
+  // Retrieval seed from the most recent member turns (richest once intake has sharpened the question).
+  const memberText = rows.filter((r) => r.sender_type !== 'agent').slice(-4).map((r) => r.body).join(' ')
+
+  // ── PHASE 1: INTAKE / PLANNER (single call; behaves exactly like v1 intake, plus a READY signal) ──
+  const candidates = await surface(pool, payload, memberText)
+  const intakeSystem = `${base}\n\n${coverageHint(candidates)}\n\n## Runtime control (commissioned v2)
+You operate in two phases:
+1. While the question is NOT yet sharp, behave EXACTLY as INTAKE (§Runtime notes): reply with your short clarifying turn (at most two targeted questions) and STOP. Do not produce a brief and do not search.
+2. When — and ONLY when — the question is sharp and ready to research, DO NOT write the brief yet. Instead reply with the control token on the FIRST line and nothing before it:
+${READY}
+<one or two sentences stating the sharpened research question + the skeptic/context>
+A deep-research pass will then read the library in depth and you will draft the brief on the next turn. Never emit ${READY} during a genuine clarifying turn.`
+
+  let intakeReply: string
+  try {
+    intakeReply = await callClaude(intakeSystem, messages, 1200)
+  } catch (e) {
+    return Response.json({ error: 'beacon failed to respond', detail: String(e).slice(0, 200) }, { status: 502 })
+  }
+  if (!intakeReply) return Response.json({ error: 'empty reply' }, { status: 502 })
+
+  const firstLine = intakeReply.split('\n', 1)[0].trim()
+  if (!firstLine.startsWith(READY)) {
+    // Still in intake — publish the clarifying reply as-is (unchanged behavior) and stop.
+    await publishReply(pool, channel, beacon, intakeReply, { commissioned: true, phase: 'intake' })
+    return Response.json({ ok: true, reply: intakeReply, phase: 'intake' })
+  }
+
+  // ── PHASE 2: RESEARCH — semantic surface → deep-read → select 3–4 → draft brief ──
+  const sharpened =
+    intakeReply.slice(intakeReply.indexOf(READY) + READY.length).trim() || memberText
+
+  // Re-surface against the sharpened question for the best candidate set, then deep-read it.
+  const briefCandidates = await surface(pool, payload, sharpened)
+  const [deep, wiki] = await Promise.all([
+    deepRead(briefCandidates, sharpened, { maxSelect: 4 }),
+    searchWiki(sharpened),
+  ])
+
+  const draftSystem = `${base}\n\n${deepSourcesBlock(deep, wiki)}\n\n## Runtime control (commissioned v2)
+The question is now sharp and the library has been deep-read for you (the deep-read sources above carry the specific extracted finding + evidence grade for each). Produce the DEFENSIBLE POSITION BRIEF now, using the EXACT §4 structure with inline grades. Synthesize from the deep-read findings — do NOT dump or paraphrase whole abstracts. Cite ONLY the deep-read sources listed above (plus the member's own statements); never cite a paper from the "considered but not used" list as support. Keep §5 (where the evidence runs out) honest, especially where the library is thin.
+Sharpened question: ${sharpened}`
+
   let reply: string
   try {
-    reply = await callClaude(system, messages)
+    reply = await callClaude(draftSystem, messages, 3600)
   } catch (e) {
     return Response.json({ error: 'beacon failed to respond', detail: String(e).slice(0, 200) }, { status: 502 })
   }
   if (!reply) return Response.json({ error: 'empty reply' }, { status: 502 })
 
-  // Post Beacon's reply: persist as an agent message + publish to Ably (mirrors /api/chat/send).
-  const ablyId = randomUUID()
-  const ins = await pool.query<{ id: number; created_at: string }>(
-    `INSERT INTO chat_messages
-       (channel, sender_id, sender_username, sender_type, sender_display_name, message_type, body, metadata, ably_message_id, parent_id)
-     VALUES ($1, $2, $3, 'agent', $4, 'text', $5, $6, $7, NULL)
-     ON CONFLICT (ably_message_id) WHERE ably_message_id IS NOT NULL DO NOTHING
-     RETURNING id, created_at`,
-    [channel, beacon.id, beacon.username, beacon.displayName || 'Beacon', reply, { commissioned: true }, ablyId],
-  )
-  const row = ins.rows[0]
-  if (row) {
-    const ably = new Rest(process.env.ABLY_API_KEY)
-    await ably.channels.get(channel).publish({
-      id: ablyId,
-      name: 'message',
-      data: {
-        id: row.id,
-        body: reply,
-        sender: beacon.username,
-        senderType: 'agent',
-        senderDisplayName: beacon.displayName || 'Beacon',
-        messageType: 'text',
-        metadata: { commissioned: true },
-        parentId: null,
-        timestamp: row.created_at,
-      },
-    })
-  }
+  await publishReply(pool, channel, beacon, reply, { commissioned: true, phase: 'brief' })
 
-  return Response.json({ ok: true, reply, sources: { papers: papers.length, wiki: wiki.length } })
+  return Response.json({
+    ok: true,
+    reply,
+    phase: 'brief',
+    sources: {
+      candidates: briefCandidates.length,
+      selected: deep.selected.length,
+      notUsed: deep.notUsed.length,
+      wiki: wiki.length,
+    },
+  })
 }
