@@ -94,6 +94,26 @@ export const Papers: CollectionConfig = {
       type: 'textarea',
     },
     {
+      // Provenance for fullText acquisition (research-011). Kept in sync with the
+      // raw-SQL column papers.full_text_source so Payload's schema model matches
+      // the DB (no drift). Free text: arxiv | unpaywall | crossref | web | manual.
+      name: 'fullTextSource',
+      type: 'text',
+      admin: {
+        description: 'Where fullText was obtained: arxiv | unpaywall | crossref | web | manual',
+      },
+    },
+    {
+      // Acquisition lifecycle for fullText (research-011). Mirrors raw-SQL column
+      // papers.full_text_status.
+      name: 'fullTextStatus',
+      type: 'select',
+      options: ['pending', 'acquired', 'failed', 'unavailable'],
+      admin: {
+        description: 'Full-text acquisition status (research-011 backfill + harvest)',
+      },
+    },
+    {
       name: 'curatorSummary',
       type: 'richText',
       admin: {
