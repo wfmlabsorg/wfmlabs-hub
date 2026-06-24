@@ -2,7 +2,9 @@ import { withPayload } from '@payloadcms/next/withPayload'
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['sharp'],
+  // @xenova/transformers (Beacon query embedding, WFM-82) ships ONNX/WASM assets that must not be
+  // bundled by Next — mark external so they load at runtime in the Node serverless function.
+  serverExternalPackages: ['sharp', '@xenova/transformers'],
   // Debates retired 2026-06-23 (WFM-74) — old debate URLs redirect to the research surface.
   redirects: async () => [
     { source: '/debates', destination: '/research', permanent: true },
