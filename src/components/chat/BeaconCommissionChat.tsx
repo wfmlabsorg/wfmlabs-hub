@@ -18,8 +18,31 @@ export function BeaconCommissionChat() {
   const memberId = session?.user?.payloadMemberId
   const [thinking, setThinking] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [proposing, setProposing] = useState(false)
+  const [proposeResult, setProposeResult] = useState<string | null>(null)
 
   const channel = memberId ? `dm:beacon:${memberId}` : ''
+
+  const doPropose = useCallback(async () => {
+    if (!channel) return
+    setProposeResult(null)
+    setProposing(true)
+    try {
+      const res = await fetch('/api/beacon/propose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      })
+      const j = (await res.json().catch(() => ({}))) as { proposed?: boolean; title?: string; reason?: string; error?: string }
+      if (res.ok && j.proposed) setProposeResult(`Proposed to the community wiki for review: “${j.title}”. A human ratifies it before it becomes canon.`)
+      else if (res.ok) setProposeResult(j.reason || 'No generalizable insight to propose from this session yet.')
+      else setProposeResult(j.error || 'Could not propose right now.')
+    } catch {
+      setProposeResult('Could not reach Beacon to propose.')
+    } finally {
+      setProposing(false)
+    }
+  }, [channel])
 
   const onAfterSend = useCallback(async () => {
     if (!channel) return
@@ -135,6 +158,31 @@ export function BeaconCommissionChat() {
         placeholder="Describe the decision you need to defend…"
         style={{ height: '560px' }}
       />
+
+      {/* §6 trust gate — member opts in; Beacon proposes a sanitized, member-stripped insight
+          as PROPOSED wiki canon for human ratification. Nothing publishes automatically. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.625rem', flexWrap: 'wrap' }}>
+        <button
+          onClick={doPropose}
+          disabled={proposing}
+          style={{
+            padding: '0.4rem 0.8rem',
+            background: 'transparent',
+            color: '#a78bfa',
+            border: '1px solid #a78bfa55',
+            borderRadius: '0.5rem',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            cursor: proposing ? 'default' : 'pointer',
+            opacity: proposing ? 0.6 : 1,
+          }}
+        >
+          {proposing ? 'Sanitizing…' : 'Propose a sanitized insight to the wiki'}
+        </button>
+        {proposeResult && (
+          <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>{proposeResult}</span>
+        )}
+      </div>
 
       <style>{`@keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }`}</style>
     </ChatProvider>
