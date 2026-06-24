@@ -635,6 +635,14 @@ export interface Paper {
   abstract?: string | null;
   fullText?: string | null;
   /**
+   * Where fullText was obtained: arxiv | unpaywall | crossref | web | manual
+   */
+  fullTextSource?: string | null;
+  /**
+   * Full-text acquisition status (research-011 backfill + harvest)
+   */
+  fullTextStatus?: ('pending' | 'acquired' | 'failed' | 'unavailable') | null;
+  /**
    * Beacon's summary or member contribution
    */
   curatorSummary?: {
@@ -756,6 +764,8 @@ export interface Article {
   createdAt: string;
 }
 /**
+ * ARCHIVED — debate engine retired 2026-06-23 (WFM-74). Read-only historical data.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "debates".
  */
@@ -1866,6 +1876,8 @@ export interface PapersSelect<T extends boolean = true> {
       };
   abstract?: T;
   fullText?: T;
+  fullTextSource?: T;
+  fullTextStatus?: T;
   curatorSummary?: T;
   whyItMatters?: T;
   caveats?: T;
