@@ -15,6 +15,7 @@ agree and Payload detects no drift.
 | File | Adds |
 |------|------|
 | `001_deep_research_db.sql` | `research_cards` + card embedding + HNSW index; `papers.full_text_source/_status`; ensures `vector` ext. (research-010 / WFM-84) |
+| `002_paper_chunks_bge_m3_rebuild.sql` | **Destructive + sequenced.** `paper_chunks.embedding` 384→`vector(1024)` (TRUNCATE + resize), ivfflat → HNSW cosine index, for the bge-m3 upgrade. Empties `paper_chunks` until the `paper-embed` worker (roc, research-013) re-embeds the corpus. Idempotent/re-run-safe (skips the truncate when already 1024-d). Apply → `paper-embed` /backfill → deploy research-014. (research-013 / WFM-87) |
 
 ---
 
