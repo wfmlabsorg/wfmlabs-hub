@@ -22,6 +22,15 @@ interface ChatPanelProps {
   channel: string
   className?: string
   style?: React.CSSProperties
+  /** Called after a member message sends successfully (e.g. to trigger an agent responder). */
+  onAfterSend?: (body: string) => void
+  /** Render a subtle "thinking" indicator at the end of the list (e.g. while an agent replies). */
+  agentThinking?: boolean
+  thinkingLabel?: string
+  /** Override the input placeholder. */
+  placeholder?: string
+  /** Override the header label (defaults to the raw channel name). */
+  headerLabel?: string
 }
 
 function formatTime(ts?: string): string {
@@ -45,7 +54,7 @@ function mapHistoryMessage(row: any): InternalMessage {
   }
 }
 
-export function ChatPanel({ channel, className, style }: ChatPanelProps) {
+export function ChatPanel({ channel, className, style, onAfterSend, agentThinking, thinkingLabel, placeholder, headerLabel }: ChatPanelProps) {
   const { client, clientId, connected } = useChatClient()
 
   const [messages, setMessages] = useState<InternalMessage[]>([])
@@ -230,12 +239,13 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
         body: JSON.stringify({ channel, body, clientMsgId, parentId: null }),
       })
       if (!res.ok) throw new Error('send failed')
+      onAfterSend?.(body)
     } catch {
       // Roll back the optimistic message and restore the input.
       setMessages((prev) => prev.filter((m) => m.id !== clientMsgId))
       setInputValue(body)
     }
-  }, [inputValue, connected, clientId, channel])
+  }, [inputValue, connected, clientId, channel, onAfterSend])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -283,7 +293,7 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
             }}
           />
           <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#f1f5f9' }}>
-            {channel}
+            {headerLabel || channel}
           </span>
         </div>
         <span style={{ fontSize: '0.75rem', color: '#64748b' }}>
@@ -456,6 +466,32 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
           )
         })}
 
+        {agentThinking && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              color: '#a78bfa',
+              fontSize: '0.8125rem',
+              fontStyle: 'italic',
+              padding: '0.25rem 0',
+            }}
+          >
+            <span
+              style={{
+                width: '0.5rem',
+                height: '0.5rem',
+                borderRadius: '50%',
+                background: '#a78bfa',
+                display: 'inline-block',
+                animation: 'pulse 1.2s ease-in-out infinite',
+              }}
+            />
+            {thinkingLabel || 'Beacon is researching…'}
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -475,7 +511,7 @@ export function ChatPanel({ channel, className, style }: ChatPanelProps) {
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={connected ? 'Send a message…' : 'Connecting…'}
+          placeholder={connected ? (placeholder || 'Send a message…') : 'Connecting…'}
           disabled={!connected}
           style={{
             flex: 1,

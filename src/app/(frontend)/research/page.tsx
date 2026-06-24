@@ -3,6 +3,7 @@ import type { Where } from 'payload'
 import config from '@payload-config'
 import React from 'react'
 import { AssetCard } from '@/components/cards/AssetCard'
+import { BeaconCommissionChat } from '@/components/chat/BeaconCommissionChat'
 
 export const metadata = { title: 'Research | WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -93,6 +94,11 @@ export default async function ResearchBrowsePage({
         <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
           Curated academic papers, industry reports, and vendor research with practitioner commentary.
         </p>
+      </div>
+
+      {/* Commission Beacon — the member-facing research analyst (the landing piece) */}
+      <div style={{ marginBottom: '2rem' }}>
+        <BeaconCommissionChat />
       </div>
 
       {/* Paper type filter chips */}
