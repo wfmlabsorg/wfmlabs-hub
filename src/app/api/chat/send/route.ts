@@ -97,7 +97,7 @@ export async function POST(request: Request) {
        (channel, sender_id, sender_username, sender_type, sender_display_name,
         message_type, body, metadata, ably_message_id, parent_id)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     ON CONFLICT (ably_message_id) DO NOTHING
+     ON CONFLICT (ably_message_id) WHERE ably_message_id IS NOT NULL DO NOTHING
      RETURNING id, created_at`,
     [
       channel,

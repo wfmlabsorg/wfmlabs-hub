@@ -219,7 +219,7 @@ export async function POST(request: Request) {
     `INSERT INTO chat_messages
        (channel, sender_id, sender_username, sender_type, sender_display_name, message_type, body, metadata, ably_message_id, parent_id)
      VALUES ($1, $2, $3, 'agent', $4, 'text', $5, $6, $7, NULL)
-     ON CONFLICT (ably_message_id) DO NOTHING
+     ON CONFLICT (ably_message_id) WHERE ably_message_id IS NOT NULL DO NOTHING
      RETURNING id, created_at`,
     [channel, beacon.id, beacon.username, beacon.displayName || 'Beacon', reply, { commissioned: true }, ablyId],
   )
