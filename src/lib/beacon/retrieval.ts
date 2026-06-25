@@ -1,12 +1,19 @@
 /**
- * Beacon retrieval (WFM-82).
+ * Beacon retrieval (WFM-82 → WFM-88 / research-014).
  *
- * v2 retrieval is SEMANTIC-primary: embed the query (see embed.ts) and run pgvector kNN over
- * `paper_chunks`, group chunks → papers, rank by best chunk similarity, then load the full paper
- * docs for the top candidates. Keyword `LIKE` over title/abstract is kept only as a recall
- * supplement and as the fallback when embedding is unavailable. Selected paper docs are loaded via
- * Payload so authorship + Lexical fields (whyItMatters / curatorSummary / caveats) are handled
- * exactly as elsewhere.
+ * v2 retrieval is SEMANTIC-primary. WFM-88 makes it CARD-FIRST: the primary kNN now runs over
+ * `research_cards.embedding` (one structured deep-comprehension card per paper, bge-m3 1024-d),
+ * ranking PAPERS by how well their card matches the query. Chunk-level kNN over `paper_chunks`
+ * (also bge-m3 post research-013) is blended in for passage-level recall, and keyword `LIKE` over
+ * title/abstract remains the final fallback when embedding is unavailable. Selected paper docs are
+ * loaded via Payload so authorship + Lexical fields are handled exactly as elsewhere; each candidate
+ * carries its full Research Card (when present) so the deep-read + draft steps reason over genuine
+ * per-paper understanding, not abstract snippets.
+ *
+ * Cutover: card/chunk kNN only return hits once research-013 has populated bge-m3 embeddings (and
+ * resized `paper_chunks.embedding` 384→1024-d). Until then both kNN paths return [] (the query
+ * vector is 1024-d; a 384-d column or empty cards table simply yields nothing / errors, which we
+ * swallow), and retrieval degrades to keyword `LIKE` — the route never 500s during the cutover.
  */
 
 import type { getPayload } from 'payload'
@@ -14,6 +21,21 @@ import type { Pool } from 'pg'
 import { toVectorLiteral } from './embed'
 
 type Payload = Awaited<ReturnType<typeof getPayload>>
+
+/** Structured deep-comprehension card (research_cards), 1:1 with a paper. */
+export interface ResearchCard {
+  thesis: string
+  method: { design?: string; sample_n?: number; setting?: string } | null
+  keyFindings: { finding: string; stat_or_quote?: string; locator?: string }[]
+  evidenceStrength: string
+  evidenceJustification: string
+  problemTags: string[]
+  limitations: string
+  applicableQuestions: string[]
+  keyQuotes: { quote: string; locator?: string }[]
+  sourceBasis: string
+  cardStatus: string
+}
 
 export interface RetrievedPaper {
   id: number
@@ -28,10 +50,12 @@ export interface RetrievedPaper {
   sourceName: string
   category: string
   url: string
-  /** Cosine similarity (1 - distance) of the best matching chunk; null for keyword-only hits. */
+  /** Cosine similarity (1 - distance) of the best matching card/chunk; null for keyword-only hits. */
   bestSim: number | null
   /** Top matching chunks for this paper (semantic hits), richest-first. */
   chunks: { content: string; sectionTitle: string | null }[]
+  /** The paper's structured Research Card (deep comprehension); null until research-012/013 fill it. */
+  card: ResearchCard | null
 }
 
 // ── keyword helpers (fallback / recall supplement) ──
@@ -93,6 +117,76 @@ function toRetrieved(p: any, bestSim: number | null, chunks: RetrievedPaper['chu
     url: String(p.sourceUrl || p.source_url || ''),
     bestSim,
     chunks,
+    card: null,
+  }
+}
+
+// ── Research Card row → typed card ──
+interface CardRow {
+  paper_id: number
+  thesis: string | null
+  method: unknown
+  key_findings: unknown
+  evidence_strength: string | null
+  evidence_justification: string | null
+  problem_tags: string[] | null
+  limitations: string | null
+  applicable_questions: string[] | null
+  key_quotes: unknown
+  source_basis: string | null
+  card_status: string | null
+}
+
+function rowToCard(r: CardRow): ResearchCard {
+  const findings = Array.isArray(r.key_findings) ? r.key_findings : []
+  const quotes = Array.isArray(r.key_quotes) ? r.key_quotes : []
+  const method =
+    r.method && typeof r.method === 'object' && !Array.isArray(r.method)
+      ? (r.method as ResearchCard['method'])
+      : null
+  return {
+    thesis: String(r.thesis || ''),
+    method,
+    keyFindings: findings.map((f) => {
+      const o = (f || {}) as { finding?: string; stat_or_quote?: string; locator?: string }
+      return { finding: String(o.finding || ''), stat_or_quote: o.stat_or_quote, locator: o.locator }
+    }),
+    evidenceStrength: String(r.evidence_strength || ''),
+    evidenceJustification: String(r.evidence_justification || ''),
+    problemTags: Array.isArray(r.problem_tags) ? r.problem_tags : [],
+    limitations: String(r.limitations || ''),
+    applicableQuestions: Array.isArray(r.applicable_questions) ? r.applicable_questions : [],
+    keyQuotes: quotes.map((q) => {
+      const o = (q || {}) as { quote?: string; locator?: string }
+      return { quote: String(o.quote || ''), locator: o.locator }
+    }),
+    sourceBasis: String(r.source_basis || ''),
+    cardStatus: String(r.card_status || ''),
+  }
+}
+
+const CARD_COLS = `paper_id, thesis, method, key_findings, evidence_strength, evidence_justification,
+                   problem_tags, limitations, applicable_questions, key_quotes, source_basis, card_status`
+
+/**
+ * Hydrate `.card` for any candidate that doesn't already carry one (e.g. arrived via chunk/keyword
+ * retrieval). One query over research_cards by paper_id. Best-effort: on error (table absent during
+ * cutover) candidates keep card=null and retrieval still works off chunks/abstract.
+ */
+export async function attachCards(pool: Pool, papers: RetrievedPaper[]): Promise<void> {
+  const need = papers.filter((p) => !p.card).map((p) => p.id)
+  if (need.length === 0) return
+  try {
+    const res = await pool.query<CardRow>(
+      `SELECT ${CARD_COLS} FROM research_cards
+        WHERE paper_id = ANY($1) AND card_status = 'complete'`,
+      [need],
+    )
+    const byPaper = new Map<number, ResearchCard>()
+    for (const r of res.rows) byPaper.set(Number(r.paper_id), rowToCard(r))
+    for (const p of papers) if (!p.card) p.card = byPaper.get(p.id) ?? null
+  } catch (e) {
+    console.error('[beacon/retrieval] attachCards skipped:', String(e).slice(0, 160))
   }
 }
 
@@ -109,6 +203,54 @@ async function loadPaperDocs(payload: Payload, ids: number[]): Promise<Map<numbe
   const map = new Map<number, unknown>()
   for (const d of res.docs) map.set(Number((d as { id: number }).id), d)
   return map
+}
+
+interface CardKnnRow extends CardRow {
+  dist: number
+}
+
+/**
+ * CARD-FIRST candidates: pgvector kNN over `research_cards.embedding` (bge-m3 1024-d, cosine),
+ * ranking PAPERS directly by how well their deep-comprehension card matches the query. Returns full
+ * paper docs each carrying their structured card. This is the primary retrieval path — it reasons
+ * over genuine per-paper understanding, not abstract keyword overlap. Empty array if there are no
+ * embedded cards yet (pre research-013) or on any error (so retrieval degrades to chunks/keyword).
+ */
+export async function cardCandidates(
+  pool: Pool,
+  payload: Payload,
+  vec: number[],
+  opts: { paperK?: number } = {},
+): Promise<RetrievedPaper[]> {
+  const paperK = opts.paperK ?? 8
+  const lit = toVectorLiteral(vec)
+  let rows: CardKnnRow[]
+  try {
+    const res = await pool.query<CardKnnRow>(
+      `SELECT ${CARD_COLS}, (embedding <=> $1::vector) AS dist
+         FROM research_cards
+        WHERE embedding IS NOT NULL AND card_status = 'complete'
+        ORDER BY embedding <=> $1::vector ASC
+        LIMIT $2`,
+      [lit, paperK],
+    )
+    rows = res.rows
+  } catch (e) {
+    console.error('[beacon/retrieval] cardCandidates skipped (cards not embedded yet?):', String(e).slice(0, 160))
+    return []
+  }
+  if (rows.length === 0) return []
+
+  const docs = await loadPaperDocs(payload, rows.map((r) => Number(r.paper_id)))
+  const out: RetrievedPaper[] = []
+  for (const r of rows) {
+    const doc = docs.get(Number(r.paper_id))
+    if (!doc) continue
+    const rp = toRetrieved(doc, 1 - r.dist, [])
+    rp.card = rowToCard(r)
+    out.push(rp)
+  }
+  return out
 }
 
 interface ChunkRow {
@@ -134,13 +276,21 @@ export async function semanticCandidates(
   const chunksPerPaper = opts.chunksPerPaper ?? 4
   const lit = toVectorLiteral(vec)
 
-  const res = await pool.query<ChunkRow>(
-    `SELECT paper_id, content, section_title, (embedding <=> $1::vector) AS dist
-       FROM paper_chunks
-      ORDER BY embedding <=> $1::vector ASC
-      LIMIT $2`,
-    [lit, chunkK],
-  )
+  let res: { rows: ChunkRow[] }
+  try {
+    res = await pool.query<ChunkRow>(
+      `SELECT paper_id, content, section_title, (embedding <=> $1::vector) AS dist
+         FROM paper_chunks
+        ORDER BY embedding <=> $1::vector ASC
+        LIMIT $2`,
+      [lit, chunkK],
+    )
+  } catch (e) {
+    // Pre-cutover the column is still vector(384); a 1024-d query throws a dimension mismatch.
+    // Swallow it so retrieval degrades to keyword rather than 500-ing.
+    console.error('[beacon/retrieval] chunk kNN skipped (dim mismatch pre-013?):', String(e).slice(0, 160))
+    return []
+  }
 
   // Group chunks → papers, keep insertion order (already distance-sorted) = best-first per paper.
   const byPaper = new Map<number, ChunkRow[]>()
