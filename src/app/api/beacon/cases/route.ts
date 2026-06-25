@@ -2,6 +2,7 @@ import {
   gateMember,
   listCases,
   loadCase,
+  loadCasePaper,
   createCase,
   updateCase,
   type ArgumentBucket,
@@ -62,7 +63,10 @@ export async function POST(request: Request) {
     if (body.id == null) return Response.json({ error: 'id required to load' }, { status: 400 })
     const c = await loadCase(pool, Number(body.id), memberId)
     if (!c) return Response.json({ error: 'case not found' }, { status: 404 })
-    return Response.json({ case: c })
+    // Rehydrate the Paper Pipeline artifact too (research-028): if a paper was already developed for
+    // this case, the canvas renders it on load instead of forcing a re-develop. Null when none exists.
+    const paper = await loadCasePaper(pool, Number(body.id), memberId)
+    return Response.json({ case: c, paper })
   }
 
   // SAVE an existing case (patch only the provided keys).

@@ -17,8 +17,9 @@
  * browser's native print-to-PDF makes the file — zero server-side PDF dependency, no cold-start hit.
  */
 
-import type { BeaconCase, EvidenceCard } from '@/lib/beacon/cases'
+import type { BeaconCase, CasePaper, EvidenceCard, PaperFinding, PaperReference } from '@/lib/beacon/cases'
 import type { Grade } from '@/lib/beacon/deepread'
+import { tierLabel } from '@/lib/beacon/tiers'
 
 // ── helpers ──
 
@@ -274,6 +275,7 @@ function htmlShell(title: string, body: string, auto: boolean): string {
   h2 { font-size: 15px; letter-spacing: .04em; text-transform: uppercase; color: #0e7490;
        margin: 30px 0 12px; }
   h3 { font-size: 17px; margin: 22px 0 8px; }
+  h3.challenge { color: #7c3aed; }
   p { margin: 0 0 12px; }
   .commission { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; font-size: 14px;
                 background: #f1f5f9; border-radius: 6px; padding: 16px 20px; }
@@ -427,6 +429,179 @@ export function caseToOnePagerHtml(c: BeaconCase, opts: { auto?: boolean } = {})
     c.sections?.bottom_line
       ? `<div class="section"><h2>Bottom line</h2><p class="bottom">${esc(c.sections.bottom_line)}</p></div>`
       : '',
+    FOOTER,
+  ].join('')
+  return htmlShell(title, body, !!opts.auto)
+}
+
+// ════════════════════════════ PAPER PIPELINE (research-028) ════════════════════════════
+//
+// Renders the Deep-Engagement `CasePaper` artifact (research-027) to the walk-away product in three
+// formats: Markdown, print-clean HTML (browser print-to-PDF), and Doc(HTML) (served as application/
+// msword so Word opens it). PURE rendering — no I/O, no auth, no fabrication: every byte already lives
+// in the persisted paper (draft sections, server-built references, deep engagement). Inline [E#]/[C#]
+// citations are kept verbatim — they resolve against the rendered References list.
+
+export function paperTitle(paper: CasePaper, c: BeaconCase): string {
+  return (paper.draft.title || caseTitle(c) || 'Untitled paper').trim()
+}
+
+/** Slug for a paper export filename. */
+export function paperSlug(paper: CasePaper, c: BeaconCase, caseId: number): string {
+  return (
+    paperTitle(paper, c).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) ||
+    `paper-${caseId}`
+  )
+}
+
+/** Author byline for a reference (≤4 names). */
+function refAuthors(r: PaperReference): string {
+  return (r.authors || []).slice(0, 4).join(', ')
+}
+
+/** The READable section blocks of a paper draft, in publication order. */
+function paperBlocks(paper: CasePaper): { heading: string; body: string }[] {
+  const d = paper.draft
+  return [
+    { heading: 'Abstract', body: d.abstract },
+    { heading: 'Introduction', body: d.introduction },
+    { heading: 'Theory — the position', body: d.theory },
+    { heading: 'Evidence for', body: d.evidence_for },
+    { heading: 'Counter-case & limitations', body: d.counter_case_and_limitations },
+    { heading: 'Discussion', body: d.discussion },
+    { heading: 'Conclusion', body: d.conclusion },
+  ].filter((b) => b.body && b.body.trim())
+}
+
+// ── Markdown ──
+
+/** The Deep-Engagement paper as portable Markdown (draft → engagement → references). */
+export function paperToMarkdown(paper: CasePaper, c: BeaconCase): string {
+  const L: string[] = []
+  L.push(`# ${paperTitle(paper, c)}`, '')
+  L.push(`> **Original synthesis** · Beacon · WFM Labs`)
+  L.push(`> Generated ${paper.generated_at?.slice(0, 10) || today()}`, '')
+
+  for (const b of paperBlocks(paper)) {
+    L.push(`## ${b.heading}`, '', b.body.trim(), '')
+  }
+
+  const eng = paper.engagement
+  const findingLines = (label: string, findings: PaperFinding[]) => {
+    if (!findings.length) return
+    L.push(`### ${label}`, '')
+    for (const f of findings) {
+      const g = f.grade ? ` _(grade ${f.grade})_` : ''
+      L.push(`- **[${f.ref}] ${mdEscape(f.statement)}**${g}`)
+      if (f.detail?.trim()) L.push(`  ${mdEscape(f.detail.trim())}`)
+    }
+    L.push('')
+  }
+  if (eng && (eng.supporting.length || eng.challenging.length || eng.tensions.length)) {
+    L.push('## Evidence engagement', '')
+    findingLines('Supporting evidence', eng.supporting)
+    findingLines('Challenging evidence', eng.challenging)
+    if (eng.tensions.length) {
+      L.push('### Tensions & open questions', '')
+      for (const t of eng.tensions) {
+        const refs = t.refs.length ? ` _(${t.refs.join(', ')})_` : ''
+        L.push(`- ${mdEscape(t.statement)}${refs}`)
+      }
+      L.push('')
+    }
+  }
+
+  const refs = paper.draft.references || []
+  L.push('## References', '')
+  if (!refs.length) {
+    L.push('_No sources cited._', '')
+  } else {
+    for (const r of refs) {
+      const a = refAuthors(r)
+      const tier = r.tier ? ` · ${tierLabel(r.tier)}` : ''
+      const link = r.url ? ` — [${mdEscape(r.url)}](${r.url})` : ''
+      const doi = r.doi && !r.url.includes(r.doi) ? ` · doi:${r.doi}` : ''
+      L.push(`- **[${r.ref}]** ${mdEscape(r.title)}${a ? ` — ${mdEscape(a)}` : ''}${tier}${link}${doi}`)
+    }
+    L.push('')
+  }
+
+  L.push(
+    '---',
+    '',
+    `_Generated by Beacon — WFM Labs. An original synthesis of the cited evidence; supporting and challenging findings are engaged honestly._`,
+  )
+  return L.join('\n')
+}
+
+// ── HTML (print-to-PDF and Doc) ──
+
+/** Split prose into escaped <p> paragraphs (paper drafts separate paragraphs with blank lines). */
+function paperParas(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${esc(p)}</p>`)
+    .join('')
+}
+
+function engagementHtml(paper: CasePaper): string {
+  const eng = paper.engagement
+  if (!eng || (!eng.supporting.length && !eng.challenging.length && !eng.tensions.length)) return ''
+  const findingList = (findings: PaperFinding[]): string =>
+    `<ul class="cards">${findings
+      .map((f) => {
+        const g = f.grade ? gradeBadge(f.grade) : ''
+        const detail = f.detail?.trim() ? `<span class="src">${esc(f.detail.trim())}</span>` : ''
+        return `<li>${g}<span class="claim">[${esc(f.ref)}] ${esc(f.statement)}</span>${detail}</li>`
+      })
+      .join('')}</ul>`
+  const parts: string[] = ['<h2>Evidence engagement</h2>']
+  if (eng.supporting.length) parts.push(`<h3>Supporting evidence</h3>${findingList(eng.supporting)}`)
+  if (eng.challenging.length)
+    parts.push(`<h3 class="challenge">Challenging evidence</h3>${findingList(eng.challenging)}`)
+  if (eng.tensions.length) {
+    parts.push('<h3>Tensions &amp; open questions</h3><ul class="sources">')
+    for (const t of eng.tensions) {
+      const refs = t.refs.length ? ` <span class="prov">(${esc(t.refs.join(', '))})</span>` : ''
+      parts.push(`<li>${esc(t.statement)}${refs}</li>`)
+    }
+    parts.push('</ul>')
+  }
+  return parts.join('')
+}
+
+function referencesHtml(paper: CasePaper): string {
+  const refs = paper.draft.references || []
+  if (!refs.length) return '<h2>References</h2><p><em>No sources cited.</em></p>'
+  const items = refs
+    .map((r) => {
+      const a = refAuthors(r)
+      const tier = r.tier ? ` · ${esc(tierLabel(r.tier))}` : ''
+      const link = r.url
+        ? ` — <a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${esc(r.url)}</a>`
+        : ''
+      const doi = r.doi && !r.url.includes(r.doi) ? ` · doi:${esc(r.doi)}` : ''
+      return `<li><strong>[${esc(r.ref)}]</strong> ${esc(r.title)}${a ? ` — ${esc(a)}` : ''}${tier}${link}${doi}</li>`
+    })
+    .join('')
+  return `<h2>References</h2><ol class="sources">${items}</ol>`
+}
+
+/** The Deep-Engagement paper as print-clean HTML. `auto` → browser print-to-PDF on load. */
+export function paperToHtml(paper: CasePaper, c: BeaconCase, opts: { auto?: boolean } = {}): string {
+  const title = paperTitle(paper, c)
+  const sections = paperBlocks(paper)
+    .map((b) => `<div class="section"><h2>${esc(b.heading)}</h2>${paperParas(b.body)}</div>`)
+    .join('')
+  const body = [
+    `<p class="eyebrow">Original synthesis · Beacon</p>`,
+    `<h1>${esc(title)}</h1>`,
+    `<p class="meta">WFM Labs · Generated ${esc(paper.generated_at?.slice(0, 10) || today())}</p>`,
+    sections,
+    engagementHtml(paper),
+    `<div class="sources">${referencesHtml(paper)}</div>`,
     FOOTER,
   ].join('')
   return htmlShell(title, body, !!opts.auto)

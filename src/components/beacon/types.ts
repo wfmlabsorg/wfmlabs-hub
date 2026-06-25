@@ -119,3 +119,78 @@ export interface AssembleResponse {
   sections: CaseSections
   error?: string
 }
+
+// ── Paper Pipeline shapes (research-027/028 / WFM-101/102) ──
+//
+// Client-safe mirror of the `paper` JSONB artifact in `src/lib/beacon/cases.ts` (CasePaper). Kept here
+// with no server imports so the workbench bundle stays free of payload/pg/Anthropic. Keep in sync.
+
+/** One full-text-grounded finding, cited to a source actually read (`ref` ∈ E#/C#). */
+export interface PaperFinding {
+  ref: string
+  statement: string
+  detail: string
+  grade?: Grade
+}
+
+/** A point of friction between supporting and challenging evidence (or an open question). */
+export interface PaperTension {
+  statement: string
+  refs: string[]
+}
+
+/** Structured deep engagement: supporting (deep) + challenging (deep) + tensions, all cited. */
+export interface PaperEngagement {
+  supporting: PaperFinding[]
+  challenging: PaperFinding[]
+  tensions: PaperTension[]
+}
+
+/** A reference the paper actually read + cited (built server-side; never fabricated). */
+export interface PaperReference {
+  ref: string
+  title: string
+  authors: string[]
+  url: string
+  tier?: SourceTier
+  doi?: string
+  paper_id?: number
+  origin: 'cased' | 'counter'
+  read: 'full_text' | 'card_abstract' | 'abstract'
+}
+
+/** The publishable paper draft — structured sections + a server-built reference list. */
+export interface PaperDraft {
+  title: string
+  abstract: string
+  introduction: string
+  theory: string
+  evidence_for: string
+  counter_case_and_limitations: string
+  discussion: string
+  conclusion: string
+  references: PaperReference[]
+}
+
+/** The persisted `beacon_cases.paper` artifact (research-027). */
+export interface CasePaper {
+  status: 'draft'
+  engagement: PaperEngagement
+  draft: PaperDraft
+  generated_at: string
+}
+
+/** POST /api/beacon/paper response (research-027). */
+export interface PaperResponse {
+  caseId: number
+  status: 'draft'
+  paper: CasePaper
+  error?: string
+}
+
+/** POST /api/beacon/paper/publish response (research-029 contract; 028 wires the control). */
+export interface PublishResponse {
+  status?: string
+  paperId?: number
+  error?: string
+}
