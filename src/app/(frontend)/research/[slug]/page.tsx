@@ -104,6 +104,9 @@ export default async function ResearchDetailPage({
 
   const paper = result.docs[0]
   if (!paper) notFound()
+  // Corpus visibility (research-029): in-review papers (draft/proposed, e.g. a just-published Beacon
+  // paper) stay member-private until a curator ratifies them — 404 on direct slug access too.
+  if (paper.status === 'draft' || paper.status === 'proposed') notFound()
 
   // Fetch reaction counts
   const reactionTypes = ['like', 'insightful', 'practical', 'question'] as const

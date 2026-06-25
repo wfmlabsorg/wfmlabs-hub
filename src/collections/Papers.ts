@@ -1,13 +1,31 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig, CollectionAfterChangeHook } from 'payload'
 import { isAdmin } from '@/access/isAdmin'
 import { isMember } from '@/access/isMember'
 import { isAuthor } from '@/access/isAuthor'
 import { baseAssetFields } from './_baseAssetFields'
+import { triggerCardEmbed } from '@/lib/papers/cardEmbed'
+
+/**
+ * Ratify → card + embed (research-029). When a paper transitions INTO `published` — a curator flips
+ * the status in the admin, or POST /api/papers/ratify does it — nudge the card + embed workers so the
+ * newly-live paper becomes retrievable + citable in future Beacon cases (the flywheel's last link).
+ * Fires only on the proposed/draft→published edge (or a direct create at published); triggerCardEmbed
+ * is fire-and-forget + no-ops when the workers aren't configured, so it never blocks the save.
+ */
+const cardEmbedOnPublish: CollectionAfterChangeHook = async ({ doc, previousDoc }) => {
+  if (doc?.status === 'published' && previousDoc?.status !== 'published') {
+    await triggerCardEmbed(doc.id as number)
+  }
+  return doc
+}
 
 export const Papers: CollectionConfig = {
   slug: 'papers',
   admin: {
     useAsTitle: 'title',
+  },
+  hooks: {
+    afterChange: [cardEmbedOnPublish],
   },
   fields: [
     {
