@@ -234,18 +234,33 @@ function toIngestPaper(hit: AcquiredHit, tier: SourceTier, finding: string) {
 }
 
 /**
+ * The Hub's OWN canonical origin for server-to-server ingest. This MUST come from trusted server
+ * config (NEXT_PUBLIC_SERVER_URL) — never an inbound request's Host/origin, which is attacker-
+ * controllable and could redirect ingest POSTs (with our BEACON_API_KEY) at an arbitrary host.
+ * Returns undefined when unset/malformed, in which case ingest is skipped (never guessed).
+ */
+function trustedIngestOrigin(): string | undefined {
+  const raw = (process.env.NEXT_PUBLIC_SERVER_URL || '').trim()
+  if (!raw) return undefined
+  try {
+    return new URL(raw).origin
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * POST kept scholarly papers to the existing ingest endpoint (WFM-47) so paper-fulltext →
  * paper-cards → paper-embed make them permanent embedded library papers. Best-effort: skips
- * silently when the API key/origin are unavailable, never throws. Returns the count actually created.
+ * silently when the trusted origin / API key are unavailable, never throws. Returns the count
+ * actually created. Ingest targets ONLY our configured host — see trustedIngestOrigin.
  */
-async function ingestPapers(
-  origin: string | undefined,
-  papers: ReturnType<typeof toIngestPaper>[],
-): Promise<number> {
+async function ingestPapers(papers: ReturnType<typeof toIngestPaper>[]): Promise<number> {
   if (papers.length === 0) return 0
+  const origin = trustedIngestOrigin()
   const key = process.env.BEACON_API_KEY
   if (!origin || !key) {
-    console.warn('[beacon/acquire] skipping ingest — missing origin or BEACON_API_KEY')
+    console.warn('[beacon/acquire] skipping ingest — missing NEXT_PUBLIC_SERVER_URL or BEACON_API_KEY')
     return 0
   }
   try {
@@ -297,7 +312,6 @@ export interface AcquireResult {
 export async function acquireAcademic(
   payload: Payload,
   question: string,
-  opts: { origin?: string } = {},
 ): Promise<AcquireResult> {
   const empty: AcquireResult = { items: [], searched: 0, ingested: 0 }
   const q = (question || '').trim()
@@ -358,7 +372,7 @@ export async function acquireAcademic(
     }
   }
 
-  const ingested = await ingestPapers(opts.origin, toIngest)
+  const ingested = await ingestPapers(toIngest)
   // Only the papers actually written to the library are honestly "newly added"; if ingest no-oped
   // (missing key/origin in a preview), drop the acquired tag so we don't over-claim.
   if (ingested === 0) {

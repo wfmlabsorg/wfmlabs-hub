@@ -145,6 +145,78 @@ export interface CaseSummary {
   updated_at: string
 }
 
+// ── Paper engine (research-027 / WFM-101) — the Deep-Engagement paper artifact ──
+//
+// "Develop into a paper" launches from an ASSEMBLED case. The engine reads the cased papers' FULL
+// TEXT for deep supporting evidence, then runs ONE counter-search pass (library kNN + Exa/Crossref
+// academic) for disconfirming evidence — the rigorous steelman — and synthesizes a balanced,
+// honestly-cited publishable draft. The whole artifact is persisted as ONE `paper` JSONB column on
+// beacon_cases (additive, schema/004_beacon_case_paper.sql) so 028 (UI/export) and 029 (publish to
+// corpus) read it without a structured-schema migration.
+
+/** One full-text-grounded finding, cited to a source actually read (`ref` ∈ E#/C#). */
+export interface PaperFinding {
+  ref: string // citation id of the read source — E# (cased) or C# (counter-search)
+  statement: string // the concise finding/claim
+  detail: string // deeper, full-text-grounded elaboration with the specific numbers/quotes
+  grade?: Grade
+}
+
+/** A point of friction between supporting and challenging evidence (or an open question). */
+export interface PaperTension {
+  statement: string
+  refs: string[] // the E#/C# refs in tension
+}
+
+/** Structured deep engagement: supporting (deep) + challenging (deep) + tensions, all cited. */
+export interface PaperEngagement {
+  supporting: PaperFinding[]
+  challenging: PaperFinding[]
+  tensions: PaperTension[]
+}
+
+/**
+ * A reference the paper actually read + cited. Built SERVER-SIDE from the read source set (never from
+ * the model) so the bibliography can never contain a fabricated source. `origin` traces whether it was
+ * the member's curated evidence or surfaced by the disconfirming counter-search; `read` records what
+ * depth was actually read (full text vs card/abstract) for provenance.
+ */
+export interface PaperReference {
+  ref: string // E# (cased) or C# (counter-search)
+  title: string
+  authors: string[]
+  url: string
+  tier?: SourceTier
+  doi?: string
+  paper_id?: number
+  origin: 'cased' | 'counter'
+  read: 'full_text' | 'card_abstract' | 'abstract'
+}
+
+/** The publishable paper draft — structured sections + a server-built reference list. */
+export interface PaperDraft {
+  title: string
+  abstract: string
+  introduction: string
+  /** The member's position (carried from the assembled case). */
+  theory: string
+  /** Deep supporting case, [E#]/[C#]-cited. */
+  evidence_for: string
+  /** The challenging evidence + limitations, engaged honestly (never buried). */
+  counter_case_and_limitations: string
+  discussion: string
+  conclusion: string
+  references: PaperReference[]
+}
+
+/** The persisted `beacon_cases.paper` artifact (research-027). */
+export interface CasePaper {
+  status: 'draft'
+  engagement: PaperEngagement
+  draft: PaperDraft
+  generated_at: string
+}
+
 export const EMPTY_COMMISSION: Commission = { decision: '', skeptic: '', context: '', sharpened_question: '' }
 
 export function newCardId(): string {
@@ -311,4 +383,31 @@ export async function updateCase(
     vals,
   )
   return res.rows[0] ? rowToCase(res.rows[0]) : null
+}
+
+// ── paper artifact store (research-027) — the `paper` JSONB column, isolated from CASE_COLS ──
+//
+// The `paper` column is read/written ONLY by the paper engine, so it stays OUT of CASE_COLS — the
+// existing case routes never SELECT/RETURN it and are unaffected whether or not schema/004 has been
+// applied yet. By the time /api/beacon/paper runs in prod the column exists (FOREMAN applies 004
+// pre-deploy); these helpers are the only code that touches it.
+
+/** Persist the generated paper artifact onto an owned case. Returns true if an owned row matched. */
+export async function saveCasePaper(
+  pool: Pool,
+  id: number,
+  memberId: number,
+  paper: CasePaper,
+): Promise<boolean> {
+  const res = await pool.query(
+    `UPDATE beacon_cases SET paper = $1::jsonb, updated_at = now() WHERE id = $2 AND member_id = $3 RETURNING id`,
+    [JSON.stringify(paper), id, memberId],
+  )
+  return (res.rowCount ?? 0) > 0
+}
+
+/** Load the generated paper artifact for an owned case; null if no case or no paper yet (for 028). */
+export async function loadCasePaper(pool: Pool, id: number, memberId: number): Promise<CasePaper | null> {
+  const res = await pool.query(`SELECT paper FROM beacon_cases WHERE id = $1 AND member_id = $2`, [id, memberId])
+  return (res.rows[0]?.paper as CasePaper | undefined) ?? null
 }
