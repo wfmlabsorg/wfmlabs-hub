@@ -23,6 +23,9 @@ import { callClaude } from '@/lib/beacon/claude'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
+/** Beacon may ask up to this many sharpening questions before it must lock the commission. */
+const MAX_QUESTIONS = 3
+
 interface Body {
   messages?: { role?: string; content?: string }[]
   caseId?: number
@@ -52,6 +55,11 @@ export async function POST(request: Request) {
     return Response.json({ error: 'send at least one member message' }, { status: 400 })
   }
 
+  // How many sharpening questions Beacon has already asked this intake (one per assistant turn).
+  const askedSoFar = messages.filter((m) => m.role === 'assistant').length
+  // Hard cap: after 3 questions, force a lock this turn so intake can never loop indefinitely.
+  const mustLock = askedSoFar >= MAX_QUESTIONS
+
   const today = new Date().toISOString().slice(0, 10)
   const system = `${BEACON_COMMISSIONED_PROMPT}
 
@@ -59,8 +67,13 @@ Today is ${today}. The commissioning member is @${member.username}.
 
 ## Runtime control (Case Canvas intake)
 You are in the INTAKE phase of a Case Canvas session. Your ONLY job this turn is to lock a sharp, decidable commission — you do NOT search, grade, or write a brief here.
-- Ask AT MOST ONE short sharpening question, and only if it genuinely changes the research (the decision, the skeptic, or the operating context). Keep it to ONE or TWO sentences. Never ask the member to narrow or downgrade their ask; never say the evidence "isn't there" — that judgment belongs to the evidence step, not intake.
-- The moment the problem is a decidable question (which is after at most one or two exchanges, or immediately if the ask is already clear), LOCK the commission.
+- You may ask UP TO ${MAX_QUESTIONS} genuine sharpening questions ACROSS THE WHOLE INTAKE (you have already asked ${askedSoFar}). Ask ONE at a time, terse (one or two sentences). Each question must materially sharpen the commission — pick from: the decision being defended, the skeptic to convince, the operating context (channel/size/sector), what's genuinely novel, or what's being replaced. STOP asking the moment the question is sharp enough — do NOT pad to ${MAX_QUESTIONS} for its own sake.
+- Never ask the member to narrow or DOWNGRADE their ask; never say the evidence "isn't there" or suggest a "lesser brief" — that judgment belongs to the evidence + grading step, not intake. Honesty lives in the grades and the gaps section, not here.
+- LOCK the commission the moment the problem is a decidable question (often after one or two exchanges, or immediately if the ask is already clear).${
+    mustLock
+      ? `\n- YOU HAVE REACHED THE QUESTION LIMIT (${MAX_QUESTIONS}). You MUST lock the commission THIS turn (ready:true). Infer sensible defaults from what the member has said; use "" for anything still genuinely unknown. Do not ask another question.`
+      : ''
+  }
 - Respond with ONLY a single minified JSON object, no prose, no code fence:
   - still sharpening → {"ready":false,"reply":"<your one short question>"}
   - locked → {"ready":true,"decision":"<the sharpened decision/claim they're defending>","skeptic":"<who they must convince>","context":"<channel/size/sector that scopes it>","sharpened_question":"<the single sharp research question, one sentence>"}
@@ -81,15 +94,19 @@ Use "" for any field the member genuinely hasn't given. Do not invent specifics.
     return Response.json({ ready: false, reply: raw.trim() || 'Could you say a bit more about the decision you need to defend?' })
   }
 
-  if (!parsed.ready) {
+  if (!parsed.ready && !mustLock) {
     return Response.json({ ready: false, reply: (parsed.reply || '').trim() || raw.trim() })
   }
 
+  // At the question cap, coerce a lock even if the model tried to ask again: anchor the sharpened
+  // question on the member's framing so intake always delivers rather than looping.
+  const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content || ''
+  const fallbackQuestion = (parsed.reply || lastUser || '').trim()
   const commission: Commission = {
-    decision: (parsed.decision || '').trim(),
+    decision: (parsed.decision || lastUser || '').trim(),
     skeptic: (parsed.skeptic || '').trim(),
     context: (parsed.context || '').trim(),
-    sharpened_question: (parsed.sharpened_question || parsed.decision || '').trim(),
+    sharpened_question: (parsed.sharpened_question || parsed.decision || fallbackQuestion).trim(),
   }
 
   // Persist onto the case if one was supplied (ownership enforced inside updateCase).
