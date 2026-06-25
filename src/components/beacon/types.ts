@@ -11,6 +11,8 @@ export type CardState = 'pool' | 'cased' | 'discarded'
 export type SourceType = 'internal' | 'web'
 /** Source credibility tier (research-020) — see lib/beacon/tiers.ts. */
 export type SourceTier = 'peer_reviewed' | 'preprint' | 'institutional' | 'vendor' | 'web_other'
+/** How a card bears on the member's position (research-026). See lib/beacon/cases.ts. */
+export type CardStance = 'supports' | 'challenges' | 'mixed' | 'neutral'
 export type CaseStatus = 'draft' | 'assembled' | 'exported'
 
 export interface EvidenceSource {
@@ -34,6 +36,10 @@ export interface EvidenceCard {
   source: EvidenceSource
   supports_argument: string
   state: CardState
+  /** supports / challenges / neutral toward the member's position (research-026). */
+  stance?: CardStance
+  /** 1–2 sentence "why this applies to your case" note (research-026); UI falls back to claim. */
+  relevance?: string
 }
 
 export interface ArgumentBucket {

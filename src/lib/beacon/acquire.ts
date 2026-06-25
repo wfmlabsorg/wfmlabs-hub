@@ -24,7 +24,7 @@ import { deepRead, type Grade } from '@/lib/beacon/deepread'
 import type { RetrievedPaper } from '@/lib/beacon/retrieval'
 import { webReach } from '@/lib/beacon/webreach'
 import { classifyWebTier, enforceGrade } from '@/lib/beacon/tiers'
-import type { EvidenceSource, SourceTier } from '@/lib/beacon/cases'
+import { toCardStance, type CardStance, type EvidenceSource, type SourceTier } from '@/lib/beacon/cases'
 import type { getPayload } from 'payload'
 
 type Payload = Awaited<ReturnType<typeof getPayload>>
@@ -270,6 +270,10 @@ export interface AcquiredItem {
   claim: string
   grade: Grade
   source: EvidenceSource
+  /** supports/challenges/neutral toward the position, from the appraiser (research-026). */
+  stance?: CardStance
+  /** 1–2 sentence why-applies note from the appraiser (research-026). */
+  relevance?: string
 }
 
 export interface AcquireResult {
@@ -337,6 +341,8 @@ export async function acquireAcademic(
     items.push({
       claim,
       grade,
+      stance: toCardStance(r.stance),
+      relevance: r.rationale || undefined,
       source: {
         title: hit.title,
         authors: hit.authors,

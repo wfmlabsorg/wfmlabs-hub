@@ -36,6 +36,13 @@ export type SourceType = 'internal' | 'web'
  */
 export type SourceTier = 'peer_reviewed' | 'preprint' | 'institutional' | 'vendor' | 'web_other'
 
+/**
+ * How a card bears on the member's position (research-026). Derived from the deepRead appraiser's
+ * stance (`for`→supports, `against`→challenges, `context`→neutral); `mixed` is reserved for sources
+ * that cut both ways. Drives the card's supports/challenges marker.
+ */
+export type CardStance = 'supports' | 'challenges' | 'mixed' | 'neutral'
+
 export interface EvidenceSource {
   title: string
   authors: string[]
@@ -67,6 +74,16 @@ export interface EvidenceCard {
   /** The argument-bucket key this card sits under. */
   supports_argument: string
   state: CardState
+  /**
+   * Whether this card supports / challenges / is neutral toward the member's position (research-026),
+   * from the deepRead appraiser. Optional for back-compat with cards persisted before iter-4.
+   */
+  stance?: CardStance
+  /**
+   * 1–2 sentence "why this applies to your case" note from the appraiser (research-026). Optional for
+   * back-compat; the UI falls back to the claim when absent.
+   */
+  relevance?: string
 }
 
 /** A proposed argument bucket. `card_ids` orders the cards the UI shows under it. */
@@ -132,6 +149,11 @@ export const EMPTY_COMMISSION: Commission = { decision: '', skeptic: '', context
 
 export function newCardId(): string {
   return randomUUID()
+}
+
+/** Map the deepRead appraiser's stance to the card-facing supports/challenges/neutral stance (research-026). */
+export function toCardStance(stance: 'for' | 'against' | 'context'): CardStance {
+  return stance === 'against' ? 'challenges' : stance === 'context' ? 'neutral' : 'supports'
 }
 
 // ── Auth + premium gate (shared by every Case route) ──
