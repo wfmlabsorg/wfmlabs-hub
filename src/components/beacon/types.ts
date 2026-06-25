@@ -9,6 +9,8 @@
 export type Grade = 'A' | 'B' | 'C' | 'D' | 'V' | '—'
 export type CardState = 'pool' | 'cased' | 'discarded'
 export type SourceType = 'internal' | 'web'
+/** Source credibility tier (research-020) — see lib/beacon/tiers.ts. */
+export type SourceTier = 'peer_reviewed' | 'preprint' | 'institutional' | 'vendor' | 'web_other'
 export type CaseStatus = 'draft' | 'assembled' | 'exported'
 
 export interface EvidenceSource {
@@ -17,6 +19,8 @@ export interface EvidenceSource {
   url: string
   type: SourceType
   paper_id?: number
+  /** Credibility tier (research-020). Optional for cards persisted before iteration 2. */
+  tier?: SourceTier
 }
 
 export interface EvidenceCard {
@@ -34,11 +38,22 @@ export interface ArgumentBucket {
   card_ids: string[]
 }
 
+/** Maps a `[E#]` token in section prose to the cased card it cites (research-020). */
+export interface CitationRef {
+  ref: string
+  card_id: string
+  grade: Grade
+  tier?: SourceTier
+  label: string
+}
+
 export interface CaseSections {
   position: string
   steelman: string
   gaps: string
   bottom_line: string
+  /** Inline-citation map for `[E#]` tokens in the prose (research-020); UI renders chips. */
+  citations?: CitationRef[]
 }
 
 export interface Commission {

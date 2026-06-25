@@ -24,6 +24,7 @@ import {
 import { deepRead, type Grade } from '@/lib/beacon/deepread'
 import { webReach } from '@/lib/beacon/webreach'
 import { callClaude } from '@/lib/beacon/claude'
+import { classifyLibraryTier, classifyWebTier, enforceGrade, webBaseGrade } from '@/lib/beacon/tiers'
 import {
   newCardId,
   type ArgumentBucket,
@@ -38,7 +39,6 @@ type Payload = Awaited<ReturnType<typeof getPayload>>
 const CANDIDATE_CAP = 10
 const MIN_ONTOPIC = 2
 const THIN_SIM = 0.5
-const WEB_DEFAULT_GRADE: Grade = 'C' // industry/web grades conservatively (§3 of the commissioned prompt)
 
 /**
  * Surface candidates for a query — CARD-FIRST bge-m3 kNN (research_cards) primary, chunk kNN blended
@@ -85,17 +85,23 @@ async function gatherRawItems(
   const candidates = await surface(pool, payload, question, exclude)
   const deep = await deepRead(candidates, question, { maxSelect: opts.maxSelect })
 
-  const items: RawItem[] = deep.selected.map((r) => ({
-    claim: (r.finding || r.card?.thesis || r.title).trim(),
-    grade: r.grade,
-    source: {
-      title: r.title,
-      authors: r.authors,
-      url: r.url,
-      type: 'internal',
-      paper_id: r.id,
-    },
-  }))
+  const items: RawItem[] = deep.selected.map((r) => {
+    // Library cards are vetted research by default; classifyLibraryTier honors a V grade (interested)
+    // and refines peer_reviewed/preprint/institutional from the paper's host when a URL exists.
+    const tier = classifyLibraryTier({ url: r.url, grade: r.grade })
+    return {
+      claim: (r.finding || r.card?.thesis || r.title).trim(),
+      grade: enforceGrade(r.grade, tier),
+      source: {
+        title: r.title,
+        authors: r.authors,
+        url: r.url,
+        type: 'internal',
+        paper_id: r.id,
+        tier,
+      },
+    }
+  })
 
   // Web-reach (Exa) when internal coverage is thin OR the caller forced it. Bounded to one call;
   // no-ops silently when EXA_API_KEY is unset. Cite ONLY the fetched highlight + URL.
@@ -107,10 +113,12 @@ async function gatherRawItems(
     for (const w of web) {
       const claim = (w.highlights[0] || w.title).replace(/\s+/g, ' ').trim().slice(0, 600)
       if (!claim) continue
+      // Classify the open-web hit by domain + fetched content; vendor blogs → V, general web caps at C.
+      const tier = classifyWebTier(w.url, w.title, w.highlights.join(' '))
       items.push({
         claim,
-        grade: WEB_DEFAULT_GRADE,
-        source: { title: w.title, authors: [], url: w.url, type: 'web' },
+        grade: enforceGrade(webBaseGrade(tier), tier),
+        source: { title: w.title, authors: [], url: w.url, type: 'web', tier },
       })
     }
   }

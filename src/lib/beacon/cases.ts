@@ -29,6 +29,13 @@ export type CardState = 'pool' | 'cased' | 'discarded'
 /** internal = WFM Labs Research Library; web = fetched via Exa when internal coverage was thin. */
 export type SourceType = 'internal' | 'web'
 
+/**
+ * Source CREDIBILITY tier (research-020). Orthogonal to `type` (where it came from): `tier` is HOW
+ * trustworthy it is. Drives the A–V grade rail — `vendor` forces V, `web_other` caps at C — so a
+ * vendor blog can never be treated as research. Classified in `lib/beacon/tiers.ts`.
+ */
+export type SourceTier = 'peer_reviewed' | 'preprint' | 'institutional' | 'vendor' | 'web_other'
+
 export interface EvidenceSource {
   title: string
   authors: string[]
@@ -36,6 +43,8 @@ export interface EvidenceSource {
   type: SourceType
   /** Present for internal cards: the papers.id this card traces to (no-fabrication lineage). */
   paper_id?: number
+  /** Credibility tier (research-020). Optional for back-compat with cards persisted pre-iter2. */
+  tier?: SourceTier
 }
 
 /** One graded evidence card in the pool. `id` is a stable uuid the UI moves between regions. */
@@ -56,12 +65,27 @@ export interface ArgumentBucket {
   card_ids: string[]
 }
 
+/**
+ * One inline-citation reference emitted by assemble (research-020): maps a `[E#]` token in the
+ * section prose to the specific cased card it cites, plus that card's grade/tier so the UI (021) can
+ * style and link the chip. The map covers every cased card, so any valid `[E#]` resolves.
+ */
+export interface CitationRef {
+  ref: string // e.g. "E2"
+  card_id: string
+  grade: Grade
+  tier?: SourceTier
+  label: string // short source title / claim for the chip tooltip
+}
+
 /** The four connective sections, generated at assemble from the CASED evidence only. */
 export interface CaseSections {
   position: string
   steelman: string
   gaps: string
   bottom_line: string
+  /** Inline-citation map for `[E#]` tokens in the section prose (research-020). */
+  citations?: CitationRef[]
 }
 
 export interface Commission {

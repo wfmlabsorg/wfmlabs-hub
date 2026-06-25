@@ -823,7 +823,8 @@ function CardView(props: {
 }
 
 function SectionsView({ sections }: { sections: CaseSections }) {
-  const blocks: { key: keyof CaseSections; label: string; color: string }[] = [
+  // Only the four prose sections render here; `citations` (research-020) is rendered by the chip layer (021).
+  const blocks: { key: 'position' | 'steelman' | 'gaps' | 'bottom_line'; label: string; color: string }[] = [
     { key: 'position', label: 'Position', color: T.accent },
     { key: 'steelman', label: 'Steelman (the other side)', color: T.violet },
     { key: 'gaps', label: 'Where the evidence runs out', color: T.amber },
