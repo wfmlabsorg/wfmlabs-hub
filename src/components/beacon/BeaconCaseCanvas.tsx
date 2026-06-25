@@ -29,7 +29,8 @@ import type {
  * structured sections (never one giant message — that's the truncation fix). Cases save & reload.
  *
  * Drives the research-017 engine: /api/beacon/{commission,evidence,assemble,cases}. Auth + the 402
- * premium gate are handled gracefully here; the old chat Beacon stays live at /research.
+ * premium gate are handled gracefully here. As of research-022 this canvas IS the /research
+ * experience — the old chat Beacon was removed.
  */
 
 // ── Mission-Control palette (matches globals.css; NO orange) ──
@@ -406,9 +407,6 @@ export function BeaconCaseCanvas() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <Link href="/research" style={{ ...btnGhost, textDecoration: 'none' }}>
-            Classic chat ↗
-          </Link>
           {phase === 'canvas' && (
             <button onClick={newCase} style={btnGhost}>
               + New case
@@ -793,6 +791,7 @@ function CardView(props: {
   const isWeb = card.source.type === 'web'
   const isOwn = !card.source.url && card.source.title === 'Your data point'
   const authors = card.source.authors.slice(0, 3).join(', ')
+  const abstract = card.source.abstract?.trim()
   const tier = card.source.tier
   const weak = isWeakTier(tier) // vendor / web_other → muted + caution
   const caution = tierCaution(tier)
@@ -840,6 +839,7 @@ function CardView(props: {
           <p style={{ margin: 0, fontSize: weak ? '0.8rem' : '0.85rem', color: weak ? T.muted : T.fg, lineHeight: 1.45 }}>
             {card.claim}
           </p>
+          {abstract && <CardAbstract text={abstract} weak={weak} />}
           {caution && (
             <div style={{ marginTop: '0.35rem' }}>
               <CautionBadge text={caution} />
@@ -848,20 +848,27 @@ function CardView(props: {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
             <SourceTag isWeb={isWeb} isOwn={isOwn} />
             <TierTag tier={tier} />
-            {card.source.url ? (
+            {card.source.acquired && <AcquiredTag />}
+            <span style={{ fontSize: '0.75rem', color: T.muted, overflowWrap: 'anywhere' }}>
+              {card.source.title}
+            </span>
+            {authors && <span style={{ fontSize: '0.72rem', color: T.faint }}>· {authors}</span>}
+            {card.source.url && (
               <a
                 href={card.source.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ fontSize: '0.75rem', color: T.accent, textDecoration: 'none', overflowWrap: 'anywhere' }}
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  color: T.accent,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
               >
-                {card.source.title}
-                {' ↗'}
+                Read full ↗
               </a>
-            ) : (
-              <span style={{ fontSize: '0.75rem', color: T.muted, overflowWrap: 'anywhere' }}>{card.source.title}</span>
             )}
-            {authors && <span style={{ fontSize: '0.72rem', color: T.faint }}>· {authors}</span>}
           </div>
         </div>
       </div>
@@ -876,6 +883,76 @@ function CardView(props: {
         </button>
       </div>
     </div>
+  )
+}
+
+/** A card's 2–3 sentence abstract (research-023). Clamped to 2 lines for scannability; long ones expand. */
+function CardAbstract({ text, weak }: { text: string; weak: boolean }) {
+  const [open, setOpen] = useState(false)
+  // Heuristic: short abstracts (a sentence or two) render whole — no toggle clutter.
+  const long = text.length > 160
+  return (
+    <div style={{ marginTop: '0.35rem' }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: weak ? '0.74rem' : '0.78rem',
+          color: T.muted,
+          lineHeight: 1.5,
+          ...(long && !open
+            ? {
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical' as const,
+                overflow: 'hidden',
+              }
+            : {}),
+        }}
+      >
+        {text}
+      </p>
+      {long && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          style={{
+            marginTop: '0.15rem',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            color: T.faint,
+            fontSize: '0.7rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          {open ? 'Show less' : 'More'}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Tags a card fetched + ingested into the library this session (research-023). */
+function AcquiredTag() {
+  return (
+    <span
+      title="Fetched and added to the library this session"
+      style={{
+        fontSize: '0.6rem',
+        fontWeight: 700,
+        color: T.violet,
+        background: 'rgba(167,139,250,0.13)',
+        border: '1px solid rgba(167,139,250,0.35)',
+        borderRadius: '0.25rem',
+        padding: '0.05rem 0.35rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        flexShrink: 0,
+      }}
+    >
+      Added to library
+    </span>
   )
 }
 
