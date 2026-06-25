@@ -3,8 +3,9 @@
  *
  * The authoritative behavior contract for Beacon's member-directed research mode, authored by
  * Ted (2026-06-24). Mirrors `02-working/beacon-commissioned-mode-instructions.md` in the research
- * fleet workspace. Edit there and here together. This is the system prompt the /api/beacon/respond
- * route sends to Claude for every commissioned turn.
+ * fleet workspace. Edit there and here together. This is the system prompt the Case Canvas engine
+ * (/api/beacon/commission + /api/beacon/assemble) sends to Claude. (The legacy /api/beacon/respond
+ * chat route that originally used it was removed in research-022.)
  */
 
 export const BEACON_COMMISSIONED_PROMPT = `# Beacon — Commissioned Session Instruction Set

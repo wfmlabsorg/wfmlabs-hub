@@ -2,9 +2,8 @@ import { getPayload } from 'payload'
 import type { Where } from 'payload'
 import config from '@payload-config'
 import React from 'react'
-import Link from 'next/link'
 import { AssetCard } from '@/components/cards/AssetCard'
-import { BeaconCommissionChat } from '@/components/chat/BeaconCommissionChat'
+import { BeaconCaseCanvas } from '@/components/beacon/BeaconCaseCanvas'
 
 export const metadata = { title: 'Research | WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -86,49 +85,25 @@ export default async function ResearchBrowsePage({
   const activeTypeInfo = paperTypes.find((t) => t.value === activeType)
 
   return (
-    <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '2rem 1rem' }}>
-      {/* Page header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-          Research
-        </h1>
+    <div style={{ maxWidth: '84rem', margin: '0 auto', padding: '2rem 1rem' }}>
+      {/* Beacon Case Canvas — the analyst workbench IS the /research experience (research-022). */}
+      <BeaconCaseCanvas />
+
+      {/* Research Library — browse the curated paper corpus the canvas draws from. */}
+      <div
+        style={{
+          marginTop: '2.5rem',
+          paddingTop: '1.5rem',
+          borderTop: '1px solid var(--border)',
+          marginBottom: '1.5rem',
+        }}
+      >
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+          Research Library
+        </h2>
         <p style={{ color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
           Curated academic papers, industry reports, and vendor research with practitioner commentary.
         </p>
-      </div>
-
-      {/* Beacon Case Canvas — the new analyst workbench (replaces the chat-dump brief) */}
-      <Link
-        href="/research/canvas"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          background: 'linear-gradient(90deg, rgba(34,211,238,0.08), rgba(167,139,250,0.06))',
-          border: '1px solid rgba(34,211,238,0.3)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '1rem 1.25rem',
-          marginBottom: '1.25rem',
-          textDecoration: 'none',
-          color: 'inherit',
-        }}
-      >
-        <span>
-          <strong style={{ color: 'var(--accent)' }}>New — Beacon Case Canvas.</strong>{' '}
-          <span style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>
-            Commission a decision, curate graded evidence cards into your case, and assemble a defensible position.
-          </span>
-        </span>
-        <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
-          Open the workbench →
-        </span>
-      </Link>
-
-      {/* Commission Beacon — the classic chat analyst (kept reachable until cutover) */}
-      <div style={{ marginBottom: '2rem' }}>
-        <BeaconCommissionChat />
       </div>
 
       {/* Paper type filter chips */}
