@@ -2,6 +2,7 @@ import { getPayload } from 'payload'
 import type { Where } from 'payload'
 import config from '@payload-config'
 import React from 'react'
+import Link from 'next/link'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { BeaconCommissionChat } from '@/components/chat/BeaconCommissionChat'
 
@@ -96,7 +97,36 @@ export default async function ResearchBrowsePage({
         </p>
       </div>
 
-      {/* Commission Beacon — the member-facing research analyst (the landing piece) */}
+      {/* Beacon Case Canvas — the new analyst workbench (replaces the chat-dump brief) */}
+      <Link
+        href="/research/canvas"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          background: 'linear-gradient(90deg, rgba(34,211,238,0.08), rgba(167,139,250,0.06))',
+          border: '1px solid rgba(34,211,238,0.3)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '1rem 1.25rem',
+          marginBottom: '1.25rem',
+          textDecoration: 'none',
+          color: 'inherit',
+        }}
+      >
+        <span>
+          <strong style={{ color: 'var(--accent)' }}>New — Beacon Case Canvas.</strong>{' '}
+          <span style={{ color: 'var(--fg-muted)', fontSize: '0.9rem' }}>
+            Commission a decision, curate graded evidence cards into your case, and assemble a defensible position.
+          </span>
+        </span>
+        <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '0.875rem', whiteSpace: 'nowrap' }}>
+          Open the workbench →
+        </span>
+      </Link>
+
+      {/* Commission Beacon — the classic chat analyst (kept reachable until cutover) */}
       <div style={{ marginBottom: '2rem' }}>
         <BeaconCommissionChat />
       </div>
