@@ -10,6 +10,7 @@ import type {
   AssembleResponse,
   BeaconCase,
   CardStance,
+  CasePaper,
   CaseSections,
   CaseStatus,
   CaseSummary,
@@ -18,6 +19,11 @@ import type {
   CommissionResponse,
   EvidenceCard,
   EvidenceResponse,
+  PaperEngagement,
+  PaperFinding,
+  PaperReference,
+  PaperResponse,
+  PublishResponse,
   SourceTier,
 } from './types'
 
@@ -96,6 +102,12 @@ export function BeaconCaseCanvas() {
   const [showDiscarded, setShowDiscarded] = useState(false)
   const [addOwnFor, setAddOwnFor] = useState<string | null>(null)
   const [addOwnText, setAddOwnText] = useState('')
+
+  // paper pipeline (research-028)
+  const [paper, setPaper] = useState<CasePaper | null>(null)
+  const [developing, setDeveloping] = useState(false)
+  const [publishState, setPublishState] = useState<'idle' | 'publishing' | 'published' | 'unavailable' | 'error'>('idle')
+  const [publishMsg, setPublishMsg] = useState<string | null>(null)
 
   // saved cases
   const [savedCases, setSavedCases] = useState<CaseSummary[]>([])
@@ -256,6 +268,9 @@ export function BeaconCaseCanvas() {
     setBuckets(j.arguments || [])
     setSections(null)
     setCaseStatus('draft')
+    setPaper(null)
+    setPublishState('idle')
+    setPublishMsg(null)
   }, [caseId, webBusy, callApi])
 
   const submitOwnPoint = useCallback(
@@ -293,12 +308,78 @@ export function BeaconCaseCanvas() {
     if (!j) return
     setSections(j.sections)
     setCaseStatus(j.status || 'assembled')
+    // Re-assembling invalidates any paper drafted from the prior position.
+    setPaper(null)
+    setPublishState('idle')
+    setPublishMsg(null)
   }, [caseId, assembling, callApi])
+
+  // ── Paper Pipeline: develop the assembled case into a deep, cited paper (research-028) ──
+  // A multi-call deep pass (full-text read + counter-search + synthesis) — can take a while.
+  const developIntoPaper = useCallback(async () => {
+    if (caseId == null || developing) return
+    setDeveloping(true)
+    setError(null)
+    const j = await callApi<PaperResponse>('/api/beacon/paper', { caseId })
+    setDeveloping(false)
+    if (!j?.paper) return
+    setPaper(j.paper)
+    setPublishState('idle')
+    setPublishMsg(null)
+  }, [caseId, developing, callApi])
+
+  // ── Publish to corpus (research-029 contract). 029 may not be merged yet: a 404 disables the
+  // control with an explanatory tooltip rather than erroring — FOREMAN merges 029 alongside this PR. ──
+  const publishToCorpus = useCallback(async () => {
+    if (caseId == null || publishState === 'publishing' || publishState === 'published') return
+    setPublishState('publishing')
+    setPublishMsg(null)
+    try {
+      const res = await fetch('/api/beacon/paper/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ caseId }),
+      })
+      if (res.status === 404) {
+        setPublishState('unavailable')
+        setPublishMsg('Publishing to the corpus ships with the next release.')
+        return
+      }
+      if (res.status === 401) {
+        setGate('signin')
+        setPublishState('idle')
+        return
+      }
+      if (res.status === 402) {
+        setGate('premium')
+        setPublishState('idle')
+        return
+      }
+      const json = (await res.json().catch(() => ({}))) as PublishResponse
+      if (!res.ok) {
+        setPublishState('error')
+        setPublishMsg(json?.error || 'Publish failed — try again in a moment.')
+        return
+      }
+      setPublishState('published')
+      setPublishMsg(
+        json?.status
+          ? `Proposed to the corpus (${json.status}) — awaiting curator ratification.`
+          : 'Proposed to the corpus — awaiting curator ratification.',
+      )
+    } catch {
+      setPublishState('error')
+      setPublishMsg('Publish is unreachable right now.')
+    }
+  }, [caseId, publishState])
 
   const loadCase = useCallback(
     async (id: number) => {
       setLoadingCaseId(id)
-      const j = await callApi<{ case: BeaconCase }>('/api/beacon/cases', { action: 'load', id })
+      const j = await callApi<{ case: BeaconCase; paper: CasePaper | null }>('/api/beacon/cases', {
+        action: 'load',
+        id,
+      })
       setLoadingCaseId(null)
       if (!j?.case) return
       const c = j.case
@@ -309,6 +390,9 @@ export function BeaconCaseCanvas() {
       setBuckets(c.arguments || [])
       setSections(c.sections)
       setCaseStatus(c.status)
+      setPaper(j.paper ?? null)
+      setPublishState('idle')
+      setPublishMsg(null)
       setMessages([])
       setError(null)
       setPhase(c.commission || (c.evidence_pool && c.evidence_pool.length) ? 'canvas' : 'intake')
@@ -327,6 +411,9 @@ export function BeaconCaseCanvas() {
     setBuckets([])
     setSections(null)
     setCaseStatus('draft')
+    setPaper(null)
+    setPublishState('idle')
+    setPublishMsg(null)
     setError(null)
     void refreshSaved()
   }, [refreshSaved])
@@ -599,6 +686,19 @@ export function BeaconCaseCanvas() {
 
           {/* Assembled sections — discrete collapsible blocks (the truncation fix) */}
           {sections && <SectionsView sections={sections} onCite={highlightCard} />}
+
+          {/* Paper Pipeline — develop the assembled case into a deep, balanced, cited paper (research-028) */}
+          {sections && (
+            <PaperPipeline
+              paper={paper}
+              developing={developing}
+              onDevelop={developIntoPaper}
+              caseId={caseId}
+              onPublish={publishToCorpus}
+              publishState={publishState}
+              publishMsg={publishMsg}
+            />
+          )}
         </>
       )}
     </div>
@@ -1190,6 +1290,608 @@ function CitationChip({
   )
 }
 
+// ═══════════════════════════ Paper Pipeline (research-028) ═══════════════════════════
+
+/**
+ * The Paper Pipeline panel — launches "Develop into a paper" from an assembled case, shows the deep-pass
+ * progress, then renders the drafted paper (PaperView) with export + publish-to-corpus controls.
+ *
+ * Developing a paper is a multi-call deep pass (full-text read of the cased papers → a dedicated
+ * counter-search for disconfirming evidence → one synthesis call), so the button surfaces a clear,
+ * patient progress state — it can take a minute or two.
+ */
+function PaperPipeline(props: {
+  paper: CasePaper | null
+  developing: boolean
+  onDevelop: () => void
+  caseId: number | null
+  onPublish: () => void
+  publishState: 'idle' | 'publishing' | 'published' | 'unavailable' | 'error'
+  publishMsg: string | null
+}) {
+  const { paper, developing, onDevelop, caseId, onPublish, publishState, publishMsg } = props
+
+  return (
+    <div style={{ ...region, borderColor: 'rgba(167,139,250,0.3)' }}>
+      <RegionHeader
+        label="Develop into a paper"
+        hint="Reads your cased papers' FULL TEXT, hunts for disconfirming evidence, and drafts a balanced, honestly-cited paper — supporting AND challenging findings, never buried."
+        accent
+      />
+
+      {!paper && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button onClick={onDevelop} disabled={developing} style={btnPrimary}>
+              {developing ? 'Developing the paper…' : 'Develop into a paper'}
+            </button>
+            <span style={{ fontSize: '0.75rem', color: T.muted }}>
+              A deep, full-text engagement pass — distinct from the assembled brief above.
+            </span>
+          </div>
+          {developing && (
+            <div style={paperProgress}>
+              <span style={{ color: T.violet, fontWeight: 600 }}>Working…</span> reading full text, searching for
+              counter-evidence, and synthesizing the draft. This is a deep pass and can take a minute or two — keep
+              this tab open.
+            </div>
+          )}
+        </div>
+      )}
+
+      {paper && (
+        <>
+          <PaperView paper={paper} />
+
+          {/* Paper actions: re-develop · export · publish to corpus */}
+          <div style={paperActions}>
+            <button onClick={onDevelop} disabled={developing} style={btnGhost} title="Run the deep pass again">
+              {developing ? 'Re-developing…' : 'Re-develop'}
+            </button>
+            <span style={{ flex: 1 }} />
+            {caseId != null && (
+              <span style={{ display: 'inline-flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <ExportLink caseId={caseId} format="md" label="Markdown" download />
+                <ExportLink caseId={caseId} format="pdf" label="PDF (print)" />
+                <ExportLink caseId={caseId} format="doc" label="Doc" download />
+              </span>
+            )}
+            <PublishButton onPublish={onPublish} publishState={publishState} />
+          </div>
+          {publishMsg && (
+            <p
+              style={{
+                margin: '0.5rem 0 0',
+                fontSize: '0.78rem',
+                color: publishState === 'published' ? '#22c55e' : publishState === 'error' ? T.amber : T.muted,
+              }}
+            >
+              {publishMsg}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+/** An export link that hits /api/beacon/paper/export. `download` forces a file save; PDF opens a print tab. */
+function ExportLink({
+  caseId,
+  format,
+  label,
+  download,
+}: {
+  caseId: number
+  format: 'md' | 'pdf' | 'doc'
+  label: string
+  download?: boolean
+}) {
+  const href = `/api/beacon/paper/export?caseId=${caseId}&format=${format}`
+  return (
+    <a
+      href={href}
+      {...(download ? { download: '' } : { target: '_blank', rel: 'noopener noreferrer' })}
+      style={{ ...miniBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+    >
+      {label}
+    </a>
+  )
+}
+
+/** Publish-to-corpus control (wired to research-029). A 404 (029 not yet merged) disables it with a tooltip. */
+function PublishButton({
+  onPublish,
+  publishState,
+}: {
+  onPublish: () => void
+  publishState: 'idle' | 'publishing' | 'published' | 'unavailable' | 'error'
+}) {
+  const unavailable = publishState === 'unavailable'
+  const done = publishState === 'published'
+  const label =
+    publishState === 'publishing'
+      ? 'Publishing…'
+      : done
+        ? 'Proposed ✓'
+        : unavailable
+          ? 'Publish to corpus (soon)'
+          : 'Publish to corpus'
+  return (
+    <button
+      onClick={onPublish}
+      disabled={publishState === 'publishing' || done || unavailable}
+      title={
+        unavailable
+          ? 'Publishing to the WFM Labs corpus ships with the next release.'
+          : 'Propose this paper as an original WFM Labs paper (curator-ratified, then citable in future cases).'
+      }
+      style={{
+        ...btnPrimary,
+        background: done ? '#22c55e' : unavailable ? 'transparent' : T.violet,
+        color: unavailable ? T.muted : T.accentText,
+        border: `1px solid ${done ? '#22c55e' : unavailable ? T.border : T.violet}`,
+        opacity: unavailable ? 0.7 : 1,
+        cursor: publishState === 'publishing' || done || unavailable ? 'default' : 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+const PAPER_SECTIONS: { key: Exclude<keyof CasePaper['draft'], 'references'>; label: string; open?: boolean }[] = [
+  { key: 'abstract', label: 'Abstract', open: true },
+  { key: 'introduction', label: 'Introduction' },
+  { key: 'theory', label: 'Theory — the position' },
+  { key: 'evidence_for', label: 'Evidence for' },
+  { key: 'counter_case_and_limitations', label: 'Counter-case & limitations' },
+  { key: 'discussion', label: 'Discussion' },
+  { key: 'conclusion', label: 'Conclusion' },
+]
+
+/**
+ * Renders the developed paper: drafted sections (collapsible, with [E#]/[C#] citation chips), the
+ * deep-engagement panel (supporting vs challenging, shown honestly), and the references list. Inline
+ * citation chips and engagement ref chips scroll to — and pulse — the matching reference entry.
+ */
+function PaperView({ paper }: { paper: CasePaper }) {
+  const { draft, engagement } = paper
+  const refMap = useMemo(() => {
+    const m = new Map<string, PaperReference>()
+    for (const r of draft.references || []) m.set(r.ref, r)
+    return m
+  }, [draft.references])
+
+  const [highlightRef, setHighlightRef] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const onCite = useCallback((ref: string) => {
+    if (typeof document !== 'undefined') {
+      document.getElementById(`beacon-ref-${ref}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    setHighlightRef(ref)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setHighlightRef(null), 2200)
+  }, [])
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.25rem' }}>
+      {/* Paper title + provenance */}
+      <div>
+        <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: T.fg, lineHeight: 1.35 }}>
+          {draft.title || 'Untitled paper'}
+        </h3>
+        <p style={{ margin: '0.25rem 0 0', fontSize: '0.72rem', color: T.faint }}>
+          Original synthesis · Beacon · generated {paper.generated_at?.slice(0, 10) || '—'}
+        </p>
+      </div>
+
+      {/* Drafted sections */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {PAPER_SECTIONS.map(({ key, label, open }) => {
+          const text = draft[key] || ''
+          if (!text.trim()) return null
+          return <PaperSection key={key} label={label} text={text} open={open} refMap={refMap} onCite={onCite} />
+        })}
+      </div>
+
+      {/* Deep engagement — supporting vs challenging, shown honestly */}
+      <EngagementPanel engagement={engagement} refMap={refMap} onCite={onCite} />
+
+      {/* References */}
+      <PaperReferences references={draft.references || []} highlightRef={highlightRef} />
+    </div>
+  )
+}
+
+/** One collapsible paper section, prose rendered with inline [E#]/[C#] citation chips. */
+function PaperSection({
+  label,
+  text,
+  open,
+  refMap,
+  onCite,
+}: {
+  label: string
+  text: string
+  open?: boolean
+  refMap: Map<string, PaperReference>
+  onCite: (ref: string) => void
+}) {
+  return (
+    <details open={open} style={{ border: `1px solid ${T.border}`, borderRadius: '0.55rem', background: T.card2 }}>
+      <summary
+        style={{
+          cursor: 'pointer',
+          padding: '0.6rem 0.8rem',
+          fontWeight: 600,
+          fontSize: '0.85rem',
+          color: T.fg,
+          listStyle: 'none',
+          borderLeft: `3px solid ${T.violet}`,
+          borderRadius: '0.55rem 0.55rem 0 0',
+        }}
+      >
+        {label}
+      </summary>
+      <div style={{ margin: 0, padding: '0 0.85rem 0.8rem', fontSize: '0.875rem', color: T.fg, lineHeight: 1.6 }}>
+        {renderPaperProse(text, refMap, onCite)}
+      </div>
+    </details>
+  )
+}
+
+/**
+ * The deep-engagement panel: supporting findings (green) and challenging findings (violet — the
+ * steelman colour) given EQUAL visual weight so disconfirming evidence is engaged honestly, never
+ * buried. Tensions/open-questions follow in amber. Every finding's ref chip links to its reference.
+ */
+function EngagementPanel({
+  engagement,
+  refMap,
+  onCite,
+}: {
+  engagement: PaperEngagement
+  refMap: Map<string, PaperReference>
+  onCite: (ref: string) => void
+}) {
+  const { supporting, challenging, tensions } = engagement
+  if (!supporting?.length && !challenging?.length && !tensions?.length) return null
+  return (
+    <div style={{ border: `1px solid ${T.border}`, borderRadius: '0.6rem', background: T.card2, padding: '0.85rem 0.95rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.7rem' }}>
+        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700, color: T.fg }}>Evidence engagement</h4>
+        <span style={{ fontSize: '0.72rem', color: T.muted }}>
+          supporting and challenging findings, weighed honestly
+        </span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 18rem), 1fr))', gap: '0.85rem' }}>
+        <FindingColumn
+          title="Supports the position"
+          symbol="↑"
+          tone="support"
+          findings={supporting}
+          refMap={refMap}
+          onCite={onCite}
+        />
+        <FindingColumn
+          title="Challenges the position"
+          symbol="↯"
+          tone="challenge"
+          findings={challenging}
+          refMap={refMap}
+          onCite={onCite}
+        />
+      </div>
+      {tensions?.length > 0 && (
+        <div style={{ marginTop: '0.85rem' }}>
+          <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: T.amber, marginBottom: '0.4rem' }}>
+            ⇅ Tensions & open questions
+          </div>
+          <ul style={{ margin: 0, paddingLeft: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {tensions.map((t, i) => (
+              <li key={i} style={{ fontSize: '0.8rem', color: T.muted, lineHeight: 1.5 }}>
+                {t.statement}
+                {t.refs?.length > 0 && (
+                  <span style={{ marginLeft: '0.35rem', display: 'inline-flex', gap: '0.2rem', flexWrap: 'wrap' }}>
+                    {t.refs.map((r) => (
+                      <RefChip key={r} refId={r} refMap={refMap} onCite={onCite} />
+                    ))}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function FindingColumn({
+  title,
+  symbol,
+  tone,
+  findings,
+  refMap,
+  onCite,
+}: {
+  title: string
+  symbol: string
+  tone: 'support' | 'challenge'
+  findings: PaperFinding[]
+  refMap: Map<string, PaperReference>
+  onCite: (ref: string) => void
+}) {
+  const color = tone === 'support' ? '#22c55e' : T.violet
+  return (
+    <div>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.35rem',
+          fontSize: '0.74rem',
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+          color,
+          marginBottom: '0.5rem',
+        }}
+      >
+        <span aria-hidden>{symbol}</span>
+        {title}
+        <span style={{ color: T.faint, fontWeight: 600 }}>· {findings?.length || 0}</span>
+      </div>
+      {(!findings || findings.length === 0) && (
+        <p style={{ fontSize: '0.78rem', color: T.faint, margin: 0 }}>
+          {tone === 'challenge' ? 'No disconfirming evidence surfaced — stated honestly, not invented.' : 'None.'}
+        </p>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        {(findings || []).map((f, i) => (
+          <FindingCard key={`${f.ref}-${i}`} finding={f} color={color} refMap={refMap} onCite={onCite} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function FindingCard({
+  finding,
+  color,
+  refMap,
+  onCite,
+}: {
+  finding: PaperFinding
+  color: string
+  refMap: Map<string, PaperReference>
+  onCite: (ref: string) => void
+}) {
+  const g = finding.grade ? gradeStyle(finding.grade) : null
+  return (
+    <div
+      style={{
+        border: `1px solid ${color}33`,
+        background: `${color}0d`,
+        borderRadius: '0.5rem',
+        padding: '0.55rem 0.65rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+        <RefChip refId={finding.ref} refMap={refMap} onCite={onCite} />
+        {g && (
+          <span
+            title={g.label}
+            style={{
+              fontSize: '0.66rem',
+              fontWeight: 700,
+              color: g.color,
+              background: g.bg,
+              border: `1px solid ${g.border}`,
+              borderRadius: '0.25rem',
+              padding: '0.02rem 0.3rem',
+              fontFamily: "'IBM Plex Mono', monospace",
+            }}
+          >
+            {finding.grade}
+          </span>
+        )}
+      </div>
+      <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: T.fg, lineHeight: 1.45 }}>{finding.statement}</p>
+      {finding.detail?.trim() && (
+        <p style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', color: T.muted, lineHeight: 1.5 }}>{finding.detail}</p>
+      )}
+    </div>
+  )
+}
+
+/** The references list — each entry anchored (`beacon-ref-#`) so citation chips can scroll to it. */
+function PaperReferences({ references, highlightRef }: { references: PaperReference[]; highlightRef: string | null }) {
+  return (
+    <div style={{ border: `1px solid ${T.border}`, borderRadius: '0.6rem', background: T.card2, padding: '0.85rem 0.95rem' }}>
+      <h4 style={{ margin: '0 0 0.6rem', fontSize: '0.9rem', fontWeight: 700, color: T.fg }}>
+        References <span style={{ color: T.faint, fontWeight: 600, fontSize: '0.78rem' }}>· {references.length}</span>
+      </h4>
+      {references.length === 0 ? (
+        <p style={{ fontSize: '0.8rem', color: T.faint, margin: 0 }}>No sources cited.</p>
+      ) : (
+        <ol style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {references.map((r) => (
+            <ReferenceItem key={r.ref} reference={r} highlighted={highlightRef === r.ref} />
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+function ReferenceItem({ reference: r, highlighted }: { reference: PaperReference; highlighted: boolean }) {
+  const authors = (r.authors || []).slice(0, 5).join(', ')
+  const tone = refTone(r.ref, r.origin)
+  const readLabel = r.read === 'full_text' ? 'full text' : r.read === 'card_abstract' ? 'card + abstract' : 'abstract'
+  return (
+    <li
+      id={`beacon-ref-${r.ref}`}
+      style={{
+        border: `1px solid ${highlighted ? T.accent : T.border}`,
+        boxShadow: highlighted ? `0 0 0 2px ${T.accent}` : 'none',
+        background: highlighted ? 'rgba(34,211,238,0.06)' : 'transparent',
+        borderRadius: '0.5rem',
+        padding: '0.55rem 0.7rem',
+        transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
+        scrollMarginTop: '1.5rem',
+        display: 'flex',
+        gap: '0.55rem',
+        alignItems: 'flex-start',
+      }}
+    >
+      <span
+        style={{
+          flexShrink: 0,
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          fontFamily: "'IBM Plex Mono', monospace",
+          color: tone.color,
+          background: tone.bg,
+          border: `1px solid ${tone.border}`,
+          borderRadius: '0.25rem',
+          padding: '0.1rem 0.35rem',
+        }}
+      >
+        {r.ref}
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600, color: T.fg, lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+          {r.title || '(untitled source)'}
+        </p>
+        {authors && <p style={{ margin: '0.15rem 0 0', fontSize: '0.72rem', color: T.faint }}>{authors}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
+          {r.tier && <TierTag tier={r.tier} />}
+          <span
+            title={`Counter-search evidence — surfaced as a challenge`}
+            style={{ fontSize: '0.62rem', fontWeight: 700, color: tone.color, textTransform: 'uppercase', letterSpacing: '0.04em' }}
+          >
+            {r.origin === 'counter' ? 'challenge' : 'supporting'}
+          </span>
+          <span style={{ fontSize: '0.66rem', color: T.faint }}>read: {readLabel}</span>
+          {r.url && (
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: '0.72rem', fontWeight: 600, color: T.accent, textDecoration: 'none' }}
+            >
+              Read ↗
+            </a>
+          )}
+          {r.doi && (!r.url || !r.url.includes(r.doi)) && (
+            <a
+              href={`https://doi.org/${r.doi}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: '0.7rem', color: T.muted, textDecoration: 'none' }}
+            >
+              doi:{r.doi}
+            </a>
+          )}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+/** Tone for an E#/C# chip: supporting (cased) reads green; challenging (counter) reads violet. */
+function refTone(ref: string, origin?: 'cased' | 'counter'): { color: string; bg: string; border: string } {
+  const challenge = origin === 'counter' || /^C\d/.test(ref)
+  return challenge
+    ? { color: T.violet, bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.4)' }
+    : { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.4)' }
+}
+
+/** A clickable [E#]/[C#] reference chip that scrolls to its reference entry; faint + inert when unresolved. */
+function RefChip({
+  refId,
+  refMap,
+  onCite,
+}: {
+  refId: string
+  refMap: Map<string, PaperReference>
+  onCite: (ref: string) => void
+}) {
+  const ref = refMap.get(refId)
+  if (!ref) return <span style={{ color: T.faint, fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem' }}>[{refId}]</span>
+  const tone = refTone(refId, ref.origin)
+  return (
+    <button
+      type="button"
+      onClick={() => onCite(refId)}
+      title={`${ref.title}${ref.tier ? ` · ${tierLabel(ref.tier)}` : ''} — ${ref.origin === 'counter' ? 'challenges' : 'supports'} the position`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'baseline',
+        verticalAlign: 'baseline',
+        margin: '0 0.1rem',
+        padding: '0 0.32rem',
+        fontSize: '0.7rem',
+        fontWeight: 700,
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: tone.color,
+        background: tone.bg,
+        border: `1px solid ${tone.border}`,
+        borderRadius: '0.25rem',
+        cursor: 'pointer',
+        lineHeight: 1.4,
+      }}
+    >
+      {refId}
+    </button>
+  )
+}
+
+const PAPER_CITE_RE = /\[\s*([EC]\d+(?:\s*[,;]\s*[EC]\d+)*)\s*\]/g
+
+/** Render paper prose: split into paragraphs, turn each [E#]/[C#] (or grouped [E1, C2]) token into chips. */
+function renderPaperProse(
+  text: string,
+  refMap: Map<string, PaperReference>,
+  onCite: (ref: string) => void,
+): React.ReactNode {
+  const paras = text.split(/\n{2,}/)
+  return paras.map((para, pi) => (
+    <p key={pi} style={{ margin: pi === 0 ? '0' : '0.6rem 0 0', lineHeight: 1.6 }}>
+      {renderPaperInline(para, refMap, onCite)}
+    </p>
+  ))
+}
+
+function renderPaperInline(
+  text: string,
+  refMap: Map<string, PaperReference>,
+  onCite: (ref: string) => void,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  PAPER_CITE_RE.lastIndex = 0
+  while ((m = PAPER_CITE_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    const refs = m[1].split(/\s*[,;]\s*/).map((r) => r.trim()).filter(Boolean)
+    out.push(
+      <span key={`grp-${i++}`} style={{ whiteSpace: 'nowrap' }}>
+        {refs.map((r, ri) => (
+          <RefChip key={`${r}-${ri}`} refId={r} refMap={refMap} onCite={onCite} />
+        ))}
+      </span>,
+    )
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return out
+}
+
 /** Splits a bucket's cards into hard-research (rendered first) and weak (web/vendor) groups. */
 function TieredCards({
   cards,
@@ -1542,4 +2244,24 @@ const errorBox: React.CSSProperties = {
   padding: '0.6rem 0.85rem',
   color: T.amber,
   fontSize: '0.83rem',
+}
+
+const paperProgress: React.CSSProperties = {
+  background: 'rgba(167,139,250,0.08)',
+  border: '1px solid rgba(167,139,250,0.3)',
+  borderRadius: '0.5rem',
+  padding: '0.6rem 0.85rem',
+  color: T.muted,
+  fontSize: '0.8rem',
+  lineHeight: 1.5,
+}
+
+const paperActions: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.5rem',
+  flexWrap: 'wrap',
+  marginTop: '1rem',
+  paddingTop: '0.85rem',
+  borderTop: `1px solid ${T.border}`,
 }
