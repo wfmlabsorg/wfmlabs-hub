@@ -3,7 +3,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
-import { gradeStyle, GRADE_LEGEND } from './grades'
+import { gradeStyle, GRADE_LEGEND, tierStyle, tierCaution } from './grades'
+import { isWeakTier, tierLabel } from '@/lib/beacon/tiers'
 import type {
   ArgumentBucket,
   AssembleResponse,
@@ -11,10 +12,12 @@ import type {
   CaseSections,
   CaseStatus,
   CaseSummary,
+  CitationRef,
   Commission,
   CommissionResponse,
   EvidenceCard,
   EvidenceResponse,
+  SourceTier,
 } from './types'
 
 /**
@@ -55,6 +58,10 @@ interface ChatMsg {
 
 const OTHER_KEY = '__other'
 
+const HARD_RESEARCH_TIERS: SourceTier[] = ['peer_reviewed', 'preprint', 'institutional']
+/** A card backed by hard research (peer-reviewed / preprint / institutional) — the load-bearing tiers. */
+const isHardResearch = (c: EvidenceCard): boolean => !!c.source.tier && HARD_RESEARCH_TIERS.includes(c.source.tier)
+
 export function BeaconCaseCanvas() {
   const { data: session, status } = useSession()
   const memberId = session?.user?.payloadMemberId
@@ -92,10 +99,25 @@ export function BeaconCaseCanvas() {
   const [savedCases, setSavedCases] = useState<CaseSummary[]>([])
   const [loadingCaseId, setLoadingCaseId] = useState<number | null>(null)
 
+  // citation-chip jump-to-source highlight
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+  const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, thinking])
+
+  // Clicking a [E#] citation chip scrolls to its source card and pulses a highlight ring.
+  const highlightCard = useCallback((cardId: string) => {
+    if (typeof document !== 'undefined') {
+      document.getElementById(`beacon-card-${cardId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    setHighlightId(cardId)
+    if (highlightTimer.current) clearTimeout(highlightTimer.current)
+    highlightTimer.current = setTimeout(() => setHighlightId(null), 2200)
+  }, [])
+  useEffect(() => () => { if (highlightTimer.current) clearTimeout(highlightTimer.current) }, [])
 
   // ── gated fetch — surfaces 401/402 as graceful prompts, never crashes ──
   const callApi = useCallback(async <T2,>(url: string, body?: unknown, method = 'POST'): Promise<T2 | null> => {
@@ -445,7 +467,10 @@ export function BeaconCaseCanvas() {
           <div style={twoCol}>
             {/* Evidence Pool */}
             <section style={region}>
-              <RegionHeader label="Evidence Pool" hint="Beacon's graded candidates — add the strong ones to your case." />
+              <RegionHeader
+                label="Evidence Pool"
+                hint="Beacon's graded candidates — hard research first; web & vendor claims are grouped below and read as claims, not evidence."
+              />
               {displayBuckets.length === 0 && !loadingEvidence && (
                 <p style={{ color: T.muted, fontSize: '0.85rem' }}>No evidence yet.</p>
               )}
@@ -498,19 +523,24 @@ export function BeaconCaseCanvas() {
                         All cards in this argument are cased.
                       </p>
                     )}
-                    {poolCards.map((card) => (
-                      <CardView
-                        key={card.id}
-                        card={card}
-                        primary={{ label: 'Add to Case →', onClick: () => moveCard(card.id, 'cased') }}
-                        secondary={{ label: 'Discard', onClick: () => moveCard(card.id, 'discarded') }}
-                      />
-                    ))}
+                    <TieredCards
+                      cards={poolCards}
+                      render={(card) => (
+                        <CardView
+                          key={card.id}
+                          card={card}
+                          highlightId={highlightId}
+                          primary={{ label: 'Add to Case →', onClick: () => moveCard(card.id, 'cased') }}
+                          secondary={{ label: 'Discard', onClick: () => moveCard(card.id, 'discarded') }}
+                        />
+                      )}
+                    />
                     {discarded.map((card) => (
                       <CardView
                         key={card.id}
                         card={card}
                         dimmed
+                        highlightId={highlightId}
                         primary={{ label: 'Restore', onClick: () => moveCard(card.id, 'pool') }}
                       />
                     ))}
@@ -530,6 +560,8 @@ export function BeaconCaseCanvas() {
               {displayBuckets.map((bucket) => {
                 const casedCards = cardsFor(bucket, 'cased')
                 if (casedCards.length === 0) return null
+                const claimsOnly =
+                  casedCards.some((c) => isWeakTier(c.source.tier)) && !casedCards.some((c) => isHardResearch(c))
                 return (
                   <div key={bucket.key} style={bucketBlock}>
                     <div style={bucketHeader}>
@@ -537,14 +569,19 @@ export function BeaconCaseCanvas() {
                       <span style={{ flex: 1 }} />
                       <span style={{ fontSize: '0.72rem', color: T.muted }}>{casedCards.length}</span>
                     </div>
-                    {casedCards.map((card) => (
-                      <CardView
-                        key={card.id}
-                        card={card}
-                        cased
-                        primary={{ label: '← Remove', onClick: () => moveCard(card.id, 'pool') }}
-                      />
-                    ))}
+                    {claimsOnly && <ArgumentWarning />}
+                    <TieredCards
+                      cards={casedCards}
+                      render={(card) => (
+                        <CardView
+                          key={card.id}
+                          card={card}
+                          cased
+                          highlightId={highlightId}
+                          primary={{ label: '← Remove', onClick: () => moveCard(card.id, 'pool') }}
+                        />
+                      )}
+                    />
                   </div>
                 )
               })}
@@ -562,7 +599,7 @@ export function BeaconCaseCanvas() {
           </div>
 
           {/* Assembled sections — discrete collapsible blocks (the truncation fix) */}
-          {sections && <SectionsView sections={sections} />}
+          {sections && <SectionsView sections={sections} onCite={highlightCard} />}
         </>
       )}
     </div>
@@ -747,23 +784,35 @@ function CardView(props: {
   card: EvidenceCard
   cased?: boolean
   dimmed?: boolean
+  highlightId?: string | null
   primary: { label: string; onClick: () => void }
   secondary?: { label: string; onClick: () => void }
 }) {
-  const { card, cased, dimmed, primary, secondary } = props
+  const { card, cased, dimmed, highlightId, primary, secondary } = props
   const g = gradeStyle(card.grade)
   const isWeb = card.source.type === 'web'
   const isOwn = !card.source.url && card.source.title === 'Your data point'
   const authors = card.source.authors.slice(0, 3).join(', ')
+  const tier = card.source.tier
+  const weak = isWeakTier(tier) // vendor / web_other → muted + caution
+  const caution = tierCaution(tier)
+  const highlighted = highlightId === card.id
   return (
     <div
+      id={`beacon-card-${card.id}`}
       style={{
-        background: cased ? 'rgba(34,211,238,0.06)' : T.card2,
-        border: `1px solid ${cased ? 'rgba(34,211,238,0.25)' : T.border}`,
+        // Weak (vendor/web) cards read as claims: hollow, dashed, muted — never like research.
+        background: weak ? 'transparent' : cased ? 'rgba(34,211,238,0.06)' : T.card2,
+        border: `1px ${weak ? 'dashed' : 'solid'} ${
+          highlighted ? T.accent : weak ? T.borderHover : cased ? 'rgba(34,211,238,0.25)' : T.border
+        }`,
         borderRadius: '0.55rem',
-        padding: '0.65rem 0.75rem',
+        padding: weak ? '0.5rem 0.65rem' : '0.65rem 0.75rem',
         marginBottom: '0.5rem',
-        opacity: dimmed ? 0.55 : 1,
+        opacity: dimmed ? 0.55 : weak ? 0.82 : 1,
+        boxShadow: highlighted ? `0 0 0 2px ${T.accent}` : 'none',
+        transition: 'box-shadow 0.25s ease, border-color 0.25s ease',
+        scrollMarginTop: '1.5rem',
       }}
     >
       <div style={{ display: 'flex', gap: '0.55rem', alignItems: 'flex-start' }}>
@@ -788,9 +837,17 @@ function CardView(props: {
           {card.grade}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: T.fg, lineHeight: 1.45 }}>{card.claim}</p>
+          <p style={{ margin: 0, fontSize: weak ? '0.8rem' : '0.85rem', color: weak ? T.muted : T.fg, lineHeight: 1.45 }}>
+            {card.claim}
+          </p>
+          {caution && (
+            <div style={{ marginTop: '0.35rem' }}>
+              <CautionBadge text={caution} />
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
             <SourceTag isWeb={isWeb} isOwn={isOwn} />
+            <TierTag tier={tier} />
             {card.source.url ? (
               <a
                 href={card.source.url}
@@ -822,17 +879,26 @@ function CardView(props: {
   )
 }
 
-function SectionsView({ sections }: { sections: CaseSections }) {
-  // Only the four prose sections render here; `citations` (research-020) is rendered by the chip layer (021).
+function SectionsView({ sections, onCite }: { sections: CaseSections; onCite: (cardId: string) => void }) {
   const blocks: { key: 'position' | 'steelman' | 'gaps' | 'bottom_line'; label: string; color: string }[] = [
     { key: 'position', label: 'Position', color: T.accent },
     { key: 'steelman', label: 'Steelman (the other side)', color: T.violet },
     { key: 'gaps', label: 'Where the evidence runs out', color: T.amber },
     { key: 'bottom_line', label: 'Bottom line', color: '#22c55e' },
   ]
+  // Resolve every [E#] token in the prose to its cased source card (research-020 citations map).
+  const citeByRef = useMemo(() => {
+    const m = new Map<string, CitationRef>()
+    for (const c of sections.citations || []) m.set(c.ref, c)
+    return m
+  }, [sections.citations])
   return (
     <div style={{ ...region }}>
-      <RegionHeader label="Assembled position" hint="Generated from your cased evidence only. Each section is its own block." accent />
+      <RegionHeader
+        label="Assembled position"
+        hint="Synthesized from your cased evidence only. [E#] chips link to the source card — weak (web/vendor) citations read muted."
+        accent
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
         {blocks.map(({ key, label, color }) => (
           <details key={key} open style={{ border: `1px solid ${T.border}`, borderRadius: '0.55rem', background: T.card2 }}>
@@ -850,13 +916,205 @@ function SectionsView({ sections }: { sections: CaseSections }) {
             >
               {label}
             </summary>
-            <p style={{ margin: 0, padding: '0 0.85rem 0.8rem', fontSize: '0.875rem', color: T.fg, lineHeight: 1.6 }}>
-              {sections[key] || <span style={{ color: T.faint }}>—</span>}
-            </p>
+            <div style={{ margin: 0, padding: '0 0.85rem 0.8rem', fontSize: '0.875rem', color: T.fg, lineHeight: 1.6 }}>
+              {sections[key]?.trim() ? renderCitedProse(sections[key], citeByRef, onCite) : <span style={{ color: T.faint }}>—</span>}
+            </div>
           </details>
         ))}
       </div>
     </div>
+  )
+}
+
+const CITE_RE = /\[E\d+\]/g
+
+/** Render section prose, splitting on `\n\n` into paragraphs and turning `[E#]` tokens into chips. */
+function renderCitedProse(
+  text: string,
+  citeByRef: Map<string, CitationRef>,
+  onCite: (cardId: string) => void,
+): React.ReactNode {
+  const paras = text.split(/\n{2,}/)
+  return paras.map((para, pi) => (
+    <p key={pi} style={{ margin: pi === 0 ? '0' : '0.6rem 0 0', lineHeight: 1.6 }}>
+      {renderInlineCitations(para, citeByRef, onCite)}
+    </p>
+  ))
+}
+
+function renderInlineCitations(
+  text: string,
+  citeByRef: Map<string, CitationRef>,
+  onCite: (cardId: string) => void,
+): React.ReactNode[] {
+  const out: React.ReactNode[] = []
+  let last = 0
+  let m: RegExpExecArray | null
+  let i = 0
+  CITE_RE.lastIndex = 0
+  while ((m = CITE_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index))
+    const ref = m[0].slice(1, -1) // "E3"
+    const cite = citeByRef.get(ref)
+    out.push(<CitationChip key={`cite-${i++}`} token={m[0]} cite={cite} onCite={onCite} />)
+    last = m.index + m[0].length
+  }
+  if (last < text.length) out.push(text.slice(last))
+  return out
+}
+
+function CitationChip({
+  token,
+  cite,
+  onCite,
+}: {
+  token: string
+  cite: CitationRef | undefined
+  onCite: (cardId: string) => void
+}) {
+  // Unknown ref (model emitted a token not in the map) — render the raw token, faint, non-interactive.
+  if (!cite) return <span style={{ color: T.faint }}>{token}</span>
+  const g = gradeStyle(cite.grade)
+  const weak = isWeakTier(cite.tier)
+  const tierTxt = cite.tier ? tierLabel(cite.tier) : 'source'
+  return (
+    <button
+      type="button"
+      onClick={() => onCite(cite.card_id)}
+      title={`${cite.label} · ${tierTxt} · grade ${cite.grade}${weak ? ' — weak: a claim, not research' : ''}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.15rem',
+        verticalAlign: 'baseline',
+        margin: '0 0.12rem',
+        padding: '0 0.32rem',
+        fontSize: '0.7rem',
+        fontWeight: 700,
+        fontFamily: "'IBM Plex Mono', monospace",
+        color: g.color,
+        background: weak ? 'transparent' : g.bg,
+        border: `1px ${weak ? 'dashed' : 'solid'} ${g.border}`,
+        borderRadius: '0.25rem',
+        cursor: 'pointer',
+        opacity: weak ? 0.85 : 1,
+        lineHeight: 1.4,
+      }}
+    >
+      {cite.ref}
+      <span style={{ opacity: 0.85 }}>·{cite.grade}</span>
+    </button>
+  )
+}
+
+/** Splits a bucket's cards into hard-research (rendered first) and weak (web/vendor) groups. */
+function TieredCards({
+  cards,
+  render,
+}: {
+  cards: EvidenceCard[]
+  render: (card: EvidenceCard) => React.ReactNode
+}) {
+  const research = cards.filter((c) => !isWeakTier(c.source.tier))
+  const weak = cards.filter((c) => isWeakTier(c.source.tier))
+  return (
+    <>
+      {research.map(render)}
+      {weak.length > 0 && <WebClaimsDivider />}
+      {weak.map(render)}
+    </>
+  )
+}
+
+function WebClaimsDivider() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.35rem 0 0.55rem' }}>
+      <span style={{ height: 1, width: '0.9rem', background: T.border, flexShrink: 0 }} />
+      <span
+        style={{
+          fontSize: '0.62rem',
+          fontWeight: 700,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: T.faint,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        Web claims · weaker than research — verify
+      </span>
+      <span style={{ height: 1, background: T.border, flex: 1 }} />
+    </div>
+  )
+}
+
+function ArgumentWarning() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '0.5rem',
+        alignItems: 'flex-start',
+        background: 'rgba(245,158,11,0.08)',
+        border: '1px solid rgba(245,158,11,0.35)',
+        borderRadius: '0.5rem',
+        padding: '0.5rem 0.7rem',
+        marginBottom: '0.6rem',
+      }}
+    >
+      <span aria-hidden style={{ color: T.amber, fontWeight: 700, lineHeight: 1.45 }}>
+        ⚠
+      </span>
+      <span style={{ fontSize: '0.76rem', color: T.amber, lineHeight: 1.45 }}>
+        This rests on claims, not research — add a hard-research source.
+      </span>
+    </div>
+  )
+}
+
+function CautionBadge({ text }: { text: string }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.25rem',
+        fontSize: '0.62rem',
+        fontWeight: 700,
+        color: T.amber,
+        background: 'rgba(245,158,11,0.1)',
+        border: '1px solid rgba(245,158,11,0.35)',
+        borderRadius: '0.25rem',
+        padding: '0.08rem 0.4rem',
+        letterSpacing: '0.02em',
+      }}
+    >
+      <span aria-hidden>⚠</span>
+      {text}
+    </span>
+  )
+}
+
+function TierTag({ tier }: { tier: SourceTier | undefined }) {
+  if (!tier) return null
+  const s = tierStyle(tier)
+  return (
+    <span
+      title={`Source tier: ${tierLabel(tier)}`}
+      style={{
+        fontSize: '0.6rem',
+        fontWeight: 700,
+        color: s.color,
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        borderRadius: '0.25rem',
+        padding: '0.05rem 0.35rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em',
+        flexShrink: 0,
+      }}
+    >
+      {tierLabel(tier)}
+    </span>
   )
 }
 
