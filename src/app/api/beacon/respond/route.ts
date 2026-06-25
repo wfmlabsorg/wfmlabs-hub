@@ -8,13 +8,16 @@ import { BEACON_COMMISSIONED_PROMPT } from '@/lib/beacon/commissioned-prompt'
 import { callClaude } from '@/lib/beacon/claude'
 import { embedQuery } from '@/lib/beacon/embed'
 import {
+  cardCandidates,
   semanticCandidates,
   keywordCandidates,
   mergeCandidates,
+  attachCards,
   searchWiki,
   type RetrievedPaper,
 } from '@/lib/beacon/retrieval'
 import { deepRead, deepSourcesBlock } from '@/lib/beacon/deepread'
+import { webReach, type WebSource } from '@/lib/beacon/webreach'
 
 /**
  * POST /api/beacon/respond — drive one turn of a commissioned Beacon session (WFM-71, v2 WFM-82).
@@ -23,13 +26,14 @@ import { deepRead, deepSourcesBlock } from '@/lib/beacon/deepread'
  * channel `dm:beacon:<memberId>` (sent via /api/chat/send). After the member posts, the client calls
  * this route; it loads the thread and drives one of two phases:
  *
- *   INTAKE (unchanged behavior) — one Claude call with the commissioned prompt sharpens the question
- *     and asks at most two clarifying questions. When the question is finally sharp, instead of
- *     writing the brief it emits a `<<<READY>>>` control token + the sharpened question.
- *   RESEARCH — semantic kNN over the existing pgvector index (paper_chunks, all-MiniLM-L6-v2 384-dim)
- *     surfaces ~8 candidates; Beacon deep-reads them in ONE structured pass (genuine-fit + specific
- *     finding + A–V grade), selects 3–4 that carry the argument (rest → "considered but not used"),
- *     then drafts the Defensible Position Brief synthesized from those deep reads.
+ *   INTAKE — one Claude call with the commissioned prompt sharpens the question, asking at most ONE
+ *     clarifying question, then ALWAYS proceeds (no pre-delivery downgrade gate). When ready it emits
+ *     a `<<<READY>>>` control token + the sharpened question instead of writing the brief.
+ *   RESEARCH — CARD-FIRST semantic kNN (research_cards.embedding, bge-m3 1024-d) blended with
+ *     paper_chunks kNN + keyword fallback surfaces ~8 candidates; Beacon deep-reads them in ONE
+ *     structured pass (genuine-fit + specific finding + A–V grade), selects 3–4 (rest → "not used"),
+ *     reads the finalists in depth (full card + full_text), web-reaches via Exa only when internal
+ *     coverage is thin, then drafts the Defensible Position Brief synthesized from those deep reads.
  *
  * Keyword `LIKE` is now only a fallback/recall supplement. Premium gate, auth, the `dm:beacon:` check,
  * Ably publish-back, and the ON CONFLICT (ably_message_id) partial-index insert (hub#31) are unchanged.
@@ -47,6 +51,10 @@ export const maxDuration = 300
 
 const READY = '<<<READY>>>'
 const CANDIDATE_CAP = 8
+// Web-reach fires only when INTERNAL coverage is thin: fewer than this many genuinely on-topic
+// finalists, OR the best card/chunk cosine similarity is below the floor (bge-m3 cosine sim).
+const MIN_ONTOPIC = 2
+const THIN_SIM = 0.5
 
 interface ChatRow {
   sender_username: string
@@ -80,20 +88,30 @@ function coverageHint(candidates: RetrievedPaper[]): string {
   return `# LIBRARY COVERAGE (titles only — do NOT cite yet; full deep-read happens after the question is sharp)\n${lines.join('\n')}`
 }
 
-// Surface candidates for a query: semantic kNN primary, keyword LIKE as recall supplement / fallback.
+// Surface candidates for a query: CARD-FIRST semantic kNN (research_cards) primary, chunk kNN
+// (paper_chunks) blended for passage recall, keyword LIKE as the final fallback. Each returned
+// candidate carries its structured Research Card (hydrated for chunk/keyword hits).
 async function surface(
   pool: ReturnType<typeof getPool>,
   payload: Awaited<ReturnType<typeof getPayload>>,
   query: string,
 ): Promise<RetrievedPaper[]> {
   const vec = await embedQuery(query)
+  let merged: RetrievedPaper[]
   if (vec) {
-    const semantic = await semanticCandidates(pool, payload, vec, { paperK: CANDIDATE_CAP })
+    const [cards, chunks] = await Promise.all([
+      cardCandidates(pool, payload, vec, { paperK: CANDIDATE_CAP }),
+      semanticCandidates(pool, payload, vec, { paperK: CANDIDATE_CAP }),
+    ])
     const keyword = await keywordCandidates(payload, query, 6)
-    return mergeCandidates(semantic, keyword, CANDIDATE_CAP)
+    // Card hits rank first, then chunk hits not already present, then keyword recall.
+    merged = mergeCandidates(mergeCandidates(cards, chunks, CANDIDATE_CAP), keyword, CANDIDATE_CAP)
+  } else {
+    // Embedding unavailable (creds unset / CF error) → degrade gracefully to keyword retrieval.
+    merged = await keywordCandidates(payload, query, CANDIDATE_CAP)
   }
-  // Embedding unavailable → degrade gracefully to keyword retrieval (v1 behavior).
-  return keywordCandidates(payload, query, CANDIDATE_CAP)
+  await attachCards(pool, merged)
+  return merged
 }
 
 async function publishReply(
@@ -188,8 +206,8 @@ export async function POST(request: Request) {
   const candidates = await surface(pool, payload, memberText)
   const intakeSystem = `${base}\n\n${coverageHint(candidates)}\n\n## Runtime control (commissioned v2)
 You operate in two phases:
-1. While the question is NOT yet sharp, behave EXACTLY as INTAKE (§Runtime notes): reply with your short clarifying turn (at most two targeted questions) and STOP. Do not produce a brief and do not search.
-2. When — and ONLY when — the question is sharp and ready to research, DO NOT write the brief yet. Instead reply with the control token on the FIRST line and nothing before it:
+1. INTAKE — ask AT MOST ONE sharpening question, and only if it genuinely changes the research. If the member has already given you enough to research (even roughly), DO NOT ask another question — go straight to phase 2. After one clarifying exchange you ALWAYS proceed to deliver; never stall, never ask the member to narrow or downgrade their ask, never say the evidence "isn't in the library yet" before researching.
+2. When the question is sharp enough to research (which is after at most one clarification), DO NOT write the brief yet. Instead reply with the control token on the FIRST line and nothing before it:
 ${READY}
 <one or two sentences stating the sharpened research question + the skeptic/context>
 A deep-research pass will then read the library in depth and you will draft the brief on the next turn. Never emit ${READY} during a genuine clarifying turn.`
@@ -220,8 +238,16 @@ A deep-research pass will then read the library in depth and you will draft the 
     searchWiki(sharpened),
   ])
 
-  const draftSystem = `${base}\n\n${deepSourcesBlock(deep, wiki)}\n\n## Runtime control (commissioned v2)
-The question is now sharp and the library has been deep-read for you (the deep-read sources above carry the specific extracted finding + evidence grade for each). Produce the DEFENSIBLE POSITION BRIEF now, using the EXACT §4 structure with inline grades. Synthesize from the deep-read findings — do NOT dump or paraphrase whole abstracts. Cite ONLY the deep-read sources listed above (plus the member's own statements); never cite a paper from the "considered but not used" list as support. Keep §5 (where the evidence runs out) honest, especially where the library is thin.
+  // Web-reach (Exa) — ONLY when internal coverage is thin: <MIN_ONTOPIC genuinely on-topic finalists
+  // OR the best internal semantic match is below THIN_SIM. Bounded to a single Exa call; gracefully
+  // no-ops when EXA_API_KEY is unset. Cites only what Exa actually returned (see webreach.ts).
+  const onTopic = deep.selected.filter((s) => s.supports && s.grade !== '—').length
+  const bestSim = Math.max(0, ...briefCandidates.map((c) => c.bestSim ?? 0))
+  const thinCoverage = onTopic < MIN_ONTOPIC || bestSim < THIN_SIM
+  const web: WebSource[] = thinCoverage ? await webReach(sharpened, { numResults: 8 }) : []
+
+  const draftSystem = `${base}\n\n${deepSourcesBlock(deep, wiki, web)}\n\n## Runtime control (commissioned v2)
+The question is now sharp and the library has been deep-read for you (the sources above carry each paper's structured Research Card, the specific extracted finding, and its evidence grade). Produce the DEFENSIBLE POSITION BRIEF now, using the EXACT §4 structure with inline grades. Synthesize from the deep reads — do NOT dump or paraphrase whole abstracts. Cite ONLY the sources listed above — papers, WFMWiki canon, and any web sources (tag web sources distinctly as \`web · fetched <date>\`, cite them only from their fetched highlight text + URL) — plus the member's own statements; never cite a paper from the "considered but not used" list as support. Keep §5 (where the evidence runs out) honest, especially where the library is thin.
 Sharpened question: ${sharpened}`
 
   let reply: string
@@ -243,6 +269,8 @@ Sharpened question: ${sharpened}`
       selected: deep.selected.length,
       notUsed: deep.notUsed.length,
       wiki: wiki.length,
+      web: web.length,
+      thinCoverage,
     },
   })
 }
