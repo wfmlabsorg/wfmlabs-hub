@@ -99,7 +99,7 @@ export function lexicalToText(node: any): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toRetrieved(p: any, bestSim: number | null, chunks: RetrievedPaper['chunks']): RetrievedPaper {
+export function toRetrieved(p: any, bestSim: number | null, chunks: RetrievedPaper['chunks']): RetrievedPaper {
   return {
     id: Number(p.id),
     title: String(p.title || ''),
@@ -191,7 +191,7 @@ export async function attachCards(pool: Pool, papers: RetrievedPaper[]): Promise
 }
 
 /** Load full paper docs (preserving order of `ids`) via Payload. */
-async function loadPaperDocs(payload: Payload, ids: number[]): Promise<Map<number, unknown>> {
+export async function loadPaperDocs(payload: Payload, ids: number[]): Promise<Map<number, unknown>> {
   if (ids.length === 0) return new Map()
   const res = await payload.find({
     collection: 'papers',

@@ -1,0 +1,29 @@
+-- 004_beacon_case_paper.sql — research-027 / WFM-101 (Paper Pipeline engine)
+--
+-- Adds the `paper` JSONB column to beacon_cases: the Deep-Engagement paper artifact produced by
+-- POST /api/beacon/paper from an ASSEMBLED case. ONE flexible JSONB column (no structured-schema
+-- migration) holding the variable-shape paper:
+--
+--   paper = {
+--     "status": "draft",
+--     "engagement": {
+--       "supporting":  [ { "ref": "E1", "statement": "...", "detail": "...", "grade": "A" } ],
+--       "challenging": [ { "ref": "C1", "statement": "...", "detail": "...", "grade": "B" } ],
+--       "tensions":    [ { "statement": "...", "refs": ["E2","C1"] } ]
+--     },
+--     "draft": {
+--       "title": "...", "abstract": "...", "introduction": "...", "theory": "...",
+--       "evidence_for": "...", "counter_case_and_limitations": "...",
+--       "discussion": "...", "conclusion": "...",
+--       "references": [ { "ref":"E1","title":"...","authors":["..."],"url":"...",
+--                        "tier":"peer_reviewed","doi":"...","paper_id":123,
+--                        "origin":"cased|counter","read":"full_text|card_abstract|abstract" } ]
+--     },
+--     "generated_at": "<iso8601>"
+--   }
+--
+-- Additive, idempotent, non-destructive. Isolated from CASE_COLS in src/lib/beacon/cases.ts, so the
+-- existing /api/beacon/* routes never touch it. FOREMAN applies post-merge, pre-deploy:
+--   psql "$WFMLABS_HUB_DATABASE_URL" -f schema/004_beacon_case_paper.sql
+
+ALTER TABLE beacon_cases ADD COLUMN IF NOT EXISTS paper jsonb;
