@@ -63,6 +63,13 @@ export default async function ResearchBrowsePage({
   if (activeType !== 'all') conditions.push({ paperType: { equals: activeType } })
   if (activeDomain !== 'all') conditions.push({ category: { equals: activeDomain } })
 
+  // Corpus visibility (research-029): hide in-review papers — `draft` and `proposed` — from the live
+  // library so a Beacon paper published to the corpus stays member-private until a curator ratifies it
+  // to `published`. NULL-safe: legacy rows without a status (or any other status) remain visible.
+  conditions.push({
+    or: [{ status: { not_in: ['draft', 'proposed'] } }, { status: { exists: false } }],
+  })
+
   const whereClause: Where = conditions.length > 0
     ? { and: conditions }
     : {}
