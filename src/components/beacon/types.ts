@@ -21,6 +21,10 @@ export interface EvidenceSource {
   paper_id?: number
   /** Credibility tier (research-020). Optional for cards persisted before iteration 2. */
   tier?: SourceTier
+  /** Short 2–3 sentence card summary (research-023); the UI renders it under the claim. */
+  abstract?: string
+  /** True when fetched + ingested into the library this session (research-023) — UI tags it. */
+  acquired?: boolean
 }
 
 export interface EvidenceCard {

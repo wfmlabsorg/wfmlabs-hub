@@ -107,9 +107,19 @@ export async function POST(request: Request) {
   }
 
   // ── INITIAL / WEB: (re)build the whole pool, grouped by freshly proposed buckets ──
+  // `origin` lets the gap-driven acquisition pass (research-023) POST kept scholarly papers back to
+  // /api/papers/ingest so thin topics grow the library; falls back gracefully if unresolvable.
+  const origin = (() => {
+    try {
+      return new URL(request.url).origin
+    } catch {
+      return undefined
+    }
+  })()
   const built = await buildInitialEvidence(pool, payload, question, {
     forceWeb: mode === 'web',
     exclude: new Set<number>(),
+    origin,
   })
   const updated = await updateCase(pool, theCase.id, memberId, {
     evidence_pool: built.cards,
