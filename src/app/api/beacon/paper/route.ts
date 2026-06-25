@@ -32,10 +32,15 @@ export async function POST(request: Request) {
   const { pool, payload, memberId, member } = gate
 
   const body = (await request.json().catch(() => null)) as Body | null
-  if (body?.caseId == null) return Response.json({ error: 'caseId required' }, { status: 400 })
+  // Validate caseId once: must be a positive safe integer. Number() alone would let "abc" (NaN),
+  // Infinity, fractional, or negative values through to loadCase and blow up at the DB layer.
+  const caseId = Number(body?.caseId)
+  if (!Number.isSafeInteger(caseId) || caseId <= 0) {
+    return Response.json({ error: 'caseId must be a positive integer' }, { status: 400 })
+  }
 
   // Ownership is enforced here — loadCase returns null for a case the member doesn't own.
-  const theCase = await loadCase(pool, Number(body.caseId), memberId)
+  const theCase = await loadCase(pool, caseId, memberId)
   if (!theCase) return Response.json({ error: 'case not found' }, { status: 404 })
 
   // The paper is developed FROM an assembled case (it builds on the synthesized position).
@@ -50,17 +55,11 @@ export async function POST(request: Request) {
     return Response.json({ error: 'No cased evidence — curate cards into The Case first.' }, { status: 400 })
   }
 
-  const origin = (() => {
-    try {
-      return new URL(request.url).origin
-    } catch {
-      return undefined
-    }
-  })()
-
   let paper
   try {
-    paper = await developPaper(pool, payload, theCase, { username: member.username, origin })
+    // No origin is forwarded from the request — the acquisition/ingest path derives its target host
+    // from trusted server config (NEXT_PUBLIC_SERVER_URL), never the attacker-controllable Host header.
+    paper = await developPaper(pool, payload, theCase, { username: member.username })
   } catch (e) {
     return Response.json(
       { error: 'beacon failed to develop the paper', detail: String(e).slice(0, 200) },

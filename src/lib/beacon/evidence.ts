@@ -213,7 +213,7 @@ export async function buildInitialEvidence(
   pool: Pool,
   payload: Payload,
   question: string,
-  opts: { forceWeb?: boolean; exclude?: Set<number>; acquire?: boolean; origin?: string } = {},
+  opts: { forceWeb?: boolean; exclude?: Set<number>; acquire?: boolean } = {},
 ): Promise<BuiltEvidence> {
   const exclude = opts.exclude ?? new Set<number>()
   const items = await gatherRawItems(pool, payload, question, exclude, { maxSelect: 6, forceWeb: !!opts.forceWeb })
@@ -224,7 +224,7 @@ export async function buildInitialEvidence(
   // ingest the strong relevant ones into the corpus so the thin topic fills itself.
   const strongCount = items.filter((it) => isStrongCard(it.grade, it.source.tier)).length
   if (opts.acquire !== false && strongCount < STRONG_TARGET) {
-    const acq = await acquireAcademic(payload, question, { origin: opts.origin })
+    const acq = await acquireAcademic(payload, question)
     for (const a of acq.items) {
       items.push({ claim: a.claim, grade: a.grade, source: a.source })
     }

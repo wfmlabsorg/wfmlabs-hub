@@ -165,7 +165,6 @@ async function counterSearch(
   question: string,
   excludePaperIds: Set<number>,
   excludeUrls: Set<string>,
-  opts: { origin?: string },
 ): Promise<ReadSource[]> {
   const counterQuery =
     `Rigorous evidence that CHALLENGES, contradicts, qualifies, or bounds the following position: ` +
@@ -218,7 +217,7 @@ async function counterSearch(
 
   // (b) Exa/Crossref academic counter (acquire) — reads fetched abstracts; ingests strong ones.
   try {
-    const acq = await acquireAcademic(payload, counterQuery, { origin: opts.origin })
+    const acq = await acquireAcademic(payload, counterQuery)
     for (const it of acq.items) {
       const url = it.source.url || ''
       if (url && seenUrl.has(url)) continue
@@ -272,6 +271,29 @@ function citedRefs(text: string): Set<string> {
   return out
 }
 
+/**
+ * Strip unresolvable inline citations from a draft prose section. The synthesis model can emit a
+ * bracketed citation — e.g. [E99] or a grouped [E1, C2] — that points at no real read source; left
+ * in the stored paper those become dangling, unverifiable references. We drop any ref not in `valid`
+ * (consistent with how engagement refs are validated), keep the resolvable ones, and tidy the
+ * whitespace/punctuation a removal leaves behind so no unresolvable citation survives.
+ */
+function stripUnresolvedCitations(text: string, valid: Set<string>): string {
+  if (!text) return text
+  return text
+    .replace(/\[\s*([EC]\d+(?:\s*[,;]\s*[EC]\d+)*)\s*\]/g, (_full, inner: string) => {
+      const kept = inner
+        .split(/\s*[,;]\s*/)
+        .map((r) => r.trim())
+        .filter((r) => valid.has(r))
+      return kept.length ? `[${kept.join(', ')}]` : ''
+    })
+    // Tidy artifacts left by a removed citation: doubled spaces and a space before punctuation.
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+([.,;:)])/g, '$1')
+    .trim()
+}
+
 interface SynthFinding {
   ref?: string
   statement?: string
@@ -313,7 +335,7 @@ export async function developPaper(
   pool: Pool,
   payload: Payload,
   theCase: BeaconCase,
-  opts: { username: string; origin?: string },
+  opts: { username: string },
 ): Promise<CasePaper> {
   const cased = theCase.evidence_pool.filter((c) => c.state === 'cased')
 
@@ -330,11 +352,15 @@ export async function developPaper(
 
   const excludePaperIds = new Set<number>(supporting.map((s) => s.paper_id).filter((x): x is number => x != null))
   const excludeUrls = new Set<string>(supporting.map((s) => s.url).filter(Boolean))
-  const challenging = await counterSearch(pool, payload, position, question, excludePaperIds, excludeUrls, {
-    origin: opts.origin,
-  })
+  const challenging = await counterSearch(pool, payload, position, question, excludePaperIds, excludeUrls)
 
-  const validRefs = new Set<string>([...supporting, ...challenging].map((s) => s.ref))
+  // Scope the citable refs per engagement side so a finding can only cite its OWN source set:
+  // supporting findings may cite only the cased E# papers; challenging findings may cite only the
+  // counter-search C# papers. validRefs (the union) is used for tensions — which legitimately span
+  // both sides — and for sanitizing draft prose / building the reference list.
+  const supportingRefs = new Set<string>(supporting.map((s) => s.ref))
+  const challengingRefs = new Set<string>(challenging.map((s) => s.ref))
+  const validRefs = new Set<string>([...supportingRefs, ...challengingRefs])
   const allRead = [...supporting, ...challenging]
 
   const today = new Date().toISOString().slice(0, 10)
@@ -395,10 +421,10 @@ Every section is plain prose (no markdown headers inside values; separate paragr
   // Build the structured engagement, dropping any fabricated/unresolvable refs.
   const engagement: PaperEngagement = {
     supporting: (parsed.engagement?.supporting || [])
-      .map((f) => toFinding(f, validRefs))
+      .map((f) => toFinding(f, supportingRefs))
       .filter((f): f is PaperFinding => f !== null),
     challenging: (parsed.engagement?.challenging || [])
-      .map((f) => toFinding(f, validRefs))
+      .map((f) => toFinding(f, challengingRefs))
       .filter((f): f is PaperFinding => f !== null),
     tensions: (parsed.engagement?.tensions || [])
       .map((t): PaperTension => ({
@@ -409,11 +435,26 @@ Every section is plain prose (no markdown headers inside values; separate paragr
   }
 
   const d = parsed.draft || {}
-  const draftText = Object.values(d).filter((v) => typeof v === 'string').join('\n')
-  // References = sources actually cited anywhere in the draft or engagement (fallback: all read).
-  const cited = citedRefs(
-    draftText + ' ' + JSON.stringify(engagement),
-  )
+  // Sanitize EVERY draft prose section before persisting: strip any inline [E#]/[C#] citation that
+  // does not resolve to a real read source. Fabricated refs are already dropped from engagement + the
+  // server-built reference list, but the prose strings were persisted verbatim — so an emitted [E99]
+  // would leave a dangling inline citation in the final paper. This closes that gap.
+  const prose = (v: unknown, fallback = ''): string =>
+    stripUnresolvedCitations(String(v ?? fallback).trim(), validRefs)
+  const draftSections = {
+    title: prose(d.title || theCase.title || 'Untitled position') || 'Untitled position',
+    abstract: prose(d.abstract),
+    introduction: prose(d.introduction),
+    theory: prose(d.theory, position),
+    evidence_for: prose(d.evidence_for),
+    counter_case_and_limitations: prose(d.counter_case_and_limitations),
+    discussion: prose(d.discussion),
+    conclusion: prose(d.conclusion),
+  }
+
+  // References = sources actually cited (post-sanitize) anywhere in the draft or engagement
+  // (fallback: all read). Built server-side so the bibliography can never contain an unread source.
+  const cited = citedRefs(Object.values(draftSections).join('\n') + ' ' + JSON.stringify(engagement))
   const refSources = allRead.filter((s) => cited.has(s.ref))
   const finalRefSources = refSources.length > 0 ? refSources : allRead
   const references: PaperReference[] = finalRefSources.map((s) => ({
@@ -429,14 +470,7 @@ Every section is plain prose (no markdown headers inside values; separate paragr
   }))
 
   const draft: PaperDraft = {
-    title: String(d.title || theCase.title || 'Untitled position').trim(),
-    abstract: String(d.abstract || '').trim(),
-    introduction: String(d.introduction || '').trim(),
-    theory: String(d.theory || position).trim(),
-    evidence_for: String(d.evidence_for || '').trim(),
-    counter_case_and_limitations: String(d.counter_case_and_limitations || '').trim(),
-    discussion: String(d.discussion || '').trim(),
-    conclusion: String(d.conclusion || '').trim(),
+    ...draftSections,
     references,
   }
 
