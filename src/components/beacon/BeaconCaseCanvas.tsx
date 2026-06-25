@@ -9,6 +9,7 @@ import type {
   ArgumentBucket,
   AssembleResponse,
   BeaconCase,
+  CardStance,
   CaseSections,
   CaseStatus,
   CaseSummary,
@@ -790,12 +791,15 @@ function CardView(props: {
   const g = gradeStyle(card.grade)
   const isWeb = card.source.type === 'web'
   const isOwn = !card.source.url && card.source.title === 'Your data point'
-  const authors = card.source.authors.slice(0, 3).join(', ')
+  const authors = card.source.authors.slice(0, 4).join(', ')
   const abstract = card.source.abstract?.trim()
   const tier = card.source.tier
   const weak = isWeakTier(tier) // vendor / web_other → muted + caution
   const caution = tierCaution(tier)
   const highlighted = highlightId === card.id
+  // research-026 anatomy: Title → Authors → Type → Abstract → Why-applies(support/challenge) → actions.
+  // Title leads with the source title; own data points have no real title, so the claim is the title.
+  const title = isOwn ? card.claim : card.source.title || card.claim
   return (
     <div
       id={`beacon-card-${card.id}`}
@@ -814,7 +818,20 @@ function CardView(props: {
         scrollMarginTop: '1.5rem',
       }}
     >
-      <div style={{ display: 'flex', gap: '0.55rem', alignItems: 'flex-start' }}>
+      {/* 1. TITLE (+ grade badge, kept) */}
+      <div style={{ display: 'flex', gap: '0.55rem', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: weak ? '0.86rem' : '0.92rem',
+            fontWeight: 600,
+            color: weak ? T.muted : T.fg,
+            lineHeight: 1.4,
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {title}
+        </p>
         <span
           title={g.label}
           style={{
@@ -835,43 +852,38 @@ function CardView(props: {
         >
           {card.grade}
         </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ margin: 0, fontSize: weak ? '0.8rem' : '0.85rem', color: weak ? T.muted : T.fg, lineHeight: 1.45 }}>
-            {card.claim}
-          </p>
-          {abstract && <CardAbstract text={abstract} weak={weak} />}
-          {caution && (
-            <div style={{ marginTop: '0.35rem' }}>
-              <CautionBadge text={caution} />
-            </div>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
-            <SourceTag isWeb={isWeb} isOwn={isOwn} />
-            <TierTag tier={tier} />
-            {card.source.acquired && <AcquiredTag />}
-            <span style={{ fontSize: '0.75rem', color: T.muted, overflowWrap: 'anywhere' }}>
-              {card.source.title}
-            </span>
-            {authors && <span style={{ fontSize: '0.72rem', color: T.faint }}>· {authors}</span>}
-            {card.source.url && (
-              <a
-                href={card.source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 600,
-                  color: T.accent,
-                  textDecoration: 'none',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                Read full ↗
-              </a>
-            )}
-          </div>
-        </div>
       </div>
+
+      {/* 2. AUTHORS */}
+      {authors && (
+        <p style={{ margin: '0.2rem 0 0', fontSize: '0.74rem', color: T.faint, overflowWrap: 'anywhere' }}>{authors}</p>
+      )}
+
+      {/* 3. TYPE BADGE (tier) + provenance tags */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+        <SourceTag isWeb={isWeb} isOwn={isOwn} />
+        <TierTag tier={tier} />
+        {card.source.acquired && <AcquiredTag />}
+        {caution && <CautionBadge text={caution} />}
+        {card.source.url && (
+          <a
+            href={card.source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: '0.75rem', fontWeight: 600, color: T.accent, textDecoration: 'none', whiteSpace: 'nowrap' }}
+          >
+            Read full ↗
+          </a>
+        )}
+      </div>
+
+      {/* 4. ABSTRACT */}
+      {abstract && <CardAbstract text={abstract} weak={weak} />}
+
+      {/* 5. WHY THIS APPLIES (relevance rationale + supports/challenges) */}
+      <WhyApplies stance={card.stance} relevance={card.relevance} claim={card.claim} isOwn={isOwn} />
+
+      {/* 6. ACTIONS */}
       <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.55rem', justifyContent: 'flex-end' }}>
         {secondary && (
           <button onClick={secondary.onClick} style={miniBtn}>
@@ -883,6 +895,100 @@ function CardView(props: {
         </button>
       </div>
     </div>
+  )
+}
+
+/**
+ * "Why this applies to your case" (research-026) — the relevance rationale from the appraiser, with a
+ * support/challenge marker. The body is the grounded `relevance` note; when a card predates iter-4 (no
+ * note), it falls back to the extracted claim so the block is never empty. No fabrication: every word
+ * here came from the deepRead appraisal or the card's own finding.
+ */
+function WhyApplies({
+  stance,
+  relevance,
+  claim,
+  isOwn,
+}: {
+  stance?: CardStance
+  relevance?: string
+  claim: string
+  isOwn: boolean
+}) {
+  const note = relevance?.trim()
+  // Own data points carry no appraisal; the claim IS the member's assertion. Otherwise fall back to the
+  // extracted finding when no appraiser note exists (legacy cards), so the block is never empty.
+  const body = note || claim
+  const showClaimToo = !!note && !isOwn && claim.trim() !== '' && claim.trim() !== note
+  return (
+    <div
+      style={{
+        marginTop: '0.5rem',
+        paddingTop: '0.45rem',
+        borderTop: `1px solid ${T.border}`,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+        <span
+          style={{
+            fontSize: '0.64rem',
+            fontWeight: 700,
+            color: T.faint,
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {isOwn ? 'Your point' : 'Why this applies to your case'}
+        </span>
+        <StanceMarker stance={stance} />
+      </div>
+      <p style={{ margin: '0.3rem 0 0', fontSize: '0.78rem', color: T.muted, lineHeight: 1.5 }}>{body}</p>
+      {showClaimToo && (
+        <p style={{ margin: '0.3rem 0 0', fontSize: '0.74rem', color: T.faint, lineHeight: 1.45 }}>
+          <span style={{ fontWeight: 600, color: T.muted }}>Finding: </span>
+          {claim}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The supports/challenges marker (research-026): a small, visually distinct chip so a member reads a
+ * card's direction at a glance — ↑ supports (green), ↯ challenges (violet, the steelman colour), ⇅
+ * mixed (amber). Neutral/context renders a muted dot; an unset stance (legacy cards) renders nothing.
+ */
+function StanceMarker({ stance }: { stance?: CardStance }) {
+  if (!stance) return null
+  const map: Record<CardStance, { symbol: string; label: string; color: string; bg: string; border: string }> = {
+    supports: { symbol: '↑', label: 'Supports', color: '#22c55e', bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.4)' },
+    challenges: { symbol: '↯', label: 'Challenges', color: T.violet, bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.4)' },
+    mixed: { symbol: '⇅', label: 'Mixed', color: T.amber, bg: 'rgba(245,158,11,0.12)', border: 'rgba(245,158,11,0.4)' },
+    neutral: { symbol: '·', label: 'Context', color: T.faint, bg: 'transparent', border: T.border },
+  }
+  const s = map[stance]
+  return (
+    <span
+      title={`This source ${stance === 'neutral' ? 'is context for' : stance + ' '}your position`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.2rem',
+        fontSize: '0.64rem',
+        fontWeight: 700,
+        color: s.color,
+        background: s.bg,
+        border: `1px solid ${s.border}`,
+        borderRadius: '0.25rem',
+        padding: '0.05rem 0.35rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.03em',
+        flexShrink: 0,
+      }}
+    >
+      <span aria-hidden>{s.symbol}</span>
+      {s.label}
+    </span>
   )
 }
 

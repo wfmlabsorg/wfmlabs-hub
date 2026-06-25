@@ -27,7 +27,9 @@ import { callClaude } from '@/lib/beacon/claude'
 import { classifyLibraryTier, classifyWebTier, enforceGrade, webBaseGrade } from '@/lib/beacon/tiers'
 import {
   newCardId,
+  toCardStance,
   type ArgumentBucket,
+  type CardStance,
   type EvidenceCard,
   type EvidenceSource,
 } from '@/lib/beacon/cases'
@@ -88,6 +90,10 @@ interface RawItem {
   claim: string
   grade: Grade
   source: EvidenceSource
+  /** How this item bears on the position (research-026); undefined for un-appraised web hits. */
+  stance?: CardStance
+  /** 1–2 sentence why-applies note (research-026); undefined for un-appraised web hits. */
+  relevance?: string
 }
 
 /** Build raw (ungrouped) evidence items from a deep-read of `question`, plus optional web-reach. */
@@ -108,6 +114,8 @@ async function gatherRawItems(
     return {
       claim: (r.finding || r.card?.thesis || r.title).trim(),
       grade: enforceGrade(r.grade, tier),
+      stance: toCardStance(r.stance),
+      relevance: r.rationale || undefined,
       source: {
         title: r.title,
         authors: r.authors,
@@ -226,7 +234,7 @@ export async function buildInitialEvidence(
   if (opts.acquire !== false && strongCount < STRONG_TARGET) {
     const acq = await acquireAcademic(payload, question, { origin: opts.origin })
     for (const a of acq.items) {
-      items.push({ claim: a.claim, grade: a.grade, source: a.source })
+      items.push({ claim: a.claim, grade: a.grade, source: a.source, stance: a.stance, relevance: a.relevance })
     }
     if (acq.items.length) {
       console.log(`[beacon/evidence] acquisition: +${acq.items.length} scholarly cards, ${acq.ingested} ingested (strong was ${strongCount}/${STRONG_TARGET})`)
@@ -246,6 +254,8 @@ export async function buildInitialEvidence(
       source: it.source,
       supports_argument: key,
       state: 'pool',
+      stance: it.stance,
+      relevance: it.relevance,
     }
     byKey.get(key)?.card_ids.push(card.id)
     return card
@@ -278,5 +288,7 @@ export async function buildExpandEvidence(
     source: it.source,
     supports_argument: bucketKey,
     state: 'pool',
+    stance: it.stance,
+    relevance: it.relevance,
   }))
 }

@@ -30,6 +30,12 @@ export interface DeepRead extends RetrievedPaper {
   finding: string
   relevance: number
   stance: 'for' | 'against' | 'context'
+  /**
+   * A 1–2 sentence plain-language note on WHY this source bears on the sharpened question, stated so a
+   * member can read support vs challenge at a glance (research-026). Emitted by the SAME appraiser call
+   * (one extra JSON field — no additional LLM call). Empty string when the model omitted it.
+   */
+  rationale: string
   /** The evidence text actually read for this paper (chunks + fullText/abstract, budgeted). */
   evidence: string
 }
@@ -157,12 +163,13 @@ Rules:
 - Be strict. A candidate that merely shares keywords but doesn't inform the question gets supports=false and grade "—".
 - "finding" must be the SPECIFIC evidence this paper offers (e.g. "CES predicts repurchase better than CSAT/NPS across 75,000 customers"), not a generic restatement. Do NOT invent numbers not in the content.
 - stance: "for" (supports the member's position), "against" (steelman / complicates it), or "context" (background/definitional).
+- "rationale" is a 1–2 sentence plain-language note on WHY this source bears on the sharpened question, naming explicitly whether it SUPPORTS or CHALLENGES the member's likely position (or is context). Grounded in the content only — no fabrication.
 
 Output ONLY a JSON array, one object per candidate, in order:
-[{"i":0,"supports":true,"grade":"A","relevance":92,"stance":"for","finding":"..."}, ...]
+[{"i":0,"supports":true,"grade":"A","relevance":92,"stance":"for","finding":"...","rationale":"..."}, ...]
 relevance is 0–100. No prose outside the array.`
 
-  let scores: { i: number; supports: boolean; grade: string; relevance: number; stance: string; finding: string }[] = []
+  let scores: { i: number; supports: boolean; grade: string; relevance: number; stance: string; finding: string; rationale: string }[] = []
   try {
     const raw = await callClaude(
       system,
@@ -191,6 +198,7 @@ relevance is 0–100. No prose outside the array.`
       relevance: typeof s?.relevance === 'number' ? s.relevance : p.bestSim != null ? Math.round(p.bestSim * 100) : 50,
       stance,
       finding: String(s?.finding || '').trim(),
+      rationale: String(s?.rationale || '').trim(),
       evidence: evidence[i],
     }
   })
