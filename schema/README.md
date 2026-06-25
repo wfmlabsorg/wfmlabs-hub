@@ -16,13 +16,14 @@ agree and Payload detects no drift.
 |------|------|
 | `001_deep_research_db.sql` | `research_cards` + card embedding + HNSW index; `papers.full_text_source/_status`; ensures `vector` ext. (research-010 / WFM-84) |
 | `002_paper_chunks_bge_m3_rebuild.sql` | **Destructive + sequenced.** `paper_chunks.embedding` 384→`vector(1024)` (TRUNCATE + resize), ivfflat → HNSW cosine index, for the bge-m3 upgrade. Empties `paper_chunks` until the `paper-embed` worker (roc, research-013) re-embeds the corpus. Idempotent/re-run-safe (skips the truncate when already 1024-d). Apply → `paper-embed` /backfill → deploy research-014. (research-013 / WFM-87) |
-| `003_beacon_cases.sql` | `beacon_cases` — one curated argument case per member (Beacon Case Canvas root). Non-destructive, idempotent. FK `member_id → members(id)` ON DELETE CASCADE; indexes on `member_id` and `(member_id, updated_at DESC)`. Holds the case lifecycle (`status` draft\|assembled\|exported) + the `commission` / `evidence_pool` / `arguments` / `sections` JSONB contract below. (research-016 / WFM-90) |
+| `003_beacon_cases.sql` | `beacon_cases` — analyst cases; a member has MANY (one row per case, Beacon Case Canvas root). Non-destructive, idempotent. FK `member_id → members(id)` ON DELETE CASCADE; indexes on `member_id` and `(member_id, updated_at DESC)`. Holds the case lifecycle (`status` draft\|assembled\|exported) + the `commission` / `evidence_pool` / `arguments` / `sections` JSONB contract below. (research-016 / WFM-90) |
 
 ---
 
 ## The Beacon Case contract (code against this)
 
-`beacon_cases` holds one analyst case **per member** (`member_id` FK →
+`beacon_cases` holds analyst cases — a member may have **many** (one row per
+case, saved & listed via `/api/beacon/cases`; no `unique(member_id)`) (`member_id` FK →
 `members(id)` ON DELETE CASCADE). It is a raw table outside Payload (like
 `research_cards`): the case is a high-churn working document with deeply nested,
 variable-shape JSONB driven by the `/api/beacon/*` engine, not the Payload admin

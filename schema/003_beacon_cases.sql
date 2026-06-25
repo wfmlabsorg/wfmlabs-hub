@@ -33,7 +33,8 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
--- beacon_cases — one curated argument case per member
+-- beacon_cases — analyst cases. A member has MANY (one row per case, saved &
+-- listed via /api/beacon/cases). NO unique(member_id) — multiple cases is intended.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS beacon_cases (
     id              BIGSERIAL PRIMARY KEY,
