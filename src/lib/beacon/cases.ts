@@ -45,6 +45,17 @@ export interface EvidenceSource {
   paper_id?: number
   /** Credibility tier (research-020). Optional for back-compat with cards persisted pre-iter2. */
   tier?: SourceTier
+  /**
+   * Short 2–3 sentence summary of the source for the card UI (research-023 / research-022). Drawn
+   * from the research_card thesis + lead finding for library cards, or the fetched highlight/abstract
+   * for web/acquired cards. Optional for back-compat with cards persisted before iter-3.
+   */
+  abstract?: string
+  /**
+   * True when this source was fetched from a scholarly search THIS session AND ingested into the
+   * library (research-023 gap-driven acquisition) — the UI tags it "newly added to library".
+   */
+  acquired?: boolean
 }
 
 /** One graded evidence card in the pool. `id` is a stable uuid the UI moves between regions. */

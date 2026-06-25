@@ -31,6 +31,8 @@ import {
   type EvidenceCard,
   type EvidenceSource,
 } from '@/lib/beacon/cases'
+import { acquireAcademic, clampAbstract, isStrongCard, STRONG_TARGET } from '@/lib/beacon/acquire'
+import type { DeepRead } from '@/lib/beacon/deepread'
 import type { Pool } from 'pg'
 import type { getPayload } from 'payload'
 
@@ -39,6 +41,20 @@ type Payload = Awaited<ReturnType<typeof getPayload>>
 const CANDIDATE_CAP = 10
 const MIN_ONTOPIC = 2
 const THIN_SIM = 0.5
+
+/**
+ * A short 2–3 sentence card abstract for a LIBRARY card (research-023): the research_card thesis +
+ * lead finding, falling back to the paper's own abstract / extracted finding / why-it-matters.
+ */
+function libraryAbstract(r: DeepRead): string {
+  const card = r.card
+  const bits: string[] = []
+  if (card?.thesis) bits.push(card.thesis.trim())
+  const f = card?.keyFindings?.[0]
+  if (f?.finding) bits.push(`${f.finding}${f.stat_or_quote ? ` (${f.stat_or_quote})` : ''}`.trim())
+  const text = bits.join(' ').trim() || r.abstract || r.finding || r.whyItMatters || r.curatorSummary || ''
+  return clampAbstract(text)
+}
 
 /**
  * Surface candidates for a query — CARD-FIRST bge-m3 kNN (research_cards) primary, chunk kNN blended
@@ -99,6 +115,7 @@ async function gatherRawItems(
         type: 'internal',
         paper_id: r.id,
         tier,
+        abstract: libraryAbstract(r),
       },
     }
   })
@@ -118,7 +135,14 @@ async function gatherRawItems(
       items.push({
         claim,
         grade: enforceGrade(webBaseGrade(tier), tier),
-        source: { title: w.title, authors: [], url: w.url, type: 'web', tier },
+        source: {
+          title: w.title,
+          authors: [],
+          url: w.url,
+          type: 'web',
+          tier,
+          abstract: clampAbstract(w.highlights.join(' '), 3, 420),
+        },
       })
     }
   }
@@ -189,10 +213,26 @@ export async function buildInitialEvidence(
   pool: Pool,
   payload: Payload,
   question: string,
-  opts: { forceWeb?: boolean; exclude?: Set<number> } = {},
+  opts: { forceWeb?: boolean; exclude?: Set<number>; acquire?: boolean; origin?: string } = {},
 ): Promise<BuiltEvidence> {
   const exclude = opts.exclude ?? new Set<number>()
   const items = await gatherRawItems(pool, payload, question, exclude, { maxSelect: 6, forceWeb: !!opts.forceWeb })
+
+  // ── Gap-driven academic acquisition (research-023) ──
+  // Count STRONG cards (grade A/B AND a research tier). When the library + web-reach come up short on
+  // the question, go FIND real scholarly sources (Crossref + Exa academic), add them as evidence, and
+  // ingest the strong relevant ones into the corpus so the thin topic fills itself.
+  const strongCount = items.filter((it) => isStrongCard(it.grade, it.source.tier)).length
+  if (opts.acquire !== false && strongCount < STRONG_TARGET) {
+    const acq = await acquireAcademic(payload, question, { origin: opts.origin })
+    for (const a of acq.items) {
+      items.push({ claim: a.claim, grade: a.grade, source: a.source })
+    }
+    if (acq.items.length) {
+      console.log(`[beacon/evidence] acquisition: +${acq.items.length} scholarly cards, ${acq.ingested} ingested (strong was ${strongCount}/${STRONG_TARGET})`)
+    }
+  }
+
   const { arguments: args, assignments } = await proposeArguments(question, items)
 
   const buckets: ArgumentBucket[] = args.map((a) => ({ key: a.key, label: a.label, card_ids: [] }))
