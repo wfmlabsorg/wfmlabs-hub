@@ -969,7 +969,7 @@ function StanceMarker({ stance }: { stance?: CardStance }) {
   const s = map[stance]
   return (
     <span
-      title={`This source ${stance === 'neutral' ? 'is context for' : stance + ' '}your position`}
+      title={`This source ${stance === 'neutral' ? 'is context for' : stance === 'mixed' ? 'is mixed on' : stance + ' '}your position`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
