@@ -16,6 +16,79 @@ agree and Payload detects no drift.
 |------|------|
 | `001_deep_research_db.sql` | `research_cards` + card embedding + HNSW index; `papers.full_text_source/_status`; ensures `vector` ext. (research-010 / WFM-84) |
 | `002_paper_chunks_bge_m3_rebuild.sql` | **Destructive + sequenced.** `paper_chunks.embedding` 384→`vector(1024)` (TRUNCATE + resize), ivfflat → HNSW cosine index, for the bge-m3 upgrade. Empties `paper_chunks` until the `paper-embed` worker (roc, research-013) re-embeds the corpus. Idempotent/re-run-safe (skips the truncate when already 1024-d). Apply → `paper-embed` /backfill → deploy research-014. (research-013 / WFM-87) |
+| `003_beacon_cases.sql` | `beacon_cases` — analyst cases; a member has MANY (one row per case, Beacon Case Canvas root). Non-destructive, idempotent. FK `member_id → members(id)` ON DELETE CASCADE; indexes on `member_id` and `(member_id, updated_at DESC)`. Holds the case lifecycle (`status` draft\|assembled\|exported) + the `commission` / `evidence_pool` / `arguments` / `sections` JSONB contract below. (research-016 / WFM-90) |
+
+---
+
+## The Beacon Case contract (code against this)
+
+`beacon_cases` holds analyst cases — a member may have **many** (one row per
+case, saved & listed via `/api/beacon/cases`; no `unique(member_id)`) (`member_id` FK →
+`members(id)` ON DELETE CASCADE). It is a raw table outside Payload (like
+`research_cards`): the case is a high-churn working document with deeply nested,
+variable-shape JSONB driven by the `/api/beacon/*` engine, not the Payload admin
+UI. research-017 (engine) reads/writes it; research-018 (UI) renders it;
+research-019 (export) reads an assembled case. **This is the shared contract —
+keep it in sync with `schema/003_beacon_cases.sql`.**
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `id` | `bigserial` PK | Case id. |
+| `member_id` | `integer` FK → `members(id)` ON DELETE CASCADE | Owning member; every route ownership-checks this. |
+| `title` | `text` | Human-facing case title (often the sharpened question). |
+| `status` | `text` CHECK, default `draft` | `draft` \| `assembled` \| `exported`. |
+| `commission` | `jsonb` | Locked intake — `{decision, skeptic, context, sharpened_question}`. |
+| `evidence_pool` | `jsonb` (array), default `[]` | Graded evidence cards (shape below). |
+| `arguments` | `jsonb` (array), default `[]` | Argument buckets — `[{key, label, card_ids[]}]`. |
+| `sections` | `jsonb` | Connective sections, filled at assemble — `{position, steelman, gaps, bottom_line}`. |
+| `created_at` | `timestamptz` default `now()` | Creation time. |
+| `updated_at` | `timestamptz` default `now()` | Last touch (drives the "My Cases" list order; engine sets on every write). |
+
+**JSONB shapes (the contract research-017/018/019 share):**
+
+```jsonc
+commission:   { "decision": "...", "skeptic": "...", "context": "...",
+                "sharpened_question": "..." }
+
+// evidence_pool — array of graded evidence cards
+evidence_pool: [
+  { "id": "research_card:842" | "card-uuid",   // stable id; references from arguments[].card_ids
+    "claim": "the gradable assertion",
+    "grade": "A",                               // Beacon A–V evidence scale
+    "source": { "title": "...", "authors": ["..."], "url": "...",
+                "type": "internal",             // "internal" (library) | "web" (Exa)
+                "paper_id": 123 },              // present only when type = "internal"
+    "supports_argument": "argument-slug",        // matches an arguments[].key
+    "state": "pool" }                            // "pool" | "cased" | "discarded"
+]
+
+// arguments — ordered buckets the member curates into
+arguments: [
+  { "key": "argument-slug",
+    "label": "Human label for the argument",
+    "card_ids": ["research_card:842", "card-uuid"] }  // ordered; ref evidence_pool[].id
+]
+
+// sections — generated at ASSEMBLE from the curated (state="cased") set ONLY
+sections:     { "position": "...", "steelman": "...", "gaps": "...",
+                "bottom_line": "..." }
+```
+
+Member-supplied data points ("add my own data point") are evidence cards with
+`source.type` web-distinct handling left to the engine — they carry no citation
+(`source.url` may be empty) and the engine tags them accordingly. Assemble cites
+only cards in `state: "cased"` (no-fabrication).
+
+### Design rationale (raw table vs Payload collection)
+
+`beacon_cases` is a raw table outside Payload because: (1) the case is a
+high-churn working document with deeply nested, variable-shape JSONB (evidence
+cards, argument buckets, generated sections) that does not fit Payload's flat
+field/relationship model and would risk schema drift; (2) its lifecycle
+(commission → evidence → curate → assemble → export) is driven entirely by the
+`/api/beacon/*` engine, not the admin UI; (3) the only Payload coupling is the
+owning member, enforced by a plain FK to `members(id)` so a deleted member's
+cases cascade away.
 
 ---
 
