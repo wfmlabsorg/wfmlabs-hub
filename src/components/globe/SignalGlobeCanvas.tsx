@@ -59,6 +59,11 @@ interface Props {
   // dwells on each stop. Persisted by the parent (SignalGlobeHero) in localStorage.
   tourScope?: TourScope
   tourDwellMs?: number
+  // Speed-derived motion rates (hub-023): the speed control governs the idle
+  // auto-rotation rate AND the auto-fly throttle, not just the dwell. Parent maps
+  // the persisted TourSpeed → these via TOUR_SPEED_ROTATE / TOUR_SPEED_FLY_INTERVAL.
+  rotateRate?: number
+  flyIntervalMs?: number
 }
 
 // A single auto-tour stop: either an ambient signal dot or a headline incident.
@@ -146,7 +151,7 @@ const FLY_DURATION = 1.8 // seconds
 const DWELL_MS = 4500 // pause rotation after a fly
 const IDLE_RESUME_MS = 9000 // pause rotation after manual interaction
 const FLY_HEIGHT = 2_600_000
-const SIGNAL_MAX_AGE_MS = 2 * 60 * 60 * 1000
+const SIGNAL_MAX_AGE_MS = 4 * 60 * 60 * 1000 // 4h client fade window (hub-023). Signals older than this never plot/tour; the feed (mins=270) carries a ~30m tail buffer.
 const MAX_FLY_QUEUE = 12
 
 // ── Auto-cycle tour (hub-019) ──
@@ -233,6 +238,8 @@ export default function SignalGlobeCanvas({
   onReady,
   tourScope = 'both',
   tourDwellMs = TOUR_DWELL_MS,
+  rotateRate = ROTATE_RATE,
+  flyIntervalMs = FLY_INTERVAL_MS,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
@@ -273,6 +280,9 @@ export default function SignalGlobeCanvas({
   // Tour controls mirrored into refs for the persistent render loop (hub-020).
   const tourScopeRef = useRef<TourScope>(tourScope)
   const tourDwellRef = useRef<number>(tourDwellMs)
+  // Speed-derived motion rates mirrored into refs for the loop (hub-023).
+  const rotateRateRef = useRef<number>(rotateRate)
+  const flyIntervalRef = useRef<number>(flyIntervalMs)
 
   // highlight state (live, read inside per-frame CallbackProperties — no re-plot)
   const activeSignalIdRef = useRef<number | null>(null) // currently landed/clicked signal
@@ -469,7 +479,7 @@ export default function SignalGlobeCanvas({
             canAutoDrive &&
             scopeAllowsSignals &&
             !flyingRef.current &&
-            now - lastFlyRef.current >= FLY_INTERVAL_MS &&
+            now - lastFlyRef.current >= flyIntervalRef.current &&
             flyQueueRef.current.length > 0
           ) {
             flyQueueRef.current.sort((a, b) => signalSeverityNum(b) - signalSeverityNum(a))
@@ -505,7 +515,7 @@ export default function SignalGlobeCanvas({
               destination: Cesium.Cartesian3.fromRadians(
                 // normalize to [-π, π) so the wrap at the antimeridian is explicit
                 // (fromRadians doesn't canonicalize longitude) — CodeRabbit hub-016
-                Cesium.Math.convertLongitudeRange(c.longitude + ROTATE_RATE),
+                Cesium.Math.convertLongitudeRange(c.longitude + rotateRateRef.current),
                 c.latitude,
                 c.height,
               ),
@@ -1221,6 +1231,9 @@ export default function SignalGlobeCanvas({
     const scopeChanged = tourScopeRef.current !== tourScope
     tourScopeRef.current = tourScope
     tourDwellRef.current = tourDwellMs
+    // Speed-derived rates re-pace the idle spin + auto-fly throttle live (hub-023).
+    rotateRateRef.current = rotateRate
+    flyIntervalRef.current = flyIntervalMs
     if (!readyRef.current) return
     buildTourList()
     if (scopeChanged) {
@@ -1229,7 +1242,7 @@ export default function SignalGlobeCanvas({
       // Apply the new scope promptly (subject to visible + not-interacting gates).
       tourNextAtRef.current = Date.now() + 600
     }
-  }, [tourScope, tourDwellMs])
+  }, [tourScope, tourDwellMs, rotateRate, flyIntervalMs])
 
   // ── react to ticker-row clicks (focusRequest) ──
   // Flies using the clicked row's OWN signal object (carried in focusRequest), so
