@@ -117,9 +117,34 @@ export function BeaconCaseCanvas() {
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
+  // Commission transcript autoscroll (research-030 fix). The old code called
+  // `chatEndRef.scrollIntoView()` on every new message — which scrolls EVERY scrollable ancestor,
+  // including the document/window, so the whole page drifted downward as Beacon responded (the same
+  // class of bug fixed in hub-017's ChatPanel). We now keep the viewport STABLE: scroll ONLY within
+  // the chat container, and only when the member is already pinned near the bottom (so we never yank
+  // them away from earlier text). We never touch window/document scroll on a new response.
+  const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  // "Was the member pinned to the bottom?" — captured from the LAST scroll position BEFORE new content
+  // lands, NOT after. Measuring after the append is the bug CodeRabbit flagged: a long Beacon reply or
+  // the loading row can add >80px, which pushes the (unchanged) scrollTop out of the <80px near-bottom
+  // band, so a user who was following along would wrongly stop being followed. Content appends don't
+  // fire `scroll`, so this ref keeps the member's real pre-append intent; we only auto-follow when true.
+  const wasNearBottomRef = useRef(true)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const el = chatScrollRef.current
+    if (!el) return
+    const measure = () => {
+      wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    }
+    measure() // seed from the current position when the transcript mounts
+    el.addEventListener('scroll', measure, { passive: true })
+    return () => el.removeEventListener('scroll', measure)
+  }, [phase])
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (!el) return
+    // Container-only follow (never window/document scroll), and only if they were already at the bottom.
+    if (wasNearBottomRef.current) el.scrollTop = el.scrollHeight
   }, [messages, thinking])
 
   // Clicking a [E#] citation chip scrolls to its source card and pulses a highlight ring.
@@ -520,7 +545,7 @@ export function BeaconCaseCanvas() {
           thinking={thinking}
           onSend={sendCommission}
           loadingEvidence={loadingEvidence}
-          chatEndRef={chatEndRef}
+          chatScrollRef={chatScrollRef}
           savedCases={savedCases}
           loadingCaseId={loadingCaseId}
           onLoadCase={loadCase}
@@ -714,12 +739,12 @@ function IntakeView(props: {
   thinking: boolean
   onSend: () => void
   loadingEvidence: boolean
-  chatEndRef: React.RefObject<HTMLDivElement | null>
+  chatScrollRef: React.RefObject<HTMLDivElement | null>
   savedCases: CaseSummary[]
   loadingCaseId: number | null
   onLoadCase: (id: number) => void
 }) {
-  const { messages, input, setInput, thinking, onSend, loadingEvidence, chatEndRef, savedCases, loadingCaseId, onLoadCase } =
+  const { messages, input, setInput, thinking, onSend, loadingEvidence, chatScrollRef, savedCases, loadingCaseId, onLoadCase } =
     props
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: '1rem', alignItems: 'start' }}>
@@ -727,6 +752,7 @@ function IntakeView(props: {
       <div style={{ ...region }}>
         <RegionHeader label="Commission" hint="Tell Beacon the decision you need to defend. It locks a sharp question, then fills the pool." />
         <div
+          ref={chatScrollRef}
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -767,7 +793,6 @@ function IntakeView(props: {
               {loadingEvidence ? 'Pulling and grading the evidence…' : 'Beacon is thinking…'}
             </div>
           )}
-          <div ref={chatEndRef} />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
           <textarea

@@ -23,6 +23,7 @@
 import { deepRead, type Grade } from '@/lib/beacon/deepread'
 import type { RetrievedPaper } from '@/lib/beacon/retrieval'
 import { webReach } from '@/lib/beacon/webreach'
+import { callClaude } from '@/lib/beacon/claude'
 import { classifyWebTier, enforceGrade } from '@/lib/beacon/tiers'
 import { toCardStance, type CardStance, type EvidenceSource, type SourceTier } from '@/lib/beacon/cases'
 import type { getPayload } from 'payload'
@@ -33,12 +34,21 @@ type Payload = Awaited<ReturnType<typeof getPayload>>
 const STRONG_GRADES = new Set<Grade>(['A', 'B'])
 const RESEARCH_TIERS = new Set<SourceTier>(['peer_reviewed', 'preprint', 'institutional'])
 
-/** Gap threshold: fewer than this many STRONG cards across the question triggers acquisition. */
+/** Gap threshold: fewer than this many STRONG (A/B + research-tier) cards triggers acquisition. */
 export const STRONG_TARGET = 2
 /** Hard cost cap: never ingest more than this many new papers per case. */
 export const MAX_ACQUIRE = 5
-/** How many scholarly candidates to deep-read per acquisition pass. */
+/** How many scholarly candidates to deep-read in a single (non-iterated) acquisition pass. */
 const ACQUIRE_CANDIDATES = 8
+
+// ── Iterated acquisition bounds (research-030) ──
+/** Max query variants (incl. the original) an iterated acquisition will try. */
+export const ACQUIRE_MAX_ROUNDS = 3
+/** Hard global cap on deep-read-graded candidates across ALL rounds — the cost ceiling. */
+export const ACQUIRE_CANDIDATE_BUDGET = 15
+/** Per-round search breadth when iterating (kept small so the budget spreads across rounds). */
+const ITER_CROSSREF_ROWS = 6
+const ITER_EXA_ROWS = 4
 
 /** Academic preprint / publisher / repository domains for Exa's academic filter. */
 const ACADEMIC_DOMAINS = [
@@ -298,85 +308,224 @@ export interface AcquireResult {
 }
 
 /**
- * Run a full academic acquisition pass for `question`:
- *   1. Search Crossref (peer-reviewed) + Exa academic (preprints) for scholarly sources.
- *   2. Dedup against the existing library (by URL/title) so we never re-add a paper.
- *   3. Keep ONLY peer_reviewed/preprint/institutional tiers (vendor/web excluded outright).
- *   4. Grade every survivor with the iter-2 deepRead appraiser (reading the fetched abstract).
- *   5. Return supporting hits as evidence items (tier + abstract + link, tagged acquired), and
- *      INGEST the STRONG (A/B) relevant ones into the library (bounded to MAX_ACQUIRE).
- *
- * Cite-only-what-was-fetched is preserved: claims/abstracts come straight from the real abstract or
- * Exa highlight. Returns [] items on any failure (acquisition must never take the route down).
+ * Mutable accumulator threaded through one or more acquisition rounds. Dedup sets persist across
+ * rounds so a later query variant never re-grades or re-ingests a hit an earlier round already saw.
  */
-export async function acquireAcademic(
+interface AcquireAccum {
+  items: AcquiredItem[]
+  toIngest: ReturnType<typeof toIngestPaper>[]
+  seenDoi: Set<string>
+  seenTitle: Set<string>
+  searched: number
+  /** Deep-read-graded candidates consumed so far — capped at ACQUIRE_CANDIDATE_BUDGET. */
+  graded: number
+}
+
+const newAccum = (): AcquireAccum => ({
+  items: [],
+  toIngest: [],
+  seenDoi: new Set<string>(),
+  seenTitle: new Set<string>(),
+  searched: 0,
+  graded: 0,
+})
+
+/** Count of STRONG (A/B + research-tier) items collected so far — the outcome we iterate toward. */
+const strongSoFar = (acc: AcquireAccum): number =>
+  acc.items.filter((it) => isStrongCard(it.grade, it.source.tier)).length
+
+/**
+ * ONE acquisition round: search `searchQuery` (Crossref + Exa academic), dedup against BOTH the
+ * existing library AND what earlier rounds already pulled, keep only research-tier hits, then grade
+ * every survivor against the ORIGINAL `gradeQuestion` with the iter-2 deepRead appraiser. Supporting
+ * research-tier hits become evidence items; the STRONG (A/B) ones are collected for ingest. Honors
+ * the global deep-read candidate budget so iterating stays cost-bounded. Mutates `acc`; never throws.
+ *
+ * "B+ enforced": an item only counts as STRONG (and only gets ingested / satisfies the gap) when its
+ * appraiser grade is A or B AND its tier is peer_reviewed/preprint/institutional — a peer-reviewed
+ * source that grades only C (tangential to the question) is kept as evidence but does NOT count.
+ */
+async function acquireRound(
   payload: Payload,
-  question: string,
-): Promise<AcquireResult> {
-  const empty: AcquireResult = { items: [], searched: 0, ingested: 0 }
-  const q = (question || '').trim()
-  if (!q) return empty
+  searchQuery: string,
+  gradeQuestion: string,
+  acc: AcquireAccum,
+  opts: { crossrefRows: number; exaRows: number },
+): Promise<void> {
+  const sq = (searchQuery || '').trim()
+  if (!sq || acc.graded >= ACQUIRE_CANDIDATE_BUDGET) return
 
-  // 1. Search both scholarly sources in parallel, merge + dedup-within-results.
-  const [crossref, exa] = await Promise.all([
-    crossrefSearch(q, ACQUIRE_CANDIDATES),
-    exaAcademic(q, 6),
-  ])
-  const merged = mergeHits(crossref, exa).slice(0, ACQUIRE_CANDIDATES + 4)
-  if (merged.length === 0) return empty
+  // The whole round is contained: search, dedup, and deepRead grading can each reject, and this runs on
+  // the BLOCKING evidence path (/api/beacon/evidence). A round MUST never take that route down — any
+  // failure degrades to the partial work already accumulated in `acc`, and the caller's loop continues.
+  try {
+    // 1. Search both scholarly sources in parallel, merge + dedup-within-results.
+    const [crossref, exa] = await Promise.all([
+      crossrefSearch(sq, opts.crossrefRows),
+      exaAcademic(sq, opts.exaRows),
+    ])
+    const merged = mergeHits(crossref, exa)
+    acc.searched += merged.length
+    if (merged.length === 0) return
 
-  // 2. Dedup against the existing corpus.
-  const fresh: AcquiredHit[] = []
-  for (const hit of merged) {
-    if (!(await isDuplicate(payload, hit))) fresh.push(hit)
-  }
-  if (fresh.length === 0) return { ...empty, searched: merged.length }
-
-  // 3. Keep only scholarly tiers — vendor/web_other excluded from acquisition outright.
-  const scholarly = fresh.filter((h) => RESEARCH_TIERS.has(classifyWebTier(h.url, h.title, h.abstract)))
-  if (scholarly.length === 0) return { ...empty, searched: merged.length }
-
-  // 4. Grade each survivor with the SAME deepRead appraiser, reading the fetched abstract.
-  const synthetics = scholarly.map(toSynthetic)
-  const byId = new Map(synthetics.map((s, i) => [s.id, scholarly[i]]))
-  const deep = await deepRead(synthetics, q, { maxSelect: synthetics.length })
-
-  // 5. Build evidence items + collect the strong relevant ones for ingest.
-  const items: AcquiredItem[] = []
-  const toIngest: ReturnType<typeof toIngestPaper>[] = []
-  for (const r of deep.selected) {
-    if (!r.supports || r.grade === '—') continue
-    const hit = byId.get(r.id)
-    if (!hit) continue
-    const tier = classifyWebTier(hit.url, hit.title, hit.abstract)
-    if (!RESEARCH_TIERS.has(tier)) continue
-    const grade = enforceGrade(r.grade, tier)
-    const claim = (r.finding || hit.title).trim()
-    items.push({
-      claim,
-      grade,
-      stance: toCardStance(r.stance),
-      relevance: r.rationale || undefined,
-      source: {
-        title: hit.title,
-        authors: hit.authors,
-        url: hit.url,
-        type: 'web',
-        tier,
-        abstract: clampAbstract(hit.abstract),
-        acquired: true,
-      },
-    })
-    if (isStrongCard(grade, tier) && toIngest.length < MAX_ACQUIRE) {
-      toIngest.push(toIngestPaper(hit, tier, r.finding))
+    // 2a. Dedup against earlier rounds this session (by DOI then normalized title).
+    const novel: AcquiredHit[] = []
+    for (const hit of merged) {
+      const doiKey = hit.doi?.toLowerCase()
+      const titleKey = normTitle(hit.title)
+      if ((doiKey && acc.seenDoi.has(doiKey)) || (titleKey && acc.seenTitle.has(titleKey))) continue
+      if (doiKey) acc.seenDoi.add(doiKey)
+      if (titleKey) acc.seenTitle.add(titleKey)
+      novel.push(hit)
     }
-  }
+    if (novel.length === 0) return
 
-  const ingested = await ingestPapers(toIngest)
-  // Only the papers actually written to the library are honestly "newly added"; if ingest no-oped
-  // (missing key/origin in a preview), drop the acquired tag so we don't over-claim.
-  if (ingested === 0) {
-    for (const it of items) it.source.acquired = false
+    // 2b. Dedup against the existing corpus.
+    const fresh: AcquiredHit[] = []
+    for (const hit of novel) {
+      if (!(await isDuplicate(payload, hit))) fresh.push(hit)
+    }
+    if (fresh.length === 0) return
+
+    // 3. Keep only scholarly tiers — vendor/web_other excluded from acquisition outright.
+    const scholarly = fresh.filter((h) => RESEARCH_TIERS.has(classifyWebTier(h.url, h.title, h.abstract)))
+    if (scholarly.length === 0) return
+
+    // 4. Grade survivors with the SAME deepRead appraiser, respecting the global candidate budget.
+    const room = Math.max(0, ACQUIRE_CANDIDATE_BUDGET - acc.graded)
+    const batch = scholarly.slice(0, room)
+    if (batch.length === 0) return
+    const synthetics = batch.map(toSynthetic)
+    const byId = new Map(synthetics.map((s, i) => [s.id, batch[i]]))
+    const deep = await deepRead(synthetics, gradeQuestion, { maxSelect: synthetics.length })
+    acc.graded += batch.length
+
+    // 5. Build evidence items + collect the strong relevant ones for ingest.
+    for (const r of deep.selected) {
+      if (!r.supports || r.grade === '—') continue
+      const hit = byId.get(r.id)
+      if (!hit) continue
+      const tier = classifyWebTier(hit.url, hit.title, hit.abstract)
+      if (!RESEARCH_TIERS.has(tier)) continue
+      const grade = enforceGrade(r.grade, tier)
+      const claim = (r.finding || hit.title).trim()
+      acc.items.push({
+        claim,
+        grade,
+        stance: toCardStance(r.stance),
+        relevance: r.rationale || undefined,
+        source: {
+          title: hit.title,
+          authors: hit.authors,
+          url: hit.url,
+          type: 'web',
+          tier,
+          abstract: clampAbstract(hit.abstract),
+          acquired: true,
+        },
+      })
+      if (isStrongCard(grade, tier) && acc.toIngest.length < MAX_ACQUIRE) {
+        acc.toIngest.push(toIngestPaper(hit, tier, r.finding))
+      }
+    }
+  } catch (e) {
+    // Degrade to whatever this round already accumulated — never bubble up into the evidence route.
+    console.error('[beacon/acquire] round failed, degrading to partial:', String(e).slice(0, 160))
   }
-  return { items, searched: merged.length, ingested }
+}
+
+/**
+ * Ingest the STRONG acquisitions into the corpus (the flywheel) and finalize the result. Only papers
+ * actually written to the library are honestly "newly added"; if ingest no-oped (missing key/origin
+ * in a preview), the acquired tag is dropped so the UI never over-claims.
+ */
+async function finalizeAcquire(acc: AcquireAccum): Promise<AcquireResult> {
+  const ingested = await ingestPapers(acc.toIngest)
+  if (ingested === 0) {
+    for (const it of acc.items) it.source.acquired = false
+  }
+  return { items: acc.items, searched: acc.searched, ingested }
+}
+
+/**
+ * Single-pass academic acquisition for `question` (used by the paper counter-search, paper.ts):
+ * one round of Crossref + Exa, graded against the question, strong hits ingested. Returns [] items
+ * on any failure (acquisition must never take the route down).
+ */
+export async function acquireAcademic(payload: Payload, question: string): Promise<AcquireResult> {
+  const q = (question || '').trim()
+  if (!q) return { items: [], searched: 0, ingested: 0 }
+  const acc = newAccum()
+  try {
+    await acquireRound(payload, q, q, acc, { crossrefRows: ACQUIRE_CANDIDATES, exaRows: 6 })
+    return await finalizeAcquire(acc)
+  } catch (e) {
+    console.error('[beacon/acquire] acquireAcademic failed, returning partial:', String(e).slice(0, 160))
+    return { items: acc.items, searched: acc.searched, ingested: 0 }
+  }
+}
+
+/**
+ * Produce up to ACQUIRE_MAX_ROUNDS search queries for an iterated acquisition: the original question
+ * first, then reformulations that vary the terms toward the CORE empirical claim (the academic
+ * construct names, synonyms, the measurable relationship) to surface scholarly sources the first
+ * phrasing missed. One cheap Claude call; degrades to just the original question on any failure (so
+ * iteration safely collapses to a single round rather than erroring).
+ */
+async function queryVariants(question: string): Promise<string[]> {
+  const base = [question]
+  const want = ACQUIRE_MAX_ROUNDS - 1
+  if (want <= 0) return base
+  const system = `You reformulate a practitioner's research question into ${want} ALTERNATIVE scholarly search queries, to find peer-reviewed evidence the original phrasing might miss. Vary the terms toward the core empirical claim: use the academic construct names, synonyms, and the measurable relationship. Each query is a short search string (not a sentence), materially different from the original and from each other. Respond with ONLY minified JSON: {"queries":["...","..."]}`
+  try {
+    const raw = await callClaude(system, [{ role: 'user', content: `QUESTION:\n${question}` }], 300)
+    const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1)) as { queries?: unknown }
+    const variants = Array.isArray(parsed.queries)
+      ? parsed.queries
+          .map((v) => String(v ?? '').trim())
+          .filter((v) => v.length > 0 && v.toLowerCase() !== question.toLowerCase())
+      : []
+    return [...base, ...variants].slice(0, ACQUIRE_MAX_ROUNDS)
+  } catch (e) {
+    console.error('[beacon/acquire] queryVariants failed, single-round:', String(e).slice(0, 140))
+    return base
+  }
+}
+
+/**
+ * OUTCOME-DRIVEN iterated academic acquisition (research-030). When a case comes up short on STRONG
+ * evidence, don't settle for one thin pass: ITERATE across up to ACQUIRE_MAX_ROUNDS query variants
+ * (varying terms toward the core claim), pulling fresh Crossref/Exa-academic candidates and grading
+ * each with deepRead, until the case has at least STRONG_TARGET sources that GRADE A or B on the
+ * question — or the bounded effort (≤ ACQUIRE_MAX_ROUNDS rounds, ≤ ACQUIRE_CANDIDATE_BUDGET graded
+ * candidates) is exhausted. Stops the moment the strong target is met. Strong (B+) acquisitions are
+ * ingested into the library (the flywheel). If NO source grades B+ after the bounded effort, it
+ * returns whatever (weaker) items it found honestly — the case shows the real gap, never a fabricated
+ * strength. Returns [] items on any failure (acquisition must never take the route down).
+ */
+export async function acquireAcademicIterated(payload: Payload, question: string): Promise<AcquireResult> {
+  const q = (question || '').trim()
+  if (!q) return { items: [], searched: 0, ingested: 0 }
+
+  const acc = newAccum()
+  // The whole iterated loop is contained too: even if queryVariants / a round / finalize rejects
+  // unexpectedly, we return the partial items already gathered rather than 500 the evidence route.
+  try {
+    const variants = await queryVariants(q)
+    for (const variant of variants) {
+      if (acc.graded >= ACQUIRE_CANDIDATE_BUDGET) break
+      // Search with the (possibly reformulated) variant, but always grade relevance to the ORIGINAL q.
+      await acquireRound(payload, variant, q, acc, { crossrefRows: ITER_CROSSREF_ROWS, exaRows: ITER_EXA_ROWS })
+      if (strongSoFar(acc) >= STRONG_TARGET) break // outcome met — stop early, keep cost down.
+    }
+    const result = await finalizeAcquire(acc)
+    console.log(
+      `[beacon/acquire] iterated: ${variants.length} variant(s), ${acc.graded} graded, ` +
+        `${strongSoFar(acc)} strong (A/B), ${result.items.length} items, ${result.ingested} ingested`,
+    )
+    return result
+  } catch (e) {
+    console.error('[beacon/acquire] iterated failed, returning partial:', String(e).slice(0, 160))
+    return { items: acc.items, searched: acc.searched, ingested: 0 }
+  }
 }
