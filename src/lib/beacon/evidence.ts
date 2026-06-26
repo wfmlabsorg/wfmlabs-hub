@@ -33,7 +33,7 @@ import {
   type EvidenceCard,
   type EvidenceSource,
 } from '@/lib/beacon/cases'
-import { acquireAcademic, clampAbstract, isStrongCard, STRONG_TARGET } from '@/lib/beacon/acquire'
+import { acquireAcademicIterated, clampAbstract, isStrongCard, STRONG_TARGET } from '@/lib/beacon/acquire'
 import type { DeepRead } from '@/lib/beacon/deepread'
 import type { Pool } from 'pg'
 import type { getPayload } from 'payload'
@@ -226,18 +226,21 @@ export async function buildInitialEvidence(
   const exclude = opts.exclude ?? new Set<number>()
   const items = await gatherRawItems(pool, payload, question, exclude, { maxSelect: 6, forceWeb: !!opts.forceWeb })
 
-  // ── Gap-driven academic acquisition (research-023) ──
+  // ── Gap-driven, OUTCOME-DRIVEN academic acquisition (research-023 → strengthened in research-030) ──
   // Count STRONG cards (grade A/B AND a research tier). When the library + web-reach come up short on
-  // the question, go FIND real scholarly sources (Crossref + Exa academic), add them as evidence, and
-  // ingest the strong relevant ones into the corpus so the thin topic fills itself.
+  // the question, run acquisition as a BLOCKING pre-step that ITERATES across query variants until it
+  // has added ≥STRONG_TARGET A/B-grade scholarly sources (or bounded-exhausts), ingesting the strong
+  // relevant ones so the thin topic fills itself. Honest-gap preserved: if nothing grades B+, we keep
+  // whatever weaker items it found and return — never fabricating strength.
   const strongCount = items.filter((it) => isStrongCard(it.grade, it.source.tier)).length
   if (opts.acquire !== false && strongCount < STRONG_TARGET) {
-    const acq = await acquireAcademic(payload, question)
+    const acq = await acquireAcademicIterated(payload, question)
     for (const a of acq.items) {
       items.push({ claim: a.claim, grade: a.grade, source: a.source, stance: a.stance, relevance: a.relevance })
     }
     if (acq.items.length) {
-      console.log(`[beacon/evidence] acquisition: +${acq.items.length} scholarly cards, ${acq.ingested} ingested (strong was ${strongCount}/${STRONG_TARGET})`)
+      const addedStrong = acq.items.filter((a) => isStrongCard(a.grade, a.source.tier)).length
+      console.log(`[beacon/evidence] iterated acquisition: +${acq.items.length} scholarly cards (${addedStrong} strong A/B), ${acq.ingested} ingested (strong was ${strongCount}/${STRONG_TARGET})`)
     }
   }
 
