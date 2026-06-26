@@ -78,8 +78,28 @@ interface PopupState {
   timeText: string
   approximate: boolean
   status: string | null
+  // 2–3 sentence narrative preview shown before the view-full link (hub-021).
+  summary: string | null
   incidentSlug: string | null
   signalId: number | null
+}
+
+// Build a compact 2–3 sentence preview from a longer narrative (hub-021): trims
+// whitespace, takes the first few sentences, and hard-caps the length so the
+// popup stays small by default. Returns the preview plus whether the source ran
+// longer (so the popup knows to offer an expand/"more" control).
+const PREVIEW_MAX_SENTENCES = 3
+const PREVIEW_MAX_CHARS = 260
+function summaryPreview(full: string | null): { preview: string; truncated: boolean } {
+  const text = (full || '').replace(/\s+/g, ' ').trim()
+  if (!text) return { preview: '', truncated: false }
+  // First 2–3 sentences (split on sentence-ending punctuation + space).
+  const sentences = text.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) || [text]
+  let preview = sentences.slice(0, PREVIEW_MAX_SENTENCES).join(' ').trim()
+  if (preview.length > PREVIEW_MAX_CHARS) {
+    preview = preview.slice(0, PREVIEW_MAX_CHARS - 1).trimEnd() + '…'
+  }
+  return { preview, truncated: preview.length < text.length }
 }
 
 // ── popup builders (fresh relative time each open) ──
@@ -95,6 +115,7 @@ function buildSignalPopup(s: GlobeSignal): PopupState {
     timeText: timeAgo(s.created_at),
     approximate: !!s.geo_source && s.geo_source !== 'precise',
     status: null,
+    summary: s.message || null,
     incidentSlug: s.incident_slug,
     signalId: s.id,
   }
@@ -111,6 +132,7 @@ function buildIncidentPopup(p: GlobeIncident): PopupState {
     timeText: p.created_at ? timeAgo(p.created_at) : '',
     approximate: false,
     status: p.status || null,
+    summary: p.impact_summary || p.description || null,
     incidentSlug: p.slug,
     signalId: null,
   }
@@ -259,6 +281,12 @@ export default function SignalGlobeCanvas({
   // popup tracking (position updated imperatively each frame to avoid re-renders)
   const popupPosRef = useRef<any>(null)
   const [popup, setPopup] = useState<PopupState | null>(null)
+  // Whether the popup's narrative preview is expanded to the full text (hub-021).
+  // Reset to collapsed each time a new entity's popup opens.
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  useEffect(() => {
+    setSummaryExpanded(false)
+  }, [popup])
 
   // latest props mirrored into refs for use inside the persistent render loop
   const signalsRef = useRef<GlobeSignal[]>(signals)
@@ -1014,6 +1042,7 @@ export default function SignalGlobeCanvas({
         timeText: '',
         approximate: false,
         status: null,
+        summary: null,
         incidentSlug: opts.incidentSlug ?? null,
         signalId: opts.signalId ?? null,
       })
@@ -1323,9 +1352,44 @@ export default function SignalGlobeCanvas({
                 ≈ approximate location
               </div>
             )}
+            {/* 2–3 sentence narrative preview (hub-021): compact by default, with a
+                more/less toggle when the source narrative runs longer. */}
+            {(() => {
+              const full = (popup.summary || '').replace(/\s+/g, ' ').trim()
+              if (!full) return null
+              const { preview, truncated } = summaryPreview(full)
+              return (
+                <div style={{ marginBottom: '0.45rem' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                    {summaryExpanded ? full : preview}
+                  </div>
+                  {truncated && (
+                    <button
+                      onClick={() => setSummaryExpanded((v) => !v)}
+                      style={{
+                        marginTop: '0.2rem',
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        color: '#22d3ee',
+                        cursor: 'pointer',
+                        fontSize: '0.65rem',
+                        fontWeight: 600,
+                        fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+                      }}
+                      aria-expanded={summaryExpanded}
+                    >
+                      {summaryExpanded ? 'less' : 'more'}
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
             {popup.incidentSlug && (
               <a
                 href={`/incidents/${popup.incidentSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{ fontSize: '0.72rem', color: '#22d3ee', fontWeight: 600, textDecoration: 'none' }}
               >
                 View incident →
@@ -1334,6 +1398,8 @@ export default function SignalGlobeCanvas({
             {!popup.incidentSlug && popup.signalId != null && (
               <a
                 href={`/signals/${popup.signalId}`}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{ fontSize: '0.72rem', color: '#22d3ee', fontWeight: 600, textDecoration: 'none' }}
               >
                 View signal →
