@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { ChatPanel } from '@/components/chat'
 import { IncidentAdminActions } from '@/components/incidents/IncidentAdminActions'
 import { IncidentCommunityValidation } from '@/components/incidents/IncidentCommunityValidation'
+import { CorroborationBadge, CorroborationSources } from '@/components/incidents/CorroborationBadge'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +67,7 @@ interface Incident {
   article_count: number
   community_confirmations: number
   community_denials: number
+  corroboration: unknown
   updated_at: string
   created_at: string
 }
@@ -309,6 +311,9 @@ export default async function IncidentDetailPage({
               ONGOING
             </span>
           )}
+
+          {/* Corroboration badge */}
+          <CorroborationBadge corroboration={incident.corroboration} />
 
           {/* Age */}
           <span style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>
@@ -653,6 +658,9 @@ export default async function IncidentDetailPage({
           </div>
         </div>
       )}
+
+      {/* ── External Corroboration ── */}
+      <CorroborationSources corroboration={incident.corroboration} />
 
       {/* ── Affected Regions ── */}
       {incident.affected_regions && incident.affected_regions.length > 0 && (

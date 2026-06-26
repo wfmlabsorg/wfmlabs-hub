@@ -1,5 +1,6 @@
 import React from 'react'
 import { isMobile } from '@/lib/mobile'
+import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -50,6 +51,7 @@ interface Incident {
   validation_status: string
   community_confirmations: number
   community_denials: number
+  corroboration: unknown
 }
 
 // ── Design tokens ──
@@ -699,6 +701,9 @@ export default async function IncidentsPage({
                           ONGOING
                         </span>
                       )}
+
+                      {/* Corroboration badge */}
+                      <CorroborationBadge corroboration={incident.corroboration} />
 
                       {/* Timestamp */}
                       <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>
