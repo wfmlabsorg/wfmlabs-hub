@@ -21,6 +21,8 @@ import {
   dedupeSignalsByEvent,
   timeAgo,
   TOUR_SPEED_DWELL,
+  TOUR_SPEED_ROTATE,
+  TOUR_SPEED_FLY_INTERVAL,
   ROC_GLOBE_FEED,
 } from './globeShared'
 
@@ -173,6 +175,8 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
           onFocus={setFocusedId}
           tourScope={tourScope}
           tourDwellMs={TOUR_SPEED_DWELL[tourSpeed]}
+          rotateRate={TOUR_SPEED_ROTATE[tourSpeed]}
+          flyIntervalMs={TOUR_SPEED_FLY_INTERVAL[tourSpeed]}
         />
 
         <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} />

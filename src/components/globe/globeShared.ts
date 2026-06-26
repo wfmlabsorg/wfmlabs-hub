@@ -62,6 +62,23 @@ export const TOUR_SPEED_DWELL: Record<TourSpeed, number> = {
   fast: 2500,
 }
 
+// Speed presets → idle auto-rotation rate (rad/frame). The speed control governs
+// the spin too, not just the tour dwell (hub-023). `medium` keeps the historical
+// ROTATE_RATE (0.0009) so the default feels unchanged.
+export const TOUR_SPEED_ROTATE: Record<TourSpeed, number> = {
+  slow: 0.0005,
+  medium: 0.0009,
+  fast: 0.0018,
+}
+
+// Speed presets → auto-fly throttle (ms; min gap between fresh-signal landings).
+// `medium` keeps the historical FLY_INTERVAL_MS (6000) (hub-023).
+export const TOUR_SPEED_FLY_INTERVAL: Record<TourSpeed, number> = {
+  slow: 9000,
+  medium: 6000,
+  fast: 3500,
+}
+
 // Category → point color. Delegated to the canonical domain map (hub-017) so the
 // globe dots match the signals page + landing badges exactly.
 export function signalColor(category: string | null | undefined): string {
@@ -261,8 +278,9 @@ export function timeAgo(date: string): string {
 export const CESIUM_VERSION = '1.124'
 export const CESIUM_CDN_BASE = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VERSION}/Build/Cesium/`
 export const OVIX_API_BASE = 'https://ovix-api.tedlango.workers.dev'
-// Poll the feed at the endpoint's max window (360 min). The default 150 returns
-// only ~6 signals, which starved the globe + ticker and left auto-fly with no
-// material; 360 returns ~40+ resolved/coord-bearing signals so the ticker is
-// populated and every ticker row is flyable (hub-013).
-export const ROC_GLOBE_FEED = '/api/roc-globe?mins=360'
+// Poll the feed for the 4h client fade window plus a ~30m tail buffer
+// (mins=270) so the fade edge always has data and signals age out smoothly
+// rather than popping on a refresh (hub-023). 270 min comfortably populates the
+// ticker + every ticker row stays flyable (supersedes the old 360/150 tuning
+// from hub-013, when the client only faded over 2h).
+export const ROC_GLOBE_FEED = '/api/roc-globe?mins=270'

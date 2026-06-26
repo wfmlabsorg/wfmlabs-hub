@@ -6,8 +6,9 @@ import { regionCentroid } from '@/lib/regionCentroids'
  *
  * Same raw-SQL / same-origin pattern as /api/incidents and /api/roc-signals.
  *
- * SIGNALS: recent signals (default last 150 min — a small buffer past the
- * client's 2h fade window so the globe can animate the fading tail) that
+ * SIGNALS: recent signals (default last 240 min = the client's 4h fade window;
+ * the client requests mins=270 for a ~30m tail buffer so the fade edge always
+ * has data — hub-023) that
  * resolve to coordinates via a three-tier lookup:
  *   Tier 1 — precise metadata->>'lat' / metadata->>'lon' when present & numeric
  *            (EONET / weather feeds, ~75% of recent signals). geo_source='precise'.
@@ -35,12 +36,13 @@ import { regionCentroid } from '@/lib/regionCentroids'
  * (The globe currently keeps its own /api/incidents fetch for the full set
  * incl. closed; this key is provided for completeness.)
  *
- * GET /api/roc-globe?mins=150  (public, read-only)
+ * GET /api/roc-globe?mins=240  (public, read-only)
  */
 export async function GET(req: Request) {
   const url = new URL(req.url)
-  // Window in minutes; default 150 (2h fade + 30m tail buffer). Clamp 30..360.
-  const mins = Math.min(Math.max(parseInt(url.searchParams.get('mins') || '150', 10) || 150, 30), 360)
+  // Window in minutes; default 240 (= the client's 4h fade window, hub-023).
+  // Clamp 30..360 so the client's mins=270 tail-buffer request is honored.
+  const mins = Math.min(Math.max(parseInt(url.searchParams.get('mins') || '240', 10) || 240, 30), 360)
 
   try {
     const pool = getPool()
