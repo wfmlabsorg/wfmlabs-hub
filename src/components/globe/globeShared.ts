@@ -89,14 +89,16 @@ export function signalSeverityNum(s: GlobeSignal): number {
 }
 
 // Signals are the AMBIENT tier — small fading dots. Kept deliberately small
-// (max 6px) so even a high-severity signal stays visibly subordinate to the
+// (max 7px) so even a high-severity signal stays visibly subordinate to the
 // smallest incident marker (12px). Severity still nudges size for texture.
+// Floor raised to 4px (hub-019) so the lowest-severity dots stay legible against
+// the density glow without crossing into the incident tier.
 export function signalSize(s: GlobeSignal): number {
   const n = signalSeverityNum(s)
-  if (n >= 8) return 6
-  if (n >= 6) return 5
-  if (n >= 4) return 4
-  return 3
+  if (n >= 8) return 7
+  if (n >= 6) return 6
+  if (n >= 4) return 5
+  return 4
 }
 
 // Short severity chip label, e.g. "7.0" or "SEVERE".
