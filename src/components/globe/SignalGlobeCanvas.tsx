@@ -25,6 +25,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
   type GlobeSignal,
   type GlobeIncident,
+  type TourScope,
   signalColor,
   incidentColor,
   incidentSize,
@@ -54,7 +55,18 @@ interface Props {
   focusRequest: FocusRequest | null
   onFocus: (id: number | null) => void
   onReady?: () => void
+  // Auto-tour controls (hub-020): what the camera cycles through + how long it
+  // dwells on each stop. Persisted by the parent (SignalGlobeHero) in localStorage.
+  tourScope?: TourScope
+  tourDwellMs?: number
 }
+
+// A single auto-tour stop: either an ambient signal dot or a headline incident.
+// Lets the tour cycle a mixed set (hub-020) — incidents are flown via the rich
+// incident path, signals via the ambient path, each with its own highlight.
+type TourStop =
+  | { kind: 'signal'; signal: GlobeSignal }
+  | { kind: 'incident'; incident: GlobeIncident }
 
 interface PopupState {
   kind: 'signal' | 'incident'
@@ -197,6 +209,8 @@ export default function SignalGlobeCanvas({
   focusRequest,
   onFocus,
   onReady,
+  tourScope = 'both',
+  tourDwellMs = TOUR_DWELL_MS,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const popupRef = useRef<HTMLDivElement | null>(null)
@@ -204,6 +218,11 @@ export default function SignalGlobeCanvas({
   const viewerRef = useRef<any>(null)
   const cesiumRef = useRef<any>(null)
   const readyRef = useRef(false)
+  // Shared horizon occluder (hub-020): updated each tick with the camera
+  // position, read inside per-entity `show` CallbackProperties so dots on the
+  // FAR side of the globe are hidden (no more see-through) while near-side dots
+  // keep disableDepthTestDistance:∞ and stay crisp at the limb.
+  const occluderRef = useRef<any>(null)
 
   // entity bookkeeping
   const densityEntitiesRef = useRef<any[]>([]) // heat-glow billboards (beneath dots)
@@ -221,12 +240,17 @@ export default function SignalGlobeCanvas({
   const lastFlyRef = useRef(0)
   const idleResumeRef = useRef(0)
 
-  // auto-cycle tour state (hub-019)
-  const tourListRef = useRef<GlobeSignal[]>([]) // prioritized loop, rebuilt on feed refresh
+  // auto-cycle tour state (hub-019 / hub-020)
+  const tourListRef = useRef<TourStop[]>([]) // prioritized loop (mixed signals+incidents), rebuilt on feed/scope refresh
   const tourCursorRef = useRef(0) // index into tourListRef (mod length)
+  const tourLastKeyRef = useRef<string | null>(null) // last landed stop key — skip an immediate repeat
   const tourNextAtRef = useRef(0) // earliest time the next tour hop may fire (paces dwell)
   const tourResumeAtRef = useRef(0) // tour suppressed until now ≥ this (user-interaction gate)
   const globeVisibleRef = useRef(true) // IntersectionObserver: is the hero on screen?
+
+  // Tour controls mirrored into refs for the persistent render loop (hub-020).
+  const tourScopeRef = useRef<TourScope>(tourScope)
+  const tourDwellRef = useRef<number>(tourDwellMs)
 
   // highlight state (live, read inside per-frame CallbackProperties — no re-plot)
   const activeSignalIdRef = useRef<number | null>(null) // currently landed/clicked signal
@@ -389,21 +413,33 @@ export default function SignalGlobeCanvas({
         }
 
         // ── persistent render-loop: rotate, pump fly queue, track popup ──
+        // One horizon occluder, refreshed each tick with the camera position and
+        // shared by the popup tracker AND every dot's `show` gate (hub-020).
         const occluder = new Cesium.EllipsoidalOccluder(
           viewer.scene.globe.ellipsoid,
           viewer.camera.positionWC,
         )
+        occluderRef.current = occluder
         const onTick = () => {
           const now = Date.now()
+
+          // Refresh the shared occluder every frame so the per-dot `show` gates
+          // and the popup tracker hide whatever is currently behind the globe.
+          occluder.cameraPosition = viewer.camera.positionWC
 
           // The globe may auto-drive (fresh-signal land OR tour hop) only when the
           // hero is on screen and the user hasn't interacted recently — otherwise
           // an active user keeps full control (hub-019).
           const canAutoDrive = globeVisibleRef.current && now >= tourResumeAtRef.current
+          // Fresh-signal landing only when the scope includes signals — "None" and
+          // "Incidents" must not hop on a new signal (hub-020).
+          const scopeAllowsSignals =
+            tourScopeRef.current === 'signals' || tourScopeRef.current === 'both'
 
           // pump auto-fly queue (throttled, severity-first) — new signals land first
           if (
             canAutoDrive &&
+            scopeAllowsSignals &&
             !flyingRef.current &&
             now - lastFlyRef.current >= FLY_INTERVAL_MS &&
             flyQueueRef.current.length > 0
@@ -451,7 +487,6 @@ export default function SignalGlobeCanvas({
 
           // track popup to its world position
           if (popupPosRef.current && popupRef.current) {
-            occluder.cameraPosition = viewer.camera.positionWC
             const visible = occluder.isPointVisible(popupPosRef.current)
             const fn =
               Cesium.SceneTransforms.worldToWindowCoordinates ||
@@ -508,6 +543,21 @@ export default function SignalGlobeCanvas({
   }, [])
 
   // ── plotting ──
+
+  // Horizon test (hub-020): is this world position on the camera-facing side of
+  // the globe? Read each frame inside a marker's `show` CallbackProperty so dots
+  // that rotate behind the sphere are hidden (instead of bleeding through, which
+  // disableDepthTestDistance:∞ used to allow). Fails OPEN (visible) before the
+  // occluder exists so nothing flickers off during init.
+  function pointVisible(pos: any): boolean {
+    const occ = occluderRef.current
+    if (!occ || !pos) return true
+    try {
+      return occ.isPointVisible(pos)
+    } catch {
+      return true
+    }
+  }
 
   // Background heat-glow tier (hub-015): soft translucent radial blobs at the
   // centroids of signal density clusters. Size + intensity scale with the
@@ -620,9 +670,10 @@ export default function SignalGlobeCanvas({
         return base.withAlpha(approximate ? Math.min(0.9, a + 0.2) : 0.55)
       }, false)
       const eid = `sig-${s.id}`
+      const position = Cesium.Cartesian3.fromDegrees(lon, lat)
       const entity = viewer.entities.add({
         id: eid,
-        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        position,
         point: {
           // Nudge approximate dots a touch larger; focused dot grows so it pops.
           pixelSize: new Cesium.CallbackProperty(() => {
@@ -635,7 +686,10 @@ export default function SignalGlobeCanvas({
             () => (isFocused() ? 2.5 : approximate ? 1.6 : 1.2),
             false,
           ),
+          // Stay always-on-top for crisp, z-fight-free near-side dots, but hide
+          // when behind the globe (hub-020 depth-occlusion fix).
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          show: new Cesium.CallbackProperty(() => pointVisible(position), false),
           scaleByDistance: new Cesium.NearFarScalar(1e6, 1.1, 2e7, 0.5),
         },
       })
@@ -664,10 +718,15 @@ export default function SignalGlobeCanvas({
       const position = Cesium.Cartesian3.fromDegrees(lon, lat)
       const eid = `inc-${p.id}`
 
+      // Hide the whole marker (core + label) when it rotates behind the globe
+      // (hub-020). Entity-level `show` gates the point AND its label together.
+      const incidentVisible = new Cesium.CallbackProperty(() => pointVisible(position), false)
+
       // Headline tier: large SEV-colored core that breathes.
       const entity = viewer.entities.add({
         id: eid,
         position,
+        show: incidentVisible,
         point: {
           pixelSize: new Cesium.CallbackProperty(() => {
             const t = (Date.now() % 1600) / 1600
@@ -702,6 +761,7 @@ export default function SignalGlobeCanvas({
       const ring = viewer.entities.add({
         id: `inc-ring-${p.id}`,
         position,
+        show: incidentVisible,
         point: {
           pixelSize: new Cesium.CallbackProperty(() => {
             const t = (Date.now() % 2200) / 2200
@@ -722,6 +782,7 @@ export default function SignalGlobeCanvas({
       const halo = viewer.entities.add({
         id: `inc-halo-${p.id}`,
         position,
+        show: incidentVisible,
         point: {
           pixelSize: baseSize * 3,
           color: ces.withAlpha(0.1),
@@ -746,8 +807,10 @@ export default function SignalGlobeCanvas({
     const color = Cesium.Color.fromCssColorString(css)
     const start = Date.now()
     const DURATION = 1800
+    const position = Cesium.Cartesian3.fromDegrees(lon, lat)
     const ring = viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(lon, lat),
+      position,
+      show: new Cesium.CallbackProperty(() => pointVisible(position), false),
       point: {
         pixelSize: new Cesium.CallbackProperty(() => {
           const t = Math.min(1, (Date.now() - start) / DURATION)
@@ -783,23 +846,83 @@ export default function SignalGlobeCanvas({
     tourResumeAtRef.current = Date.now() + TOUR_RESUME_MS
   }
 
-  // Advance the auto-cycle tour to the next prioritized signal and fly to it.
+  // Stable identity for a tour stop so we can skip an immediate repeat.
+  function stopKey(stop: TourStop): string {
+    return stop.kind === 'signal' ? `sig-${stop.signal.id}` : `inc-${stop.incident.id}`
+  }
+
+  // Rebuild the auto-cycle tour route from the current feed + scope (hub-020).
+  // Incidents are the headline tier, so when scope is "both" they lead, then the
+  // recent/high-severity signal slice. "none" ⇒ empty (no hopping). The cursor
+  // wraps mod length, so refreshing this mid-loop is always safe.
+  function buildTourList() {
+    const scope = tourScopeRef.current
+    if (scope === 'none') {
+      tourListRef.current = []
+      return
+    }
+    const nowTs = Date.now()
+    const wantSignals = scope === 'signals' || scope === 'both'
+    const wantIncidents = scope === 'incidents' || scope === 'both'
+
+    const incStops: TourStop[] = wantIncidents
+      ? incidentsRef.current
+          .filter((p) => {
+            const la = p.location_lat == null ? NaN : parseFloat(String(p.location_lat))
+            const lo = p.location_lon == null ? NaN : parseFloat(String(p.location_lon))
+            return !isNaN(la) && !isNaN(lo)
+          })
+          .sort((a, b) => incidentSevRank(a.sev_level) - incidentSevRank(b.sev_level))
+          .map((incident) => ({ kind: 'incident' as const, incident }))
+      : []
+
+    const sigStops: TourStop[] = wantSignals
+      ? signalsRef.current
+          .filter((s) => {
+            if (s.promoted) return false
+            const la = Number(s.lat)
+            const lo = Number(s.lon)
+            if (isNaN(la) || isNaN(lo)) return false
+            const created = new Date(s.created_at).getTime()
+            return !isNaN(created) && nowTs - created <= SIGNAL_MAX_AGE_MS
+          })
+          .sort((a, b) => {
+            const sev = signalSeverityNum(b) - signalSeverityNum(a)
+            if (sev !== 0) return sev
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          })
+          .slice(0, TOUR_MAX)
+          .map((signal) => ({ kind: 'signal' as const, signal }))
+      : []
+
+    tourListRef.current = [...incStops, ...sigStops]
+  }
+
+  // Fly to a tour stop via its tier-appropriate path (rich incident popup vs
+  // ambient signal highlight).
+  function flyToStop(stop: TourStop, showPopup: boolean) {
+    if (stop.kind === 'incident') flyToIncident(stop.incident)
+    else flyToSignal(stop.signal, showPopup)
+  }
+
+  // Advance the auto-cycle tour to the next prioritized stop and fly to it.
   // Cursor is taken modulo the (possibly refreshed) list length so the loop is
-  // always in-bounds and survives feed updates. flyToSignal handles the pulse +
-  // popup highlight and schedules the next hop via tourNextAtRef in its complete
-  // callback, so the dwell paces naturally.
+  // always in-bounds and survives feed/scope updates. flyToStop handles the
+  // pulse + popup highlight and schedules the next hop via tourNextAtRef in its
+  // complete callback, so the dwell paces naturally.
   function advanceTour() {
     const list = tourListRef.current
     if (list.length === 0) return
-    // Skip an immediate repeat of the just-landed signal when we have choices.
+    // Skip an immediate repeat of the just-landed stop when we have choices.
     let idx = tourCursorRef.current % list.length
-    if (list.length > 1 && list[idx].id === activeSignalIdRef.current) {
+    if (list.length > 1 && stopKey(list[idx]) === tourLastKeyRef.current) {
       idx = (idx + 1) % list.length
     }
     tourCursorRef.current = idx + 1
+    tourLastKeyRef.current = stopKey(list[idx])
     // Hold the camera if the next hop somehow can't fly, so we retry shortly.
-    tourNextAtRef.current = Date.now() + FLY_DURATION * 1000 + TOUR_DWELL_MS
-    flyToSignal(list[idx], true)
+    tourNextAtRef.current = Date.now() + FLY_DURATION * 1000 + tourDwellRef.current
+    flyToStop(list[idx], true)
   }
 
   // Start a guarded flight. Bumps a monotonic token, marks flying, and returns a
@@ -850,7 +973,7 @@ export default function SignalGlobeCanvas({
         settle()
         idleResumeRef.current = Date.now() + DWELL_MS
         // Pace the next tour hop from when we finished landing (natural dwell).
-        tourNextAtRef.current = Date.now() + TOUR_DWELL_MS
+        tourNextAtRef.current = Date.now() + tourDwellRef.current
       },
       cancel: () => {
         settle()
@@ -930,6 +1053,8 @@ export default function SignalGlobeCanvas({
       complete: () => {
         settle()
         idleResumeRef.current = Date.now() + DWELL_MS
+        // Pace the next tour hop from landing so incident stops dwell too (hub-020).
+        tourNextAtRef.current = Date.now() + tourDwellRef.current
       },
       cancel: () => {
         settle()
@@ -1018,36 +1143,20 @@ export default function SignalGlobeCanvas({
     signalsRef.current = signals
     if (!readyRef.current) return
 
-    // Rebuild the auto-cycle tour route: plottable, non-promoted, non-aged
-    // signals, recent/high-severity first, capped at TOUR_MAX. The cursor wraps
-    // mod length, so refreshing this mid-loop is always safe (hub-019).
-    const nowTs = Date.now()
-    tourListRef.current = signals
-      .filter((s) => {
-        if (s.promoted) return false
-        const la = Number(s.lat)
-        const lo = Number(s.lon)
-        if (isNaN(la) || isNaN(lo)) return false
-        const created = new Date(s.created_at).getTime()
-        return !isNaN(created) && nowTs - created <= SIGNAL_MAX_AGE_MS
-      })
-      .sort((a, b) => {
-        const sev = signalSeverityNum(b) - signalSeverityNum(a)
-        if (sev !== 0) return sev
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      })
-      .slice(0, TOUR_MAX)
+    // Rebuild the auto-cycle tour route from the fresh feed (hub-020 centralizes
+    // this in buildTourList, which also folds in incidents + the scope setting).
+    buildTourList()
 
     if (firstLoadRef.current) {
       signals.forEach((s) => seenRef.current.add(s.id))
       firstLoadRef.current = false
-      // First load: visibly "land" on real activity (highest-severity, tie →
-      // most recent) instead of idling, so the globe demonstrates live data.
-      // This kicks off the tour from the top of the route.
+      // First load: visibly "land" on real activity (top of the route — the
+      // highest-severity incident or signal per scope) instead of idling, so the
+      // globe demonstrates live data and kicks off the tour.
       const landing = tourListRef.current[0]
       if (landing) {
         window.setTimeout(() => {
-          if (readyRef.current) flyToSignal(landing, true)
+          if (readyRef.current) flyToStop(landing, true)
         }, 1400)
       }
     } else {
@@ -1070,7 +1179,28 @@ export default function SignalGlobeCanvas({
     incidentsRef.current = incidents
     if (!readyRef.current) return
     plotIncidents(incidentsRef.current)
+    // Incidents are a tour tier now (hub-020) — keep the route in sync.
+    buildTourList()
   }, [incidents])
+
+  // ── react to tour control changes (scope + speed) — hub-020 ──
+  // The control panel (SignalGlobeHero) drives these props. Changing the scope
+  // rebuilds the route and restarts the loop promptly; changing speed just
+  // re-paces. Both persist in localStorage on the parent. This cooperates with
+  // pause/resume: if the user is mid-interaction the new settings apply on resume.
+  useEffect(() => {
+    const scopeChanged = tourScopeRef.current !== tourScope
+    tourScopeRef.current = tourScope
+    tourDwellRef.current = tourDwellMs
+    if (!readyRef.current) return
+    buildTourList()
+    if (scopeChanged) {
+      tourCursorRef.current = 0
+      tourLastKeyRef.current = null
+      // Apply the new scope promptly (subject to visible + not-interacting gates).
+      tourNextAtRef.current = Date.now() + 600
+    }
+  }, [tourScope, tourDwellMs])
 
   // ── react to ticker-row clicks (focusRequest) ──
   // Flies using the clicked row's OWN signal object (carried in focusRequest), so
@@ -1218,6 +1348,22 @@ export default function SignalGlobeCanvas({
 
 function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text
+}
+
+// Tour ordering for incidents: SEV1 first (lowest rank), unknown last.
+function incidentSevRank(sev: string | null | undefined): number {
+  switch ((sev || '').toUpperCase()) {
+    case 'SEV1':
+      return 0
+    case 'SEV2':
+      return 1
+    case 'SEV3':
+      return 2
+    case 'SEV4':
+      return 3
+    default:
+      return 4
+  }
 }
 
 // Lightweight CSS sphere — placeholder while Cesium boots / on error.

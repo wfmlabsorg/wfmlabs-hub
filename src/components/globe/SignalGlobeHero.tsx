@@ -11,6 +11,8 @@ import dynamic from 'next/dynamic'
 import {
   type GlobeSignal,
   type GlobeIncident,
+  type TourScope,
+  type TourSpeed,
   signalColor,
   severityChip,
   severityChipColor,
@@ -18,6 +20,7 @@ import {
   cleanTitle,
   dedupeSignalsByEvent,
   timeAgo,
+  TOUR_SPEED_DWELL,
   ROC_GLOBE_FEED,
 } from './globeShared'
 
@@ -33,6 +36,12 @@ const SignalGlobeCanvas = dynamic(() => import('./SignalGlobeCanvas'), {
 const POLL_MS = 30_000
 const TICKER_CAP = 30
 
+// localStorage keys for the persisted auto-tour control (hub-020).
+const LS_SCOPE = 'wfm.globe.tourScope'
+const LS_SPEED = 'wfm.globe.tourSpeed'
+const SCOPE_VALUES: TourScope[] = ['incidents', 'signals', 'both', 'none']
+const SPEED_VALUES: TourSpeed[] = ['slow', 'medium', 'fast']
+
 interface FocusRequest {
   signal: GlobeSignal
   nonce: number
@@ -45,6 +54,38 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   const [focusRequest, setFocusRequest] = useState<FocusRequest | null>(null)
   const nonceRef = useRef(0)
   const sectionRef = useRef<HTMLElement | null>(null)
+
+  // ── auto-tour control (hub-020): scope + speed, persisted in localStorage ──
+  // Default Both / Medium. Start from defaults so SSR + first client render match,
+  // then hydrate from localStorage in an effect to avoid a hydration mismatch.
+  const [tourScope, setTourScope] = useState<TourScope>('both')
+  const [tourSpeed, setTourSpeed] = useState<TourSpeed>('medium')
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem(LS_SCOPE)
+      if (s && (SCOPE_VALUES as string[]).includes(s)) setTourScope(s as TourScope)
+      const v = localStorage.getItem(LS_SPEED)
+      if (v && (SPEED_VALUES as string[]).includes(v)) setTourSpeed(v as TourSpeed)
+    } catch {
+      /* localStorage unavailable (private mode) — keep defaults */
+    }
+  }, [])
+  const handleScope = useCallback((s: TourScope) => {
+    setTourScope(s)
+    try {
+      localStorage.setItem(LS_SCOPE, s)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+  const handleSpeed = useCallback((v: TourSpeed) => {
+    setTourSpeed(v)
+    try {
+      localStorage.setItem(LS_SPEED, v)
+    } catch {
+      /* ignore */
+    }
+  }, [])
 
   // ── postMessage bridge: the OVIX tape (iframe at /roc/dashboards/scores.html)
   // posts { type:'wfm:globe-focus', domain } to its parent (this landing). We
@@ -130,9 +171,18 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
           incidents={incidents}
           focusRequest={focusRequest}
           onFocus={setFocusedId}
+          tourScope={tourScope}
+          tourDwellMs={TOUR_SPEED_DWELL[tourSpeed]}
         />
 
         <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} />
+
+        <TourControl
+          scope={tourScope}
+          speed={tourSpeed}
+          onScope={handleScope}
+          onSpeed={handleSpeed}
+        />
 
         {/* ticker rail (right) */}
         <div
@@ -309,6 +359,124 @@ function Badge({ color, label }: { color: string; label: string }) {
     >
       {label}
     </span>
+  )
+}
+
+// ── auto-tour control panel (hub-020) ──
+// Unobtrusive Mission-Control panel, bottom-left of the hero (top-right is the
+// ticker rail). Drives what the auto-tour cycles through (scope) and how long it
+// dwells (speed). Choices persist via the parent's localStorage handlers.
+function TourControl({
+  scope,
+  speed,
+  onScope,
+  onSpeed,
+}: {
+  scope: TourScope
+  speed: TourSpeed
+  onScope: (s: TourScope) => void
+  onSpeed: (v: TourSpeed) => void
+}) {
+  const scopeOpts: { key: TourScope; label: string }[] = [
+    { key: 'incidents', label: 'Incidents' },
+    { key: 'signals', label: 'Signals' },
+    { key: 'both', label: 'Both' },
+    { key: 'none', label: 'Off' },
+  ]
+  const speedOpts: { key: TourSpeed; label: string }[] = [
+    { key: 'slow', label: 'Slow' },
+    { key: 'medium', label: 'Med' },
+    { key: 'fast', label: 'Fast' },
+  ]
+  return (
+    <div
+      role="group"
+      aria-label="Globe auto-tour controls"
+      style={{
+        position: 'absolute',
+        bottom: '1rem',
+        left: '1rem',
+        zIndex: 5,
+        background: 'rgba(6,10,22,0.82)',
+        backdropFilter: 'blur(6px)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        padding: '0.6rem 0.7rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.5rem',
+      }}
+    >
+      <ControlRow label="Tour">
+        {scopeOpts.map((o) => (
+          <SegButton key={o.key} active={scope === o.key} onClick={() => onScope(o.key)}>
+            {o.label}
+          </SegButton>
+        ))}
+      </ControlRow>
+      <ControlRow label="Speed">
+        {speedOpts.map((o) => (
+          <SegButton key={o.key} active={speed === o.key} onClick={() => onSpeed(o.key)}>
+            {o.label}
+          </SegButton>
+        ))}
+      </ControlRow>
+    </div>
+  )
+}
+
+function ControlRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+      <span
+        style={{
+          fontSize: '0.55rem',
+          fontWeight: 700,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: '#64748b',
+          fontFamily: "'IBM Plex Mono', monospace",
+          width: '2.6rem',
+          flexShrink: 0,
+        }}
+      >
+        {label}
+      </span>
+      <div style={{ display: 'flex', gap: '0.2rem' }}>{children}</div>
+    </div>
+  )
+}
+
+function SegButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      style={{
+        cursor: 'pointer',
+        fontSize: '0.6rem',
+        fontWeight: 600,
+        fontFamily: "'IBM Plex Mono', monospace",
+        letterSpacing: '0.03em',
+        padding: '0.2rem 0.45rem',
+        borderRadius: 'var(--radius)',
+        border: `1px solid ${active ? '#22d3ee' : 'var(--border)'}`,
+        background: active ? 'rgba(34,211,238,0.16)' : 'transparent',
+        color: active ? '#22d3ee' : '#94a3b8',
+        transition: 'color 0.15s, border-color 0.15s, background 0.15s',
+      }}
+    >
+      {children}
+    </button>
   )
 }
 
