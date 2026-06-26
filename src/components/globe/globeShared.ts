@@ -42,6 +42,19 @@ export interface GlobeFeed {
   incidents: GlobeIncident[]
 }
 
+// Auto-tour scope (hub-020): governs what the camera auto-cycles through.
+//   incidents → headline tier only · signals → ambient tier only
+//   both → incidents first, then signals · none → no hopping (idle spin only)
+export type TourScope = 'incidents' | 'signals' | 'both' | 'none'
+
+// Speed presets → tour dwell (ms held on each stop before advancing).
+export type TourSpeed = 'slow' | 'medium' | 'fast'
+export const TOUR_SPEED_DWELL: Record<TourSpeed, number> = {
+  slow: 8000,
+  medium: 5000,
+  fast: 2500,
+}
+
 // Category → point color. Delegated to the canonical domain map (hub-017) so the
 // globe dots match the signals page + landing badges exactly.
 export function signalColor(category: string | null | undefined): string {
