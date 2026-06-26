@@ -52,6 +52,7 @@ export async function GET(req: Request) {
                 s.severity,
                 s.severity_label,
                 s.title,
+                s.message,
                 s.region_name,
                 s.created_at,
                 CASE WHEN (s.metadata->>'lat') ~ '^-?[0-9]+(\\.[0-9]+)?$'
@@ -76,7 +77,7 @@ export async function GET(req: Request) {
           WHERE s.created_at > now() - make_interval(mins => $1)
        )
        SELECT sig.id, sig.category, sig.severity, sig.severity_label, sig.title,
-              sig.region_name, sig.created_at, sig.lat, sig.lon, sig.geo_source,
+              sig.message, sig.region_name, sig.created_at, sig.lat, sig.lon, sig.geo_source,
               (inc.id IS NOT NULL) AS promoted,
               inc.id   AS incident_id,
               inc.slug AS incident_slug,
@@ -159,6 +160,7 @@ export async function GET(req: Request) {
 
     const incidentsResult = await pool.query(
       `SELECT id, title, slug, domain, sev_level, status,
+              impact_summary, description,
               location_lat, location_lon, related_signal_ids, created_at
          FROM incidents
         WHERE status NOT IN ('closed', 'resolved')

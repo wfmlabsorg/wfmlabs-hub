@@ -14,6 +14,9 @@ export interface GlobeSignal {
   severity: string | number | null
   severity_label?: string | null
   title: string
+  // Short narrative the scout/IWS filter wrote for this signal — surfaced as the
+  // globe popup's 2–3 sentence preview (hub-021).
+  message?: string | null
   region_name: string | null
   created_at: string
   lat: number
@@ -32,6 +35,10 @@ export interface GlobeIncident {
   domain: string
   sev_level: string
   status: string
+  // Watchkeeper's incident narrative — globe popup preview prefers impact_summary,
+  // falling back to description (hub-021).
+  impact_summary?: string | null
+  description?: string | null
   location_lat: number | string | null
   location_lon: number | string | null
   created_at: string
