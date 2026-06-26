@@ -124,11 +124,27 @@ export function BeaconCaseCanvas() {
   // the chat container, and only when the member is already pinned near the bottom (so we never yank
   // them away from earlier text). We never touch window/document scroll on a new response.
   const chatScrollRef = useRef<HTMLDivElement | null>(null)
+  // "Was the member pinned to the bottom?" — captured from the LAST scroll position BEFORE new content
+  // lands, NOT after. Measuring after the append is the bug CodeRabbit flagged: a long Beacon reply or
+  // the loading row can add >80px, which pushes the (unchanged) scrollTop out of the <80px near-bottom
+  // band, so a user who was following along would wrongly stop being followed. Content appends don't
+  // fire `scroll`, so this ref keeps the member's real pre-append intent; we only auto-follow when true.
+  const wasNearBottomRef = useRef(true)
   useEffect(() => {
     const el = chatScrollRef.current
     if (!el) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    if (nearBottom) el.scrollTop = el.scrollHeight
+    const measure = () => {
+      wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    }
+    measure() // seed from the current position when the transcript mounts
+    el.addEventListener('scroll', measure, { passive: true })
+    return () => el.removeEventListener('scroll', measure)
+  }, [phase])
+  useEffect(() => {
+    const el = chatScrollRef.current
+    if (!el) return
+    // Container-only follow (never window/document scroll), and only if they were already at the bottom.
+    if (wasNearBottomRef.current) el.scrollTop = el.scrollHeight
   }, [messages, thinking])
 
   // Clicking a [E#] citation chip scrolls to its source card and pulses a highlight ring.

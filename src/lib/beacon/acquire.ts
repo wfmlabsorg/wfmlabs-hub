@@ -355,74 +355,82 @@ async function acquireRound(
   const sq = (searchQuery || '').trim()
   if (!sq || acc.graded >= ACQUIRE_CANDIDATE_BUDGET) return
 
-  // 1. Search both scholarly sources in parallel, merge + dedup-within-results.
-  const [crossref, exa] = await Promise.all([
-    crossrefSearch(sq, opts.crossrefRows),
-    exaAcademic(sq, opts.exaRows),
-  ])
-  const merged = mergeHits(crossref, exa)
-  acc.searched += merged.length
-  if (merged.length === 0) return
+  // The whole round is contained: search, dedup, and deepRead grading can each reject, and this runs on
+  // the BLOCKING evidence path (/api/beacon/evidence). A round MUST never take that route down — any
+  // failure degrades to the partial work already accumulated in `acc`, and the caller's loop continues.
+  try {
+    // 1. Search both scholarly sources in parallel, merge + dedup-within-results.
+    const [crossref, exa] = await Promise.all([
+      crossrefSearch(sq, opts.crossrefRows),
+      exaAcademic(sq, opts.exaRows),
+    ])
+    const merged = mergeHits(crossref, exa)
+    acc.searched += merged.length
+    if (merged.length === 0) return
 
-  // 2a. Dedup against earlier rounds this session (by DOI then normalized title).
-  const novel: AcquiredHit[] = []
-  for (const hit of merged) {
-    const doiKey = hit.doi?.toLowerCase()
-    const titleKey = normTitle(hit.title)
-    if ((doiKey && acc.seenDoi.has(doiKey)) || (titleKey && acc.seenTitle.has(titleKey))) continue
-    if (doiKey) acc.seenDoi.add(doiKey)
-    if (titleKey) acc.seenTitle.add(titleKey)
-    novel.push(hit)
-  }
-  if (novel.length === 0) return
-
-  // 2b. Dedup against the existing corpus.
-  const fresh: AcquiredHit[] = []
-  for (const hit of novel) {
-    if (!(await isDuplicate(payload, hit))) fresh.push(hit)
-  }
-  if (fresh.length === 0) return
-
-  // 3. Keep only scholarly tiers — vendor/web_other excluded from acquisition outright.
-  const scholarly = fresh.filter((h) => RESEARCH_TIERS.has(classifyWebTier(h.url, h.title, h.abstract)))
-  if (scholarly.length === 0) return
-
-  // 4. Grade survivors with the SAME deepRead appraiser, respecting the global candidate budget.
-  const room = Math.max(0, ACQUIRE_CANDIDATE_BUDGET - acc.graded)
-  const batch = scholarly.slice(0, room)
-  if (batch.length === 0) return
-  const synthetics = batch.map(toSynthetic)
-  const byId = new Map(synthetics.map((s, i) => [s.id, batch[i]]))
-  const deep = await deepRead(synthetics, gradeQuestion, { maxSelect: synthetics.length })
-  acc.graded += batch.length
-
-  // 5. Build evidence items + collect the strong relevant ones for ingest.
-  for (const r of deep.selected) {
-    if (!r.supports || r.grade === '—') continue
-    const hit = byId.get(r.id)
-    if (!hit) continue
-    const tier = classifyWebTier(hit.url, hit.title, hit.abstract)
-    if (!RESEARCH_TIERS.has(tier)) continue
-    const grade = enforceGrade(r.grade, tier)
-    const claim = (r.finding || hit.title).trim()
-    acc.items.push({
-      claim,
-      grade,
-      stance: toCardStance(r.stance),
-      relevance: r.rationale || undefined,
-      source: {
-        title: hit.title,
-        authors: hit.authors,
-        url: hit.url,
-        type: 'web',
-        tier,
-        abstract: clampAbstract(hit.abstract),
-        acquired: true,
-      },
-    })
-    if (isStrongCard(grade, tier) && acc.toIngest.length < MAX_ACQUIRE) {
-      acc.toIngest.push(toIngestPaper(hit, tier, r.finding))
+    // 2a. Dedup against earlier rounds this session (by DOI then normalized title).
+    const novel: AcquiredHit[] = []
+    for (const hit of merged) {
+      const doiKey = hit.doi?.toLowerCase()
+      const titleKey = normTitle(hit.title)
+      if ((doiKey && acc.seenDoi.has(doiKey)) || (titleKey && acc.seenTitle.has(titleKey))) continue
+      if (doiKey) acc.seenDoi.add(doiKey)
+      if (titleKey) acc.seenTitle.add(titleKey)
+      novel.push(hit)
     }
+    if (novel.length === 0) return
+
+    // 2b. Dedup against the existing corpus.
+    const fresh: AcquiredHit[] = []
+    for (const hit of novel) {
+      if (!(await isDuplicate(payload, hit))) fresh.push(hit)
+    }
+    if (fresh.length === 0) return
+
+    // 3. Keep only scholarly tiers — vendor/web_other excluded from acquisition outright.
+    const scholarly = fresh.filter((h) => RESEARCH_TIERS.has(classifyWebTier(h.url, h.title, h.abstract)))
+    if (scholarly.length === 0) return
+
+    // 4. Grade survivors with the SAME deepRead appraiser, respecting the global candidate budget.
+    const room = Math.max(0, ACQUIRE_CANDIDATE_BUDGET - acc.graded)
+    const batch = scholarly.slice(0, room)
+    if (batch.length === 0) return
+    const synthetics = batch.map(toSynthetic)
+    const byId = new Map(synthetics.map((s, i) => [s.id, batch[i]]))
+    const deep = await deepRead(synthetics, gradeQuestion, { maxSelect: synthetics.length })
+    acc.graded += batch.length
+
+    // 5. Build evidence items + collect the strong relevant ones for ingest.
+    for (const r of deep.selected) {
+      if (!r.supports || r.grade === '—') continue
+      const hit = byId.get(r.id)
+      if (!hit) continue
+      const tier = classifyWebTier(hit.url, hit.title, hit.abstract)
+      if (!RESEARCH_TIERS.has(tier)) continue
+      const grade = enforceGrade(r.grade, tier)
+      const claim = (r.finding || hit.title).trim()
+      acc.items.push({
+        claim,
+        grade,
+        stance: toCardStance(r.stance),
+        relevance: r.rationale || undefined,
+        source: {
+          title: hit.title,
+          authors: hit.authors,
+          url: hit.url,
+          type: 'web',
+          tier,
+          abstract: clampAbstract(hit.abstract),
+          acquired: true,
+        },
+      })
+      if (isStrongCard(grade, tier) && acc.toIngest.length < MAX_ACQUIRE) {
+        acc.toIngest.push(toIngestPaper(hit, tier, r.finding))
+      }
+    }
+  } catch (e) {
+    // Degrade to whatever this round already accumulated — never bubble up into the evidence route.
+    console.error('[beacon/acquire] round failed, degrading to partial:', String(e).slice(0, 160))
   }
 }
 
@@ -448,8 +456,13 @@ export async function acquireAcademic(payload: Payload, question: string): Promi
   const q = (question || '').trim()
   if (!q) return { items: [], searched: 0, ingested: 0 }
   const acc = newAccum()
-  await acquireRound(payload, q, q, acc, { crossrefRows: ACQUIRE_CANDIDATES, exaRows: 6 })
-  return finalizeAcquire(acc)
+  try {
+    await acquireRound(payload, q, q, acc, { crossrefRows: ACQUIRE_CANDIDATES, exaRows: 6 })
+    return await finalizeAcquire(acc)
+  } catch (e) {
+    console.error('[beacon/acquire] acquireAcademic failed, returning partial:', String(e).slice(0, 160))
+    return { items: acc.items, searched: acc.searched, ingested: 0 }
+  }
 }
 
 /**
@@ -495,17 +508,24 @@ export async function acquireAcademicIterated(payload: Payload, question: string
   if (!q) return { items: [], searched: 0, ingested: 0 }
 
   const acc = newAccum()
-  const variants = await queryVariants(q)
-  for (const variant of variants) {
-    if (acc.graded >= ACQUIRE_CANDIDATE_BUDGET) break
-    // Search with the (possibly reformulated) variant, but always grade relevance to the ORIGINAL q.
-    await acquireRound(payload, variant, q, acc, { crossrefRows: ITER_CROSSREF_ROWS, exaRows: ITER_EXA_ROWS })
-    if (strongSoFar(acc) >= STRONG_TARGET) break // outcome met — stop early, keep cost down.
+  // The whole iterated loop is contained too: even if queryVariants / a round / finalize rejects
+  // unexpectedly, we return the partial items already gathered rather than 500 the evidence route.
+  try {
+    const variants = await queryVariants(q)
+    for (const variant of variants) {
+      if (acc.graded >= ACQUIRE_CANDIDATE_BUDGET) break
+      // Search with the (possibly reformulated) variant, but always grade relevance to the ORIGINAL q.
+      await acquireRound(payload, variant, q, acc, { crossrefRows: ITER_CROSSREF_ROWS, exaRows: ITER_EXA_ROWS })
+      if (strongSoFar(acc) >= STRONG_TARGET) break // outcome met — stop early, keep cost down.
+    }
+    const result = await finalizeAcquire(acc)
+    console.log(
+      `[beacon/acquire] iterated: ${variants.length} variant(s), ${acc.graded} graded, ` +
+        `${strongSoFar(acc)} strong (A/B), ${result.items.length} items, ${result.ingested} ingested`,
+    )
+    return result
+  } catch (e) {
+    console.error('[beacon/acquire] iterated failed, returning partial:', String(e).slice(0, 160))
+    return { items: acc.items, searched: acc.searched, ingested: 0 }
   }
-  const result = await finalizeAcquire(acc)
-  console.log(
-    `[beacon/acquire] iterated: ${variants.length} variant(s), ${acc.graded} graded, ` +
-      `${strongSoFar(acc)} strong (A/B), ${result.items.length} items, ${result.ingested} ingested`,
-  )
-  return result
 }
