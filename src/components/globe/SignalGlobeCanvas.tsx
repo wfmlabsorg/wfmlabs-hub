@@ -347,6 +347,17 @@ export default function SignalGlobeCanvas({
         }, Cesium.ScreenSpaceEventType.MOUSE_MOVE)
         handlers.push(hoverHandler)
 
+        // Clear the hover highlight when the cursor leaves the canvas — MOUSE_MOVE
+        // won't fire again, so a dot under an exiting pointer would otherwise stay focused.
+        const onPointerLeave = () => {
+          hoveredSignalIdRef.current = null
+          viewer.scene.canvas.style.cursor = 'default'
+        }
+        viewer.scene.canvas.addEventListener('pointerleave', onPointerLeave)
+        handlers.push({
+          removeInputAction: () => viewer.scene.canvas.removeEventListener('pointerleave', onPointerLeave),
+        })
+
         // pause auto-rotate + auto-tour on manual interaction
         const pause = () => {
           idleResumeRef.current = Date.now() + IDLE_RESUME_MS
