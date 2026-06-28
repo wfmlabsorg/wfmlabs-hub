@@ -1,6 +1,7 @@
 import React from 'react'
 import { isMobile } from '@/lib/mobile'
 import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
+import { CoveragePanel, type DistroItem } from '@/components/incidents/CoveragePanel'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -97,6 +98,150 @@ const domainList = [
   'infrastructure', 'financial', 'environmental', 'geopolitical', 'general',
 ]
 
+// Corroboration triage filter — keys map to a SQL predicate on incidents.corroboration.
+// 'uncorroborated' deliberately also captures null/absent corroboration (legacy incidents
+// + Exa failures) so the triage queue surfaces everything lacking external confirmation.
+const corrobConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  corroborated: { label: 'Corroborated', color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' },
+  'single-source': { label: 'Single source', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
+  uncorroborated: { label: 'Uncorroborated', color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', border: 'var(--border-hover)' },
+}
+const corrobList = ['corroborated', 'single-source', 'uncorroborated']
+
+function corrobPredicate(key: string): string {
+  if (key === 'corroborated') return "corroboration->>'status' = 'corroborated'"
+  if (key === 'single-source') return "corroboration->>'status' = 'single-source'"
+  // uncorroborated bucket = explicit 'uncorroborated' OR no corroboration on record
+  return "(corroboration IS NULL OR corroboration->>'status' IS NULL OR corroboration->>'status' NOT IN ('corroborated','single-source'))"
+}
+
+// Region bucket (US / non-US / global) as a SQL CASE over a free-text location column.
+// Heuristic by design — the goal is at-a-glance skew, not precise geocoding.
+function regionBucketCase(col: string): string {
+  return `CASE
+    WHEN ${col} IS NULL OR btrim(${col}) = '' OR lower(btrim(${col})) IN ('global','worldwide','international','multiple','various') THEN 'global'
+    WHEN ${col} ILIKE '%united states%' OR upper(btrim(${col})) IN ('US','USA','U.S.','U.S.A.') OR ${col} ILIKE '%, us' OR ${col} ILIKE '%, usa' THEN 'US'
+    ELSE 'non-US'
+  END`
+}
+
+const regionColors: Record<string, string> = {
+  US: '#22d3ee',
+  'non-US': '#3b82f6',
+  global: '#64748b',
+}
+
+interface CoverageData {
+  totalSignals: number
+  totalOpenIncidents: number
+  needsValidation: number
+  signalsByRegion: DistroItem[]
+  signalsByCategory: DistroItem[]
+  incidentsByDomain: DistroItem[]
+  incidentsByRegion: DistroItem[]
+  corroboration: DistroItem[]
+}
+
+const COVERAGE_WINDOW_DAYS = 7
+
+/**
+ * Loads the coverage/balance distributions. Wrapped so a query failure degrades to a
+ * hidden panel (returns null) instead of breaking the whole incidents page.
+ */
+async function loadCoverage(): Promise<CoverageData | null> {
+  try {
+    const win = `created_at > now() - interval '${COVERAGE_WINDOW_DAYS} days'`
+    const [
+      { rows: sigRegion },
+      { rows: sigCategory },
+      { rows: incDomain },
+      { rows: incRegion },
+      { rows: incCorrob },
+    ] = await Promise.all([
+      neonQuery<{ bucket: string; cnt: string }>(
+        `SELECT ${regionBucketCase('region_name')} AS bucket, COUNT(*) AS cnt
+           FROM signals WHERE ${win} GROUP BY 1`,
+      ),
+      neonQuery<{ category: string; cnt: string }>(
+        `SELECT category::text AS category, COUNT(*) AS cnt
+           FROM signals WHERE ${win} GROUP BY 1 ORDER BY 2 DESC LIMIT 8`,
+      ),
+      neonQuery<{ domain: string; cnt: string }>(
+        "SELECT domain, COUNT(*) AS cnt FROM incidents WHERE status != 'closed' GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
+      ),
+      neonQuery<{ bucket: string; cnt: string }>(
+        `SELECT ${regionBucketCase('location_country')} AS bucket, COUNT(*) AS cnt
+           FROM incidents WHERE status != 'closed' GROUP BY 1`,
+      ),
+      neonQuery<{ bucket: string; cnt: string }>(
+        `SELECT CASE
+            WHEN corroboration->>'status' = 'corroborated' THEN 'corroborated'
+            WHEN corroboration->>'status' = 'single-source' THEN 'single-source'
+            ELSE 'uncorroborated'
+          END AS bucket, COUNT(*) AS cnt
+           FROM incidents WHERE status != 'closed' GROUP BY 1`,
+      ),
+    ])
+
+    // Region buckets render in a fixed, meaningful order (always show all three).
+    const regionOrder = ['US', 'non-US', 'global']
+    const mapRegion = (rows: { bucket: string; cnt: string }[], hrefFor?: (b: string) => string): DistroItem[] => {
+      const counts: Record<string, number> = {}
+      for (const r of rows) counts[r.bucket] = parseInt(r.cnt) || 0
+      return regionOrder.map((b) => ({
+        label: b,
+        count: counts[b] || 0,
+        color: regionColors[b] || '#64748b',
+        href: hrefFor ? hrefFor(b) : undefined,
+      }))
+    }
+
+    const signalsByRegion = mapRegion(sigRegion)
+    const totalSignals = signalsByRegion.reduce((a, b) => a + b.count, 0)
+
+    const signalsByCategory: DistroItem[] = sigCategory.map((r) => ({
+      label: domainLabel(r.category || 'general'),
+      count: parseInt(r.cnt) || 0,
+      color: (domainColors[r.category] || defaultDomain).fg,
+    }))
+
+    const incidentsByDomain: DistroItem[] = incDomain.map((r) => ({
+      label: domainLabel(r.domain || 'general'),
+      count: parseInt(r.cnt) || 0,
+      color: (domainColors[r.domain] || defaultDomain).fg,
+      href: `/incidents?domain=${encodeURIComponent(r.domain)}`,
+    }))
+
+    const incidentsByRegion = mapRegion(incRegion)
+
+    const corrobCounts: Record<string, number> = {}
+    for (const r of incCorrob) corrobCounts[r.bucket] = parseInt(r.cnt) || 0
+    const corroboration: DistroItem[] = corrobList.map((k) => ({
+      label: corrobConfig[k].label,
+      count: corrobCounts[k] || 0,
+      color: corrobConfig[k].color,
+      href: `/incidents?corrob=${k}`,
+    }))
+
+    const totalOpenIncidents = incidentsByDomain.reduce((a, b) => a + b.count, 0)
+    const needsValidation = (corrobCounts['uncorroborated'] || 0) + (corrobCounts['single-source'] || 0)
+
+    return {
+      totalSignals,
+      totalOpenIncidents,
+      needsValidation,
+      signalsByRegion,
+      signalsByCategory,
+      incidentsByDomain,
+      incidentsByRegion,
+      corroboration,
+    }
+  } catch (e) {
+    console.error('coverage load failed:', e)
+    return null
+  }
+}
+
 function domainLabel(domain: string): string {
   return domain.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
@@ -134,18 +279,25 @@ function buildHref(base: Record<string, string | null>, overrides: Record<string
 export default async function IncidentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; sev?: string; domain?: string; page?: string }>
+  searchParams: Promise<{ status?: string; sev?: string; domain?: string; corrob?: string; page?: string }>
 }) {
   const params = await searchParams
   const mobile = await isMobile()
   const activeSev = params.sev || null
   const activeDomain = params.domain || null
   const activeStatus = params.status || null
+  const activeCorrob = params.corrob && corrobList.includes(params.corrob) ? params.corrob : null
   const page = parseInt(params.page || '1')
   const limit = 25
   const offset = (page - 1) * limit
 
-  const filterState = { sev: activeSev, domain: activeDomain, status: activeStatus, page: null as string | null }
+  const filterState = {
+    sev: activeSev,
+    domain: activeDomain,
+    status: activeStatus,
+    corrob: activeCorrob,
+    page: null as string | null,
+  }
 
   // Build query conditions
   const conditions: string[] = []
@@ -170,6 +322,9 @@ export default async function IncidentsPage({
     conditions.push(`domain = $${paramIdx++}`)
     queryParams.push(activeDomain)
   }
+  if (activeCorrob) {
+    conditions.push(corrobPredicate(activeCorrob))
+  }
 
   const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const sortOrder = activeStatus === 'closed'
@@ -182,6 +337,7 @@ export default async function IncidentsPage({
     { rows: sevRows },
     { rows: persistentIncidents },
     { rows: recentlyClosed },
+    coverage,
   ] = await Promise.all([
     neonQuery<Incident>(
       `SELECT * FROM incidents ${whereClause} ORDER BY ${sortOrder} LIMIT ${limit} OFFSET ${offset}`,
@@ -202,6 +358,7 @@ export default async function IncidentsPage({
           "SELECT * FROM incidents WHERE status = 'closed' ORDER BY closed_at DESC NULLS LAST LIMIT 10",
         )
       : Promise.resolve({ rows: [] as Incident[], rowCount: 0 }),
+    loadCoverage(),
   ])
 
   const totalDocs = parseInt(countRow?.cnt || '0')
@@ -322,7 +479,22 @@ export default async function IncidentsPage({
         })}
       </div>
 
-      {/* Filters: domain + status */}
+      {/* Coverage / balance overview */}
+      {coverage && (
+        <CoveragePanel
+          windowDays={COVERAGE_WINDOW_DAYS}
+          totalSignals={coverage.totalSignals}
+          totalOpenIncidents={coverage.totalOpenIncidents}
+          needsValidation={coverage.needsValidation}
+          signalsByRegion={coverage.signalsByRegion}
+          signalsByCategory={coverage.signalsByCategory}
+          incidentsByDomain={coverage.incidentsByDomain}
+          incidentsByRegion={coverage.incidentsByRegion}
+          corroboration={coverage.corroboration}
+        />
+      )}
+
+      {/* Filters: domain + status + corroboration */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
         {/* Domain filter */}
         <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -425,10 +597,82 @@ export default async function IncidentsPage({
             )
           })}
         </div>
+
+        {/* Corroboration triage filter */}
+        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <span
+            style={{
+              fontSize: '0.6875rem',
+              fontWeight: 600,
+              color: 'var(--fg-faint)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginRight: '0.25rem',
+            }}
+          >
+            Corroboration
+          </span>
+          <a
+            href={buildHref(filterState, { corrob: null, page: null })}
+            style={{
+              padding: '0.25rem 0.625rem',
+              borderRadius: '9999px',
+              border: '1px solid var(--border)',
+              background: !activeCorrob ? 'var(--fg)' : 'transparent',
+              color: !activeCorrob ? 'var(--bg)' : 'var(--fg-muted)',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              textDecoration: 'none',
+            }}
+          >
+            All
+          </a>
+          {corrobList.map((key) => {
+            const cfg = corrobConfig[key]
+            const isActive = activeCorrob === key
+            return (
+              <a
+                key={key}
+                href={buildHref(filterState, { corrob: isActive ? null : key, page: null })}
+                title={
+                  key === 'uncorroborated'
+                    ? 'Incidents lacking external corroboration — the triage queue to validate'
+                    : key === 'single-source'
+                      ? 'Only a single external source found'
+                      : 'Independently corroborated by reputable external sources'
+                }
+                style={{
+                  padding: '0.25rem 0.625rem',
+                  borderRadius: '9999px',
+                  border: `1px solid ${isActive ? cfg.border : 'var(--border)'}`,
+                  background: isActive ? cfg.bg : 'transparent',
+                  color: isActive ? cfg.color : 'var(--fg-muted)',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                }}
+              >
+                <span
+                  style={{
+                    width: '0.375rem',
+                    height: '0.375rem',
+                    borderRadius: '50%',
+                    background: cfg.color,
+                    flexShrink: 0,
+                  }}
+                />
+                {cfg.label}
+              </a>
+            )
+          })}
+        </div>
       </div>
 
       {/* Persistent Situations */}
-      {persistentIncidents.length > 0 && !activeStatus && !activeSev && !activeDomain && (
+      {persistentIncidents.length > 0 && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (
         <div style={{ marginBottom: '2rem' }}>
           <h2
             style={{
@@ -510,7 +754,7 @@ export default async function IncidentsPage({
 
       {/* Active Incidents */}
       <div style={{ marginBottom: '2rem' }}>
-        {activeStatus || activeSev || activeDomain ? (
+        {activeStatus || activeSev || activeDomain || activeCorrob ? (
           <h2
             style={{
               fontSize: '0.8125rem',
@@ -551,12 +795,12 @@ export default async function IncidentsPage({
             }}
           >
             <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-              {activeStatus || activeSev || activeDomain
+              {activeStatus || activeSev || activeDomain || activeCorrob
                 ? 'No incidents matching filters'
                 : 'No active incidents'}
             </p>
             <p style={{ fontSize: '0.875rem' }}>
-              {activeStatus || activeSev || activeDomain
+              {activeStatus || activeSev || activeDomain || activeCorrob
                 ? 'Try adjusting your filters.'
                 : 'Watchkeeper will declare incidents when severity thresholds are met.'}
             </p>
@@ -837,7 +1081,7 @@ export default async function IncidentsPage({
       )}
 
       {/* Recently Closed (only when not filtering) */}
-      {!activeStatus && !activeSev && !activeDomain && recentlyClosed.length > 0 && (
+      {!activeStatus && !activeSev && !activeDomain && !activeCorrob && recentlyClosed.length > 0 && (
         <div style={{ marginTop: '2rem' }}>
           <details>
             <summary
