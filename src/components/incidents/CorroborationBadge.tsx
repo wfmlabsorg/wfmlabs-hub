@@ -54,9 +54,13 @@ function effectiveStatus(c: Corroboration | null): EffectiveStatus {
   return 'unverified'
 }
 
+// Count the actual corroborating sources (sources.length), NOT reputable_count.
+// reputable_count is a separate quality signal (how many sources cleared the
+// reputable-publisher bar) and undercounts the real source list — the badge must
+// reflect the number of sources we actually display. Defensive: sources may be
+// missing/empty → 0.
 function sourceCount(c: Corroboration | null): number {
   if (!c) return 0
-  if (typeof c.reputable_count === 'number' && c.reputable_count >= 0) return c.reputable_count
   return Array.isArray(c.sources) ? c.sources.length : 0
 }
 
