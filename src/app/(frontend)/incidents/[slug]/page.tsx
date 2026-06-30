@@ -7,6 +7,8 @@ import { ChatPanel } from '@/components/chat'
 import { IncidentAdminActions } from '@/components/incidents/IncidentAdminActions'
 import { IncidentCommunityValidation } from '@/components/incidents/IncidentCommunityValidation'
 import { CorroborationBadge, CorroborationSources } from '@/components/incidents/CorroborationBadge'
+import { IncidentEvidencePanel } from '@/components/incidents/IncidentEvidencePanel'
+import { getIncidentEvidence } from '@/lib/evidence'
 
 export const dynamic = 'force-dynamic'
 
@@ -221,6 +223,9 @@ export default async function IncidentDetailPage({
     }).catch(() => ({ docs: [] }))
     relatedSignals = sigResult.docs
   }
+
+  // Fetch the evidence chain (best-effort; null/absent for un-instrumented incidents).
+  const evidence = await getIncidentEvidence({ id: incident.id, slug: incident.slug })
 
   const sc = sevConfig[incident.sev_level] || sevConfig.SEV4
   const st = statusConfig[incident.status] || statusConfig.declared
@@ -605,6 +610,13 @@ export default async function IncidentDetailPage({
           </div>
         )}
       </div>
+
+      {/* ── Evidence / Why this? ── */}
+      <IncidentEvidencePanel
+        evidence={evidence}
+        corroboration={incident.corroboration}
+        sevLabel={incident.sev_level}
+      />
 
       {/* ── Related Signals ── */}
       {relatedSignals.length > 0 && (
