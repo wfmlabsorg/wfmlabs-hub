@@ -110,6 +110,12 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
       if (data.signalId != null) detail.signalId = data.signalId
       if (data.incidentSlug != null) detail.incidentSlug = data.incidentSlug
       if (data.incidentId != null) detail.incidentId = data.incidentId
+      // Specific-event focus (OVIX "Driving Event"): carries the event's own
+      // identity so the canvas focuses THAT event (or says it has no mapped
+      // location) instead of falling back to a different signal (hub-028).
+      if (data.focus != null) detail.focus = data.focus
+      if (data.eventTitle != null) detail.eventTitle = data.eventTitle
+      if (data.source != null) detail.source = data.source
       window.dispatchEvent(new CustomEvent('wfm:globe-focus', { detail }))
       sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }

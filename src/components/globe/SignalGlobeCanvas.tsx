@@ -291,6 +291,11 @@ export default function SignalGlobeCanvas({
   // popup tracking (position updated imperatively each frame to avoid re-renders)
   const popupPosRef = useRef<any>(null)
   const [popup, setPopup] = useState<PopupState | null>(null)
+  // Honest "this specific event has no mapped location" banner (hub-028). Shown,
+  // centered (not geo-anchored), when a SPECIFIC event/signal focus request can't
+  // be resolved to a plotted dot — instead of silently focusing a different one.
+  const [focusNotice, setFocusNotice] = useState<{ title: string | null; message: string } | null>(null)
+  const focusNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Whether the popup's narrative preview is expanded to the full text (hub-021).
   // Reset to collapsed each time a new entity's popup opens.
   const [summaryExpanded, setSummaryExpanded] = useState(false)
@@ -1101,10 +1106,63 @@ export default function SignalGlobeCanvas({
     })
   }
 
+  // Surface an honest, centered "no mapped location" banner (hub-028) and clear
+  // any stale geo-anchored popup. Auto-dismisses so it never lingers.
+  function showFocusNotice(title: string | null, message: string) {
+    if (focusNoticeTimerRef.current) clearTimeout(focusNoticeTimerRef.current)
+    popupPosRef.current = null
+    setPopup(null)
+    activeSignalIdRef.current = null
+    onFocusRef.current(null)
+    setFocusNotice({ title: title ? cleanTitle(title) : null, message })
+    focusNoticeTimerRef.current = setTimeout(() => setFocusNotice(null), 7000)
+  }
+
+  // Resolve a SPECIFIC event (by exact title) to a currently-plotted signal so
+  // "show on globe" lands on THAT event — never a different one (hub-028). The
+  // OVIX tape has no coords/signalId for its driving event, only the title, so
+  // this is title-only matching: exact (normalized) equality, category-scoped
+  // when a category is supplied, restricted to plotted + in-window signals. No
+  // fuzzy matching — a near-miss must NOT hijack the focus to a wrong artifact.
+  function findPlottedByTitle(rawTitle: unknown, rawCategory: unknown): GlobeSignal | null {
+    const target = String(rawTitle ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+    if (!target) return null
+    const cat =
+      rawCategory != null ? String(rawCategory).toLowerCase().replace(/-/g, '_') : null
+    const now = Date.now()
+    const matches = signalsRef.current.filter((s) => {
+      if (s.promoted) return false
+      const la = Number(s.lat)
+      const lo = Number(s.lon)
+      if (isNaN(la) || isNaN(lo)) return false
+      const created = new Date(s.created_at).getTime()
+      if (isNaN(created) || now - created > SIGNAL_MAX_AGE_MS) return false
+      if (cat && String(s.category || '').toLowerCase().replace(/-/g, '_') !== cat) return false
+      return String(s.title ?? '').replace(/\s+/g, ' ').trim().toLowerCase() === target
+    })
+    if (!matches.length) return null
+    // Deterministic pick among exact-title dupes: highest severity, then newest.
+    matches.sort((a, b) => {
+      const sev = signalSeverityNum(b) - signalSeverityNum(a)
+      if (sev !== 0) return sev
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    return matches[0]
+  }
+
   // ── external focus hook: window CustomEvent('wfm:globe-focus', { detail }) ──
-  // detail is one of: { lat, lon, title?, category? } | { signalId } | { domain }.
-  // Lets the OVIX tape (via the page.tsx postMessage bridge) and native sections
-  // drive the globe without navigating. Auto-rotate pauses (flyTo* sets the dwell).
+  // detail is one of:
+  //   { incidentSlug|incidentId, ... }        → that incident (headline tier)
+  //   { lat, lon, title?, category? }          → that exact location
+  //   { signalId }                             → that exact plotted signal
+  //   { focus:'event', eventTitle, category? } → that SPECIFIC event (title-only)
+  //   { domain }                               → domain-level: pick a representative
+  // The first four are SPECIFIC-artifact requests: if the target can't be found /
+  // plotted we say so honestly (showFocusNotice) and STOP — we never substitute a
+  // different artifact. Domain-fallback (highest-severity signal in the domain) is
+  // reserved for the last form, where the domain itself IS the intent (hub-028).
+  // Lets the OVIX tape (via the SignalGlobeHero postMessage bridge) and native
+  // sections drive the globe without navigating. Auto-rotate pauses (flyTo* dwell).
   useEffect(() => {
     const handler = (e: Event) => {
       if (!readyRef.current) return
@@ -1115,7 +1173,8 @@ export default function SignalGlobeCanvas({
       // 0) incident identity → headline tier: fly + rich popup (Part 3). Checked
       // before raw coords so an incident "show on globe" never degrades to a
       // generic coordinate popup even when lat/lon are also supplied.
-      if (detail.incidentSlug != null || detail.incidentId != null) {
+      const wantsIncident = detail.incidentSlug != null || detail.incidentId != null
+      if (wantsIncident) {
         const inc = incidentsRef.current.find(
           (x) =>
             (detail.incidentSlug != null && x.slug === String(detail.incidentSlug)) ||
@@ -1125,10 +1184,11 @@ export default function SignalGlobeCanvas({
           flyToIncident(inc)
           return
         }
-        // Incident not in current feed — fall through to coords if provided.
+        // Incident not in current feed — fall through to coords if the caller
+        // supplied them; otherwise we report honestly at the end (never fallback).
       }
 
-      // 1) explicit coordinates
+      // 1) explicit coordinates → SPECIFIC location
       const lat = detail.lat != null ? Number(detail.lat) : NaN
       const lon = detail.lon != null ? Number(detail.lon) : NaN
       if (!isNaN(lat) && !isNaN(lon)) {
@@ -1141,14 +1201,49 @@ export default function SignalGlobeCanvas({
         return
       }
 
-      // 2) explicit signal id → fly to that plotted signal
+      // 2) explicit signal id → SPECIFIC plotted signal (honest miss, no fallback)
       if (detail.signalId != null) {
         const s = signalsRef.current.find((x) => x.id === Number(detail.signalId))
-        if (s) flyToSignal(s, true)
+        if (s) {
+          flyToSignal(s, true)
+        } else {
+          showFocusNotice(
+            detail.title ?? detail.eventTitle ?? null,
+            'This signal is no longer on the live globe (it may have aged out of the current window).',
+          )
+        }
         return
       }
 
-      // 3) domain key → highest-severity, most-recent currently-plotted signal.
+      // 3) SPECIFIC event focus (OVIX "Driving Event" etc.): title-only identity,
+      // no coords/signalId available. Resolve to a plotted dot by exact title, or
+      // say honestly it has no mapped location — never jump to a different signal.
+      if (detail.focus === 'event' || detail.eventTitle != null) {
+        const match = findPlottedByTitle(detail.eventTitle, detail.category ?? detail.domain)
+        if (match) {
+          flyToSignal(match, true)
+        } else {
+          showFocusNotice(
+            detail.eventTitle ?? detail.title ?? null,
+            'This event has no mapped location on the globe — it may be non-geographic or not currently plotted.',
+          )
+        }
+        return
+      }
+
+      // An incident was requested by id/slug but wasn't found and no coords were
+      // given — report honestly rather than silently doing nothing (hub-028).
+      if (wantsIncident) {
+        showFocusNotice(
+          detail.title ?? null,
+          'This incident is no longer on the live globe.',
+        )
+        return
+      }
+
+      // 4) domain-level focus → highest-severity, most-recent plotted signal in
+      // that domain. This is the ONLY intentional "representative" path: the
+      // domain itself is the request (no specific event/signal/incident given).
       // Normalize key (OVIX uses 'supply-chain', globe categories use 'supply_chain').
       if (detail.domain) {
         const cat = String(detail.domain).toLowerCase().replace(/-/g, '_')
@@ -1169,12 +1264,17 @@ export default function SignalGlobeCanvas({
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           })
           flyToSignal(candidates[0], true)
+        } else {
+          showFocusNotice(null, 'No mapped activity in this domain right now.')
         }
         return
       }
     }
     window.addEventListener('wfm:globe-focus', handler as EventListener)
-    return () => window.removeEventListener('wfm:globe-focus', handler as EventListener)
+    return () => {
+      window.removeEventListener('wfm:globe-focus', handler as EventListener)
+      if (focusNoticeTimerRef.current) clearTimeout(focusNoticeTimerRef.current)
+    }
   }, [])
 
   // ── react to new signal data: detect new ids, enqueue, re-plot ──
@@ -1421,6 +1521,65 @@ export default function SignalGlobeCanvas({
           </div>
         )}
       </div>
+
+      {/* honest "no mapped location" banner (hub-028) — centered, not geo-anchored,
+          shown when a specific event/signal focus can't be resolved to a dot. */}
+      {focusNotice && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '1rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 7,
+            maxWidth: 'min(92%, 26rem)',
+            background: 'rgba(6,10,22,0.96)',
+            border: '1px solid #eab308',
+            borderRadius: '6px',
+            padding: '0.6rem 0.85rem',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.6)',
+            fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
+            pointerEvents: 'auto',
+          }}
+          role="status"
+        >
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+            <div style={{ flex: 1 }}>
+              <div
+                style={{
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#eab308',
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  marginBottom: '0.3rem',
+                }}
+              >
+                ⚑ No mapped location
+              </div>
+              {focusNotice.title && (
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#e2e8f0', lineHeight: 1.35, marginBottom: '0.25rem' }}>
+                  {focusNotice.title}
+                </div>
+              )}
+              <div style={{ fontSize: '0.7rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+                {focusNotice.message}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (focusNoticeTimerRef.current) clearTimeout(focusNoticeTimerRef.current)
+                setFocusNotice(null)
+              }}
+              style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '0.85rem', lineHeight: 1 }}
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

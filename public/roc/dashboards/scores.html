@@ -511,12 +511,28 @@ a.lnk:hover { text-decoration:underline; }
   // landing (window.parent !== window), focus the NATIVE landing globe via
   // postMessage (no navigation). When opened standalone, fall through to the
   // <a href> so the standalone /roc/globe/globe.html still works.
-  // The tape only knows the domain key (no event coords), so we pass `domain`.
-  window.showOnGlobe = function(ev, key) {
+  //
+  // This control targets the SPECIFIC driving event, so it posts that event's
+  // identity (title/source/domain) marked `focus:'event'` — NOT a bare `domain`
+  // (hub-028). The API gives us no coords/signalId for the top event, so the
+  // globe resolves it by title; if it isn't plotted it says so honestly rather
+  // than jumping to a *different* (highest-severity) signal in the domain.
+  // Identity is read from the anchor's data-* attributes (avoids escaping free
+  // text into an inline onclick string).
+  window.showOnGlobe = function(ev, el) {
     try {
       if (window.parent && window.parent !== window) {
         if (ev && ev.preventDefault) ev.preventDefault();
-        window.parent.postMessage({ type: 'wfm:globe-focus', domain: key }, location.origin);
+        var title  = el ? el.getAttribute('data-globe-title')  : null;
+        var domain = el ? el.getAttribute('data-globe-domain') : null;
+        var source = el ? el.getAttribute('data-globe-source') : null;
+        window.parent.postMessage({
+          type: 'wfm:globe-focus',
+          focus: 'event',              // SPECIFIC event → never domain-fallback
+          eventTitle: title || null,
+          category: domain || null,    // domain for context + category-scoped match
+          source: source || null,
+        }, location.origin);
         return false; // embedded: handled locally, do not navigate
       }
     } catch (e) { /* parent inaccessible — fall through to navigate */ }
@@ -553,7 +569,11 @@ a.lnk:hover { text-decoration:underline; }
       html += '<div class="evt"><div class="et">' + esc(dom.topEvent) + '</div>' +
         '<div class="em"><span>source: ' + esc(dom.topSource || '—') + '</span>' +
         '<span>' + (dom.eventCount || 0) + ' events in domain</span>' +
-        (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Show on globe" onclick="return showOnGlobe(event, \'' + esc(key) + '\')">show on globe ↗</a>' : '') +
+        (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Show on globe"' +
+          ' data-globe-domain="' + esc(key) + '"' +
+          ' data-globe-title="' + esc(dom.topEvent) + '"' +
+          ' data-globe-source="' + esc(dom.topSource || '') + '"' +
+          ' onclick="return showOnGlobe(event, this)">show on globe ↗</a>' : '') +
         '</div></div>';
     } else { html += '<div class="muted">No top event reported.</div>'; }
     html += '</div>';
