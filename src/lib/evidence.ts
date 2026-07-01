@@ -139,22 +139,20 @@ function parseInputs(raw: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Read the full evidence chain for one incident.
+ * Read the full evidence chain for one artifact, keyed by `artifact_type` + one-or-more
+ * candidate `artifact_id`s (the writer's id convention isn't pinned per-fleet, so callers
+ * pass every value it might have used — numeric id and/or slug — and whichever matches wins).
  *
- * The `artifact_id` convention used by the (separately-built) AGENTS instrumentation is not
- * yet pinned, so we look up by BOTH the numeric id AND the slug — whichever the writer used
- * will match. Returns `null` only on a hard failure; an incident with no evidence yet
- * resolves to an all-empty {@link ArtifactEvidence} so the caller can render the graceful
- * "not yet available" state uniformly.
+ * Returns `null` only on a hard failure; an artifact with no evidence yet resolves to an
+ * all-empty {@link ArtifactEvidence} so callers can render the graceful "not yet available"
+ * state uniformly. Shared by {@link getIncidentEvidence} and {@link getSignalEvidence}.
  */
-export async function getIncidentEvidence(opts: {
-  id: number | string
-  slug: string
-}): Promise<ArtifactEvidence | null> {
-  const candidates = Array.from(
-    new Set([String(opts.id), opts.slug].filter((v) => v && v.length > 0)),
-  )
-  if (candidates.length === 0) return { projection: null, decisions: [], rules: {}, generatedAt: null }
+async function getArtifactEvidence(
+  artifactType: string,
+  candidates: string[],
+): Promise<ArtifactEvidence | null> {
+  const ids = Array.from(new Set(candidates.filter((v) => v && v.length > 0)))
+  if (ids.length === 0) return { projection: null, decisions: [], rules: {}, generatedAt: null }
 
   try {
     // Projection (latest) + full decision_log rows, in parallel.
@@ -162,18 +160,18 @@ export async function getIncidentEvidence(opts: {
       neonQuery<{ payload: unknown; generated_at: string }>(
         `SELECT payload, generated_at
            FROM evidence
-          WHERE artifact_type = 'incident' AND artifact_id = ANY($1)
+          WHERE artifact_type = $1 AND artifact_id = ANY($2)
           ORDER BY generated_at DESC
           LIMIT 1`,
-        [candidates],
+        [artifactType, ids],
       ),
       neonQuery<DecisionLogRow & { inputs: unknown }>(
         `SELECT id, stage, decision, score, inputs, rule_id, rule_version,
                 engine, model_id, prompt_version, created_at
            FROM decision_log
-          WHERE artifact_type = 'incident' AND artifact_id = ANY($1)
+          WHERE artifact_type = $1 AND artifact_id = ANY($2)
           ORDER BY created_at ASC`,
-        [candidates],
+        [artifactType, ids],
       ),
     ])
 
@@ -208,4 +206,30 @@ export async function getIncidentEvidence(opts: {
     // Best-effort: missing tables (pre-migration), transient Neon, malformed rows → absent.
     return null
   }
+}
+
+/**
+ * Read the full evidence chain for one incident (`artifact_type = 'incident'`).
+ *
+ * The `artifact_id` convention used by the (separately-built) AGENTS instrumentation is not
+ * yet pinned, so we look up by BOTH the numeric id AND the slug — whichever the writer used
+ * will match.
+ */
+export async function getIncidentEvidence(opts: {
+  id: number | string
+  slug: string
+}): Promise<ArtifactEvidence | null> {
+  return getArtifactEvidence('incident', [String(opts.id), opts.slug])
+}
+
+/**
+ * Read the full evidence chain for one signal (`artifact_type = 'signal'`) — hub-027 / WFM-128.
+ *
+ * Answers "why is this a signal": the IWS filter decision (pass + inputs + model) that
+ * promoted a news_event to a member-facing signal, plus OVIX volatility, geo provenance, and
+ * the source news_event(s). The IWS filter (API fleet) writes these against the signal's
+ * numeric id per EVIDENCE-CONTRACT.md; signals have no slug, so the id is the only candidate.
+ */
+export async function getSignalEvidence(id: number | string): Promise<ArtifactEvidence | null> {
+  return getArtifactEvidence('signal', [String(id)])
 }
