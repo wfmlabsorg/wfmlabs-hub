@@ -97,7 +97,7 @@ export function CorroborationBadge({ corroboration }: { corroboration: unknown }
     <span
       title={
         status === 'corroborated'
-          ? 'Independently corroborated by reputable external sources'
+          ? 'Independently corroborated by external sources'
           : status === 'single-source'
             ? 'Only a single external source found'
             : 'No external corroboration on record'
