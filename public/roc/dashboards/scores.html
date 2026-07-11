@@ -3,13 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OVIX Volatility Tape — ROC</title>
+<title>Operational Risk Index — ROC</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ============================================================
-   OVIX VOLATILITY TAPE — operator-grade dashboard (hub-007)
+   OPERATIONAL RISK INDEX — 12-domain tape (hub-029, was hub-007)
+   HEADLINE = signals-derived Operational Risk Index (all 12 domains,
+   member-geo-weighted, traceable). OVIX = geophysical SENSOR OVERLAY,
+   demoted to a muted, clearly-labeled second reading — never the headline.
    Mission Control theme. NO ORANGE (#f97316).
    bg #0b1120 · panels #0f1729/#111927 · text #f1f5f9/#94a3b8
    cyan #22d3ee = interactive ONLY · amber #f59e0b = elevated
@@ -42,7 +45,7 @@ body {
 
 /* ---------- COMPOSITE BAND ---------- */
 .band {
-  display:flex; align-items:center; gap:18px;
+  display:flex; align-items:center; gap:16px;
   padding:10px 18px; background:var(--panel); border-bottom:1px solid var(--border);
   flex-shrink:0; min-height:62px;
 }
@@ -51,18 +54,17 @@ body {
 .band-composite { display:flex; align-items:baseline; gap:8px; }
 .band-composite .val { font-family:var(--mono); font-size:34px; font-weight:700; line-height:1; }
 .band-composite .scale { font-size:11px; color:var(--dim2); }
-.band-dir { display:flex; flex-direction:column; align-items:flex-start; gap:1px; }
-.dir-arrow { font-size:14px; font-weight:700; line-height:1; }
-.dir-delta { font-family:var(--mono); font-size:11px; }
 .level-badge { padding:3px 11px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; border:1px solid; }
-.vol-badge {
-  padding:2px 8px; border-radius:3px; font-size:9px; font-weight:700; letter-spacing:1px;
-  border:1px solid; white-space:nowrap;
+
+/* OVIX overlay chip in the band — muted, clearly secondary */
+.ovix-chip {
+  display:flex; align-items:center; gap:8px; padding:4px 10px; border-radius:4px;
+  border:1px dashed var(--border2); background:rgba(148,163,184,0.04);
 }
-.vol-STABLE { color:var(--dim); border-color:var(--border2); background:rgba(148,163,184,0.06); }
-.vol-RISING { color:var(--amber); border-color:rgba(245,158,11,0.4); background:rgba(245,158,11,0.08); }
-.vol-HIGH   { color:var(--red); border-color:rgba(239,68,68,0.5); background:rgba(239,68,68,0.1); }
-.band-spark { flex-shrink:0; }
+.ovix-chip .lbl { font-size:8px; letter-spacing:1px; color:var(--dim2); font-weight:600; line-height:1.2; text-transform:uppercase; }
+.ovix-chip .ov-val { font-family:var(--mono); font-size:16px; font-weight:700; color:var(--dim); line-height:1; }
+.ovix-chip .ov-dir { font-family:var(--mono); font-size:10px; }
+
 .band-right { margin-left:auto; display:flex; align-items:center; gap:16px; }
 .updated { font-family:var(--mono); font-size:10px; color:var(--dim); display:flex; align-items:center; gap:6px; white-space:nowrap; }
 .pulse { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 0 0 rgba(16,185,129,0.6); animation:pulse 2s infinite; }
@@ -86,7 +88,7 @@ body {
 .tape { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
 .tape-head, .row {
   display:grid;
-  grid-template-columns: 150px 96px 110px 92px 1fr 56px 40px;
+  grid-template-columns: 168px 118px 132px 1fr 50px 46px;
   align-items:center; gap:10px;
 }
 .tape-head {
@@ -107,12 +109,18 @@ body {
 }
 .cell-domain { display:flex; flex-direction:column; gap:2px; min-width:0; }
 .cell-domain .name { font-weight:600; font-size:13px; text-transform:capitalize; letter-spacing:.3px; }
-.cell-domain .meta { font-size:9px; color:var(--dim2); font-family:var(--mono); }
-.cell-score { display:flex; align-items:baseline; gap:6px; }
+.cell-domain .meta { font-size:9px; color:var(--dim2); font-family:var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* op-risk headline score cell */
+.cell-score { display:flex; align-items:center; gap:8px; }
 .cell-score .s { font-family:var(--mono); font-size:21px; font-weight:700; line-height:1; }
-.cell-dir { display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; }
-.cell-dir .a { font-size:12px; font-weight:700; }
-.cell-dir .d { font-family:var(--mono); font-size:9px; }
+.cell-score .lvl { padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:.5px; border:1px solid; white-space:nowrap; }
+
+/* OVIX overlay cell — muted second reading */
+.cell-ovix { display:flex; align-items:center; gap:7px; min-width:0; }
+.cell-ovix .ov { font-family:var(--mono); font-size:14px; font-weight:600; color:var(--dim); }
+.cell-ovix .none { font-size:9px; color:var(--dim2); font-style:italic; }
+
 .cell-driver { font-size:11px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .inc-badge {
   display:inline-flex; align-items:center; justify-content:center; min-width:24px; height:20px; padding:0 6px;
@@ -120,16 +128,19 @@ body {
   background:rgba(239,68,68,0.12); color:var(--red); border:1px solid rgba(239,68,68,0.35);
 }
 .inc-badge.zero { background:transparent; color:var(--dim2); border-color:var(--border2); }
-.feed-dot { width:9px; height:9px; border-radius:50%; margin:0 auto; }
-.feed-dot.ok { background:var(--green); }
-.feed-dot.dead { background:var(--red); box-shadow:0 0 6px rgba(239,68,68,0.6); }
+.why-btn {
+  display:inline-flex; align-items:center; justify-content:center; width:26px; height:22px; margin:0 auto;
+  border-radius:4px; border:1px solid var(--border2); background:rgba(34,211,238,0.05);
+  color:var(--cyan); font-size:11px; font-weight:600; cursor:pointer;
+}
+.why-btn:hover { border-color:var(--cyan); background:rgba(34,211,238,0.16); }
 
 /* ---------- DRILL PANEL ---------- */
 .drill {
   width:0; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border);
   overflow:hidden; transition:width .18s ease; display:flex; flex-direction:column;
 }
-.drill.open { width:400px; }
+.drill.open { width:410px; }
 .drill-head {
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0;
@@ -143,6 +154,25 @@ body {
 .sect { margin-bottom:18px; }
 .sect-title { font-size:9px; letter-spacing:1.5px; color:var(--dim2); font-weight:600; text-transform:uppercase; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
 .sect-title::after { content:""; flex:1; height:1px; background:var(--border); }
+
+/* WHY-THIS-SCORE (traceability centerpiece) */
+.trace { border:1px solid var(--border2); border-radius:6px; padding:11px 12px; background:var(--panel2); }
+.trace-rule { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:9px; }
+.trace-chip { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:3px; border:1px solid var(--border2); color:var(--dim); background:rgba(148,163,184,0.05); }
+.trace-chip.rule { color:var(--cyan); border-color:rgba(34,211,238,0.35); background:rgba(34,211,238,0.06); }
+.trace-chip.engine { color:var(--green); border-color:rgba(16,185,129,0.35); background:rgba(16,185,129,0.06); }
+.trace-formula { font-family:var(--mono); font-size:10px; color:var(--dim); line-height:1.5; margin-bottom:10px; padding-bottom:9px; border-bottom:1px solid var(--border); }
+.trace-formula b { color:var(--text); }
+.io-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; }
+.io { display:flex; flex-direction:column; gap:1px; }
+.io .k { font-size:8px; letter-spacing:.5px; color:var(--dim2); text-transform:uppercase; }
+.io .v { font-family:var(--mono); font-size:13px; font-weight:600; color:var(--text); }
+.io .v small { font-size:9px; color:var(--dim2); font-weight:400; }
+
+.ov-block { border:1px dashed var(--border2); border-radius:6px; padding:10px 12px; background:rgba(148,163,184,0.03); }
+.ov-block .ov-head { display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+.ov-block .ov-num { font-family:var(--mono); font-size:20px; font-weight:700; }
+.ov-block .ov-tag { font-size:8px; letter-spacing:1px; color:var(--dim2); text-transform:uppercase; font-weight:600; }
 
 .reg-row { display:grid; grid-template-columns: 1fr 60px 44px; align-items:center; gap:8px; padding:5px 0; border-bottom:1px solid rgba(30,41,59,0.6); }
 .reg-row .rn { font-size:11px; color:var(--text); }
@@ -165,6 +195,9 @@ a.lnk:hover { text-decoration:underline; }
 
 .brief-snip { font-size:11px; color:var(--dim); line-height:1.5; }
 
+/* sparkline holder */
+.spark { flex-shrink:0; line-height:0; }
+
 /* ---------- FOOTER ---------- */
 .footer {
   padding:4px 18px; background:var(--panel2); border-top:1px solid var(--border);
@@ -177,9 +210,9 @@ a.lnk:hover { text-decoration:underline; }
 ::-webkit-scrollbar-track { background:transparent; }
 
 @media (max-width:860px) {
-  .tape-head, .row { grid-template-columns: 120px 78px 0 80px 1fr 44px 0; }
-  .band-spark, .feed-dot, .cell-domain .meta { display:none; }
-  .drill.open { position:absolute; right:0; top:0; bottom:0; width:90%; max-width:400px; z-index:50; }
+  .tape-head, .row { grid-template-columns: 130px 96px 0 1fr 42px 40px; }
+  .cell-ovix, .cell-domain .meta, .ovix-chip { display:none; }
+  .drill.open { position:absolute; right:0; top:0; bottom:0; width:92%; max-width:410px; z-index:50; }
 }
 </style>
 </head>
@@ -187,20 +220,20 @@ a.lnk:hover { text-decoration:underline; }
 
 <!-- ========== COMPOSITE BAND ========== -->
 <div class="band">
-  <div class="band-title">OVIX<small>VOLATILITY TAPE</small></div>
+  <div class="band-title">OP RISK<small>12-DOMAIN INDEX</small></div>
   <div class="band-composite">
     <span class="val mono" id="comp-val">--</span>
     <span class="scale">/10</span>
   </div>
-  <div class="band-dir">
-    <span class="dir-arrow" id="comp-arrow">—</span>
-    <span class="dir-delta mono" id="comp-delta">6h</span>
-  </div>
   <span class="level-badge" id="comp-level">—</span>
-  <span class="vol-badge vol-STABLE" id="comp-vol">VOL —</span>
-  <span class="band-spark" id="comp-spark"></span>
+  <div class="ovix-chip" id="ovix-chip" title="OVIX geophysical sensor composite — corroboration overlay, not the headline">
+    <span class="lbl">OVIX sensor<br>overlay</span>
+    <span class="ov-val mono" id="ovix-val">—</span>
+    <span class="ov-dir mono" id="ovix-dir">—</span>
+    <span class="spark" id="ovix-spark"></span>
+  </div>
   <div class="band-right">
-    <span class="feeds" id="feeds">FEEDS <b>—/—</b></span>
+    <span class="feeds" id="feeds">SIGNALS <b>—/—</b></span>
     <span class="updated"><span class="pulse"></span><span id="updated">--:--</span></span>
     <div class="transport">
       <button onclick="rocNav('prev')" title="Previous">&#9198;</button>
@@ -214,11 +247,11 @@ a.lnk:hover { text-decoration:underline; }
 <div class="body">
   <div class="tape">
     <div class="tape-head">
-      <span>Domain</span><span>Score</span><span>6h Trend</span><span>Volatility</span>
-      <span>Top Driver</span><span style="text-align:center">Inc</span><span style="text-align:center">Feed</span>
+      <span>Domain</span><span>Op Risk</span><span>OVIX overlay</span>
+      <span>Top Driver</span><span style="text-align:center">Inc</span><span style="text-align:center">Why</span>
     </div>
     <div class="rows" id="rows">
-      <div style="padding:24px 18px;color:var(--dim2)">Loading tape…</div>
+      <div style="padding:24px 18px;color:var(--dim2)">Loading Operational Risk Index…</div>
     </div>
   </div>
 
@@ -235,7 +268,7 @@ a.lnk:hover { text-decoration:underline; }
 </div>
 
 <div class="footer">
-  <span>OVIX Volatility Tape · scores &amp; series from canonical /api/ovix endpoints · regional breakdown via /api/ovix/composite</span>
+  <span>Operational Risk Index · signals-derived, member-geo-weighted (rule op_risk_index v1) · OVIX = geophysical sensor overlay</span>
   <span id="foot-status">—</span>
 </div>
 
@@ -245,8 +278,28 @@ a.lnk:hover { text-decoration:underline; }
   var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
   var REFRESH_MS = 30000;
 
-  // Curated operator-relevant regions for the drill breakdown (intersected with the
-  // live registry at load). Macro regions + key BPO/contact-center metro hubs.
+  // HEADLINE = signals-derived Operational Risk Index (all 12 domains).
+  var OP_RISK_URL = OVIX_API + '/api/ovix/op-risk?scope=global';
+  // OVERLAY = OVIX geophysical sensor scores + 6h trend series (corroboration only).
+  var OVIX_SCORES_URL = OVIX_API + '/api/ovix/scores';
+  var OVIX_SERIES_URL = OVIX_API + '/api/ovix/scores/series?hours=6&region=global';
+
+  // Traceability constants (rule is named + versioned server-side in decision_rules;
+  // mirrored here for the member-facing "why this score" trace — display only).
+  var RISK_SOURCE = 'signals-op-risk-v1';
+  var RISK_RULE   = 'op_risk_index';
+  var RISK_RULE_VERSION = 'v1';
+
+  // Domains where OVIX has a genuine sensor / feed reading worth showing as an
+  // overlay (per 12-DOMAIN spec: weather/seismic/disaster/environmental/health/cyber
+  // are OVIX-live; infrastructure has an IODA feed). labor/supply_chain/travel/
+  // financial/geopolitical have NO OVIX sensor by design → honest "no overlay".
+  var OVIX_SENSOR_DOMAINS = {
+    weather:1, seismic:1, disaster:1, environmental:1, health:1, cyber:1, infrastructure:1
+  };
+
+  // Curated operator-relevant regions for the OVIX regional overlay (intersected with
+  // the live registry at load). Macro regions + key BPO/contact-center metro hubs.
   var MACRO_REGIONS = ['north-america','emea','apac','south-america','australia-nz'];
   var METRO_CANDIDATES = [
     'manila','cebu','mumbai','bengaluru','bangalore','delhi','hyderabad','chennai',
@@ -265,27 +318,32 @@ a.lnk:hover { text-decoration:underline; }
 
   // ---- state ----
   var state = {
-    scores: null,           // /api/ovix/scores
-    seriesByDomain: {},      // domain -> {points, volatility, volatilityLevel}
-    compositeSeries: [],
-    incByDomain: {},         // domain -> [open incidents]
-    regions: null,           // /api/ovix/regions
-    regionCache: {},         // regionId -> composite response
-    selected: null,          // selected domain key
-    lastScores: {}           // domain -> previous score (for flash)
+    risk: null,             // /api/ovix/op-risk  (HEADLINE, all 12 domains)
+    ovix: null,             // /api/ovix/scores   (OVERLAY sensor reading)
+    ovixSeries: {},         // domain -> {points} from /api/ovix/scores/series
+    ovixCompositeSeries: [],
+    incByDomain: {},        // domain -> [open incidents]
+    regions: null,          // /api/ovix/regions
+    regionCache: {},        // regionId -> composite response (OVIX)
+    selected: null,         // selected domain key
+    lastScores: {}          // domain -> previous op-risk score (for flash)
   };
 
+  function ovixDomain(key) {
+    var arr = (state.ovix && state.ovix.domains) || [];
+    for (var i = 0; i < arr.length; i++) { if (arr[i].domain === key) return arr[i]; }
+    return null;
+  }
+  function hasOvixOverlay(key) { return !!OVIX_SENSOR_DOMAINS[key]; }
+
   // ============================================================
-  //  SPARKLINE (inline SVG) — renders SHAPE of a points[] series.
-  //  Honest nuance: the series is a mean across region snapshots, so its
-  //  last point is the trend shape, NOT the headline value — we never
-  //  assert equality. Sparse/empty series degrade to a flat dim line.
+  //  SPARKLINE (inline SVG) — renders the SHAPE of a points[] series (OVIX sensor
+  //  trend). Sparse/empty series degrade to a flat dim line. Display only.
   // ============================================================
   function sparkline(points, w, h, color) {
     w = w || 104; h = h || 24;
     var vals = (points || []).map(function(p) { return p.score; }).filter(function(v) { return typeof v === 'number'; });
     if (vals.length < 2) {
-      // graceful degrade — non-geo / sparse domains
       return '<svg width="' + w + '" height="' + h + '" aria-hidden="true">' +
         '<line x1="2" y1="' + (h/2) + '" x2="' + (w-2) + '" y2="' + (h/2) +
         '" stroke="var(--border2)" stroke-width="1.5" stroke-dasharray="3 3"/></svg>';
@@ -305,9 +363,6 @@ a.lnk:hover { text-decoration:underline; }
       '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>' +
       '<circle cx="' + last[0] + '" cy="' + last[1] + '" r="2.1" fill="' + color + '"/></svg>';
   }
-
-  // 6h trend delta from the series (first vs last point). This is a difference of
-  // values the endpoint returned — display math, not a score computation.
   function trendDelta(points) {
     var vals = (points || []).map(function(p) { return p.score; }).filter(function(v) { return typeof v === 'number'; });
     if (vals.length < 2) return null;
@@ -321,23 +376,13 @@ a.lnk:hover { text-decoration:underline; }
     if (delta === null) return '—';
     return (delta >= 0 ? '+' : '') + delta.toFixed(1);
   }
-  function volLevelOf(domain) {
-    var s = state.seriesByDomain[domain];
-    return (s && s.volatilityLevel) ? s.volatilityLevel : null;
-  }
 
   // ============================================================
-  //  HEAT SORT — FOREMAN default: float HIGH-volatility domains to the top
-  //  (rapid change outranks a high-but-flat score), else by score desc.
-  //  Kept isolated so Ted can swap to pure-score or a blended weight in one line.
+  //  SORT — Operational Risk score, descending. Honest: low-signal domains
+  //  (e.g. labor) legitimately fall to the bottom rather than being inflated.
   // ============================================================
-  function heatSort(domains) {
-    return domains.slice().sort(function(a, b) {
-      var ah = volLevelOf(a.domain) === 'HIGH' ? 1 : 0;
-      var bh = volLevelOf(b.domain) === 'HIGH' ? 1 : 0;
-      if (ah !== bh) return bh - ah;
-      return b.score - a.score;
-    });
+  function riskSort(domains) {
+    return domains.slice().sort(function(a, b) { return (b.score || 0) - (a.score || 0); });
   }
 
   // ============================================================
@@ -366,7 +411,6 @@ a.lnk:hover { text-decoration:underline; }
         var dom = inc.domain || 'unknown';
         (by[dom] = by[dom] || []).push(inc);
       });
-      // strongest severity first
       Object.keys(by).forEach(function(k) {
         by[k].sort(function(a, b) { return (b.severity || 0) - (a.severity || 0); });
       });
@@ -376,28 +420,28 @@ a.lnk:hover { text-decoration:underline; }
 
   function loadCore() {
     return Promise.all([
-      getJSON(OVIX_API + '/api/ovix/scores').catch(function() { return null; }),
-      getJSON(OVIX_API + '/api/ovix/scores/series?hours=6&region=global').catch(function() { return null; }),
+      getJSON(OP_RISK_URL).catch(function() { return null; }),         // HEADLINE
+      getJSON(OVIX_SCORES_URL).catch(function() { return null; }),      // overlay scores
+      getJSON(OVIX_SERIES_URL).catch(function() { return null; }),      // overlay trend
       loadIncidents()
     ]).then(function(res) {
-      if (res[0]) state.scores = res[0];
-      var s = res[1];
-      state.seriesByDomain = {};
-      state.compositeSeries = [];
+      if (res[0]) state.risk = res[0];
+      state.ovix = res[1] || null;
+      state.ovixSeries = {};
+      state.ovixCompositeSeries = [];
+      var s = res[2];
       if (s) {
-        (s.domains || []).forEach(function(d) {
-          state.seriesByDomain[d.domain] = { points: d.points || [], volatility: d.volatility, volatilityLevel: d.volatilityLevel };
-        });
-        state.compositeSeries = s.composite_series || [];
+        (s.domains || []).forEach(function(d) { state.ovixSeries[d.domain] = { points: d.points || [] }; });
+        state.ovixCompositeSeries = s.composite_series || [];
       }
     });
   }
 
   // ============================================================
-  //  RENDER — composite band
+  //  RENDER — composite band (headline op-risk + OVIX overlay chip)
   // ============================================================
   function renderBand() {
-    var d = state.scores; if (!d) return;
+    var d = state.risk; if (!d) return;
     var comp = (typeof d.composite === 'number') ? d.composite : 0;
     var level = comp >= 7 ? 'HIGH' : comp >= 4 ? 'ELEVATED' : 'NORMAL';
     var color = levelColor(level);
@@ -408,41 +452,38 @@ a.lnk:hover { text-decoration:underline; }
     var lb = document.getElementById('comp-level');
     lb.textContent = level; lb.style.color = color; lb.style.borderColor = color;
 
-    var delta = trendDelta(state.compositeSeries);
-    var arr = dirArrow(delta);
-    var aEl = document.getElementById('comp-arrow');
-    aEl.textContent = arr.ch; aEl.style.color = arr.color;
-    document.getElementById('comp-delta').textContent = fmtDelta(delta) + ' /6h';
-    document.getElementById('comp-delta').style.color = arr.color;
+    // OVIX overlay chip — muted geophysical sensor composite + its 6h trend
+    var chip = document.getElementById('ovix-chip');
+    if (state.ovix && typeof state.ovix.composite === 'number') {
+      document.getElementById('ovix-val').textContent = state.ovix.composite.toFixed(1);
+      var delta = trendDelta(state.ovixCompositeSeries);
+      var arr = dirArrow(delta);
+      var od = document.getElementById('ovix-dir');
+      od.textContent = arr.ch + ' ' + fmtDelta(delta); od.style.color = arr.color;
+      document.getElementById('ovix-spark').innerHTML = sparkline(state.ovixCompositeSeries, 72, 22, 'var(--dim)');
+      chip.style.display = '';
+    } else { chip.style.display = 'none'; }
 
-    document.getElementById('comp-spark').innerHTML = sparkline(state.compositeSeries, 150, 30, color);
-
-    // composite volatility badge — derived from the headline level band of the trend (display only)
-    var cv = document.getElementById('comp-vol');
-    var compVolLvl = (delta !== null && Math.abs(delta) >= 1.5) ? 'HIGH' : (delta !== null && Math.abs(delta) >= 0.6) ? 'RISING' : 'STABLE';
-    cv.className = 'vol-badge vol-' + compVolLvl;
-    cv.textContent = 'VOL ' + compVolLvl;
-
-    // feed health — proxy: domains reporting events / total (honest, no feed-health field in API)
+    // signal coverage — domains reporting signals / total (from op-risk eventCount)
     var domains = d.domains || [];
     var reporting = domains.filter(function(x) { return (x.eventCount || 0) > 0; }).length;
-    document.getElementById('feeds').innerHTML = 'FEEDS <b>' + reporting + '/' + domains.length + '</b>';
+    document.getElementById('feeds').innerHTML = 'SIGNALS <b>' + reporting + '/' + domains.length + '</b>';
 
     var when = d.lastUpdated ? new Date(d.lastUpdated) : new Date();
     var hh = String(when.getHours()).padStart(2, '0'), mm = String(when.getMinutes()).padStart(2, '0');
     document.getElementById('updated').textContent = hh + ':' + mm;
-    document.getElementById('foot-status').textContent = 'updated ' + hh + ':' + mm + ' local · ' + (d.source || '');
+    document.getElementById('foot-status').textContent = 'updated ' + hh + ':' + mm + ' local · ' + (d.source || RISK_SOURCE);
   }
 
   // ============================================================
-  //  RENDER — the tape rows
+  //  RENDER — the tape rows (headline op-risk; OVIX muted overlay)
   // ============================================================
   function renderRows() {
-    var d = state.scores;
+    var d = state.risk;
     var host = document.getElementById('rows');
-    if (!d || !d.domains) { host.innerHTML = '<div style="padding:24px 18px;color:var(--red)">No score data.</div>'; return; }
+    if (!d || !d.domains) { host.innerHTML = '<div style="padding:24px 18px;color:var(--red)">No Operational Risk Index data.</div>'; return; }
 
-    var sorted = heatSort(d.domains);
+    var sorted = riskSort(d.domains);
     var changed = {};
     sorted.forEach(function(dom) {
       var prev = state.lastScores[dom.domain];
@@ -451,33 +492,41 @@ a.lnk:hover { text-decoration:underline; }
 
     host.innerHTML = sorted.map(function(dom) {
       var color = scoreColorByLevel(dom);
-      var ser = state.seriesByDomain[dom.domain] || {};
-      var delta = trendDelta(ser.points);
-      var arr = dirArrow(delta);
-      var volLvl = ser.volatilityLevel || '—';
-      var volClass = (volLvl === 'HIGH' || volLvl === 'RISING' || volLvl === 'STABLE') ? volLvl : 'STABLE';
-      var volTxt = (typeof ser.volatility === 'number') ? (volLvl + ' ' + ser.volatility.toFixed(2)) : '—';
+      var level = levelOf(dom);
       var incs = state.incByDomain[dom.domain] || [];
-      var feedOk = (dom.eventCount || 0) > 0;
       var sel = state.selected === dom.domain ? ' selected' : '';
       var flash = changed[dom.domain] ? ' flash' : '';
       var driver = dom.topEvent || '—';
+      var sigCount = dom.eventCount || 0;
+      var metaBits = sigCount + ' signal' + (sigCount === 1 ? '' : 's');
+      if (dom.topSource) metaBits += ' · ' + dom.topSource;
+
+      // OVIX overlay cell
+      var ovCell;
+      if (hasOvixOverlay(dom.domain)) {
+        var ov = ovixDomain(dom.domain);
+        if (ov && typeof ov.score === 'number') {
+          var ovColor = levelColor(levelOf(ov));
+          ovCell = '<span class="ov" style="color:' + ovColor + '">' + ov.score.toFixed(1) + '</span>' +
+            '<span class="spark">' + sparkline((state.ovixSeries[dom.domain] || {}).points, 62, 22, ovColor) + '</span>';
+        } else { ovCell = '<span class="none">sensor idle</span>'; }
+      } else {
+        ovCell = '<span class="none">no sensor</span>';
+      }
 
       return '<div class="row' + sel + flash + '" data-domain="' + dom.domain + '">' +
-        '<div class="cell-domain"><span class="name">' + dom.domain.replace(/-/g, ' ') + '</span>' +
-          '<span class="meta">' + (dom.eventCount || 0) + ' evt · ' + (dom.topSource || '—') + '</span></div>' +
+        '<div class="cell-domain"><span class="name">' + dom.domain.replace(/_/g, ' ').replace(/-/g, ' ') + '</span>' +
+          '<span class="meta" title="' + esc(metaBits) + '">' + esc(metaBits) + '</span></div>' +
         '<div class="cell-score"><span class="s" style="color:' + color + '">' + dom.score.toFixed(1) + '</span>' +
-          '<span class="cell-dir"><span class="a" style="color:' + arr.color + '">' + arr.ch + '</span>' +
-          '<span class="d" style="color:' + arr.color + '">' + fmtDelta(delta) + '</span></span></div>' +
-        '<div>' + sparkline(ser.points, 104, 24, color) + '</div>' +
-        '<div><span class="vol-badge vol-' + volClass + '">' + volTxt + '</span></div>' +
+          '<span class="lvl" style="color:' + color + ';border-color:' + color + '">' + level + '</span></div>' +
+        '<div class="cell-ovix">' + ovCell + '</div>' +
         '<div class="cell-driver" title="' + esc(driver) + '">' + esc(driver) + '</div>' +
         '<div style="text-align:center"><span class="inc-badge' + (incs.length ? '' : ' zero') + '">' + incs.length + '</span></div>' +
-        '<div><span class="feed-dot ' + (feedOk ? 'ok' : 'dead') + '" title="' + (feedOk ? 'reporting' : 'no events — check feed') + '"></span></div>' +
+        '<div style="text-align:center"><span class="why-btn" title="Why this score? — trace to source">ⓘ</span></div>' +
       '</div>';
     }).join('');
 
-    // bind clicks + record current scores for next-poll flash
+    // bind clicks (whole row + why button open the drill / trace)
     Array.prototype.forEach.call(host.querySelectorAll('.row'), function(r) {
       r.addEventListener('click', function() { openDrill(r.getAttribute('data-domain')); });
     });
@@ -492,7 +541,7 @@ a.lnk:hover { text-decoration:underline; }
   //  DRILL PANEL
   // ============================================================
   function domainObj(key) {
-    return ((state.scores && state.scores.domains) || []).filter(function(x) { return x.domain === key; })[0];
+    return ((state.risk && state.risk.domains) || []).filter(function(x) { return x.domain === key; })[0];
   }
 
   function openDrill(key) {
@@ -507,18 +556,9 @@ a.lnk:hover { text-decoration:underline; }
     renderRows();
   };
 
-  // "Show on globe" — when this dashboard is embedded as an IFRAME on the
-  // landing (window.parent !== window), focus the NATIVE landing globe via
-  // postMessage (no navigation). When opened standalone, fall through to the
-  // <a href> so the standalone /roc/globe/globe.html still works.
-  //
-  // This control targets the SPECIFIC driving event, so it posts that event's
-  // identity (title/source/domain) marked `focus:'event'` — NOT a bare `domain`
-  // (hub-028). The API gives us no coords/signalId for the top event, so the
-  // globe resolves it by title; if it isn't plotted it says so honestly rather
-  // than jumping to a *different* (highest-severity) signal in the domain.
-  // Identity is read from the anchor's data-* attributes (avoids escaping free
-  // text into an inline onclick string).
+  // "Show on globe" — when embedded as an IFRAME on the landing, focus the native
+  // globe via postMessage (no navigation); standalone falls through to the <a href>.
+  // Targets the SPECIFIC driving event (title/source/domain), marked focus:'event'.
   window.showOnGlobe = function(ev, el) {
     try {
       if (window.parent && window.parent !== window) {
@@ -528,47 +568,64 @@ a.lnk:hover { text-decoration:underline; }
         var source = el ? el.getAttribute('data-globe-source') : null;
         window.parent.postMessage({
           type: 'wfm:globe-focus',
-          focus: 'event',              // SPECIFIC event → never domain-fallback
+          focus: 'event',
           eventTitle: title || null,
-          category: domain || null,    // domain for context + category-scoped match
+          category: domain || null,
           source: source || null,
         }, location.origin);
-        return false; // embedded: handled locally, do not navigate
+        return false;
       }
     } catch (e) { /* parent inaccessible — fall through to navigate */ }
-    return true; // standalone: let the anchor open globe.html (_top)
+    return true;
   };
 
   function renderDrill() {
     var key = state.selected; if (!key) return;
     var dom = domainObj(key); if (!dom) return;
     var color = scoreColorByLevel(dom);
+    var level = levelOf(dom);
 
-    document.getElementById('d-name').textContent = key.replace(/-/g, ' ');
+    document.getElementById('d-name').textContent = key.replace(/_/g, ' ').replace(/-/g, ' ');
     var ds = document.getElementById('d-score');
     ds.textContent = dom.score.toFixed(1); ds.style.color = color;
 
     var body = document.getElementById('drill-body');
-    var ser = state.seriesByDomain[key] || {};
-
-    // --- trend block ---
-    var delta = trendDelta(ser.points);
-    var arr = dirArrow(delta);
     var html = '';
-    html += '<div class="sect"><div class="sect-title">6h Trend (shape)</div>' +
-      '<div style="display:flex;align-items:center;gap:12px">' +
-      sparkline(ser.points, 200, 44, color) +
-      '<div><div class="mono" style="font-size:13px;color:' + arr.color + '">' + arr.ch + ' ' + fmtDelta(delta) + '</div>' +
-      '<div class="muted" style="font-style:normal">vol ' + (typeof ser.volatility === 'number' ? ser.volatility.toFixed(2) : '—') +
-      ' · ' + (ser.volatilityLevel || '—') + '</div></div></div>' +
-      '<div class="muted">Headline ' + dom.score.toFixed(1) + ' is current; the sparkline shows the trend shape (mean across regions) — values may differ.</div></div>';
+
+    // --- WHY THIS SCORE (traceability centerpiece) ---
+    // Deterministic index: a documented ENGINE decides the member-facing score
+    // (no LLM in the loop). Rule is named + versioned server-side; inputs shown here
+    // are the checkable substrate (signal density, member-geo weight, top driver).
+    var sigCount = dom.eventCount || 0;
+    var eff = (typeof dom.effCount === 'number') ? dom.effCount.toFixed(1) : '—';
+    var gw = (typeof dom.geoWeight === 'number') ? dom.geoWeight.toFixed(2) + '×' : '—';
+    html += '<div class="sect"><div class="sect-title">Why this score</div>' +
+      '<div class="trace">' +
+        '<div class="trace-rule">' +
+          '<span class="trace-chip rule">rule ' + RISK_RULE + ' ' + RISK_RULE_VERSION + '</span>' +
+          '<span class="trace-chip engine">engine-decided · no LLM</span>' +
+          '<span class="trace-chip">source ' + esc(dom.available === false ? 'unavailable' : RISK_SOURCE) + '</span>' +
+        '</div>' +
+        '<div class="trace-formula">score = severity-weighted <b>signal density</b> × member-geo <b>exposure weight</b> × <b>time-decay</b>, banded to ' +
+          '<span style="color:' + color + '">' + level + '</span>.</div>' +
+        '<div class="io-grid">' +
+          '<div class="io"><span class="k">Contributing signals</span><span class="v">' + sigCount + '</span></div>' +
+          '<div class="io"><span class="k">Effective (weighted)</span><span class="v">' + eff + '</span></div>' +
+          '<div class="io"><span class="k">Member-geo weight</span><span class="v">' + gw + '</span></div>' +
+          '<div class="io"><span class="k">Top exposed region</span><span class="v">' + esc(dom.geoRegion || 'global') + '</span></div>' +
+        '</div>' +
+      '</div>';
+    if (sigCount === 0) {
+      html += '<div class="muted" style="margin-top:7px">Low signal volume — this reading is honestly quiet, not suppressed.</div>';
+    }
+    html += '</div>';
 
     // --- driving event ---
     html += '<div class="sect"><div class="sect-title">Driving Event</div>';
     if (dom.topEvent) {
       html += '<div class="evt"><div class="et">' + esc(dom.topEvent) + '</div>' +
         '<div class="em"><span>source: ' + esc(dom.topSource || '—') + '</span>' +
-        '<span>' + (dom.eventCount || 0) + ' events in domain</span>' +
+        '<span>' + sigCount + ' signals in domain</span>' +
         (dom.geographic ? '<a class="lnk" target="_top" rel="noopener" href="/roc/globe/globe.html" title="Show on globe"' +
           ' data-globe-domain="' + esc(key) + '"' +
           ' data-globe-title="' + esc(dom.topEvent) + '"' +
@@ -576,6 +633,31 @@ a.lnk:hover { text-decoration:underline; }
           ' onclick="return showOnGlobe(event, this)">show on globe ↗</a>' : '') +
         '</div></div>';
     } else { html += '<div class="muted">No top event reported.</div>'; }
+    html += '</div>';
+
+    // --- OVIX SENSOR OVERLAY (corroboration, clearly not the headline) ---
+    html += '<div class="sect"><div class="sect-title">OVIX sensor overlay</div>';
+    if (hasOvixOverlay(key)) {
+      var ov = ovixDomain(key);
+      if (ov && typeof ov.score === 'number') {
+        var ovColor = levelColor(levelOf(ov));
+        var ovDelta = trendDelta((state.ovixSeries[key] || {}).points);
+        var ovArr = dirArrow(ovDelta);
+        html += '<div class="ov-block">' +
+          '<div class="ov-head">' +
+            '<span class="ov-num" style="color:' + ovColor + '">' + ov.score.toFixed(1) + '</span>' +
+            '<span class="spark">' + sparkline((state.ovixSeries[key] || {}).points, 120, 30, ovColor) + '</span>' +
+            '<span class="mono" style="font-size:11px;color:' + ovArr.color + '">' + ovArr.ch + ' ' + fmtDelta(ovDelta) + ' /6h</span>' +
+          '</div>' +
+          '<div class="ov-tag">Independent geophysical sensor reading — corroboration, not the headline</div>' +
+          (ov.topEvent ? '<div class="muted" style="margin-top:6px;font-style:normal">sensor: ' + esc(ov.topEvent) + ' <span style="color:var(--dim2)">(' + esc(ov.topSource || '—') + ')</span></div>' : '') +
+        '</div>';
+      } else {
+        html += '<div class="muted">Sensor idle — no current OVIX reading for this domain.</div>';
+      }
+    } else {
+      html += '<div class="muted">No sensor overlay — this domain has no OVIX geophysical feed by design; the Operational Risk score above is its single source of truth.</div>';
+    }
     html += '</div>';
 
     // --- open incidents ---
@@ -593,14 +675,16 @@ a.lnk:hover { text-decoration:underline; }
     } else { html += '<div class="muted">No open incidents in this domain.</div>'; }
     html += '</div>';
 
-    // --- regional breakdown (placeholder until composite calls resolve) ---
-    html += '<div class="sect"><div class="sect-title">Regional Breakdown</div><div id="reg-host"><div class="muted">Loading regions…</div></div></div>';
+    // --- OVIX regional breakdown (overlay; geophysical domains only) ---
+    if (hasOvixOverlay(key)) {
+      html += '<div class="sect"><div class="sect-title">OVIX regional breakdown</div><div id="reg-host"><div class="muted">Loading regions…</div></div></div>';
+    }
 
-    // --- latest brief (member-gated; degrade gracefully) ---
+    // --- latest brief ---
     html += '<div class="sect"><div class="sect-title">Latest Brief</div><div id="brief-host"><div class="muted">Loading…</div></div></div>';
 
     body.innerHTML = html;
-    loadRegionBreakdown(key);
+    if (hasOvixOverlay(key)) loadRegionBreakdown(key);
     loadBrief(key);
   }
 
@@ -618,10 +702,8 @@ a.lnk:hover { text-decoration:underline; }
     return (d.getMonth() + 1) + '/' + d.getDate();
   }
 
-  // Regional breakdown via /api/ovix/composite?region=<id>.
-  // NOTE: /api/ovix/scores?region= is a no-op (returns global) in api-019; the
-  // composite endpoint is the one that genuinely differentiates by region
-  // (same domains[] shape, regionName populated) — same source the globe uses.
+  // OVIX regional breakdown via /api/ovix/composite?region=<id> (same source the globe
+  // uses). This is the OVIX sensor overlay differentiated by region — labeled as such.
   function loadRegionBreakdown(key) {
     var host = function() { return document.getElementById('reg-host'); };
     if (!state.regions) { if (host()) host().innerHTML = '<div class="muted">Regional data unavailable.</div>'; return; }
@@ -640,7 +722,7 @@ a.lnk:hover { text-decoration:underline; }
         .then(function(d) { state.regionCache[id] = d; return d; })
         .catch(function() { return null; });
     })).then(function(results) {
-      if (state.selected !== key) return; // user moved on
+      if (state.selected !== key) return;
       var rows = [];
       results.forEach(function(d, i) {
         if (!d || !d.domains) return;
