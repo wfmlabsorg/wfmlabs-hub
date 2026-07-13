@@ -42,14 +42,18 @@
   var canon = null; // canonical score for THIS page's domain (number) or null
 
   function scoreFrom(d) {
-    if (!d || !Array.isArray(d.domains)) return null;
-    for (var i = 0; i < d.domains.length; i++) {
-      if (String(d.domains[i].domain).toLowerCase() === DOMAIN) {
-        var n = Number(d.domains[i].score);
-        return isNaN(n) ? null : n;
+    try {
+      if (!d || !Array.isArray(d.domains)) return null;
+      for (var i = 0; i < d.domains.length; i++) {
+        var entry = d.domains[i];
+        if (!entry || entry.domain == null) continue; // skip malformed entries
+        if (String(entry.domain).toLowerCase() === DOMAIN) {
+          var n = Number(entry.score);
+          return isNaN(n) ? null : n;
+        }
       }
-    }
-    return null;
+      return null;
+    } catch (e) { return null; } // never throw → never skip the OVIX fallback
   }
 
   function set(n) {

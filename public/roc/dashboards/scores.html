@@ -56,6 +56,12 @@ body {
 .band-composite .scale { font-size:11px; color:var(--dim2); }
 .level-badge { padding:3px 11px; border-radius:3px; font-size:10px; font-weight:700; letter-spacing:1px; border:1px solid; }
 
+/* headline composite trend (op-risk series) */
+.band-dir { display:flex; flex-direction:column; align-items:flex-start; gap:1px; }
+.dir-arrow { font-size:14px; font-weight:700; line-height:1; }
+.dir-delta { font-family:var(--mono); font-size:11px; }
+.band-spark { flex-shrink:0; line-height:0; }
+
 /* OVIX overlay chip in the band — muted, clearly secondary */
 .ovix-chip {
   display:flex; align-items:center; gap:8px; padding:4px 10px; border-radius:4px;
@@ -88,7 +94,7 @@ body {
 .tape { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
 .tape-head, .row {
   display:grid;
-  grid-template-columns: 168px 118px 132px 1fr 50px 46px;
+  grid-template-columns: 158px 106px 100px 120px 1fr 46px 42px;
   align-items:center; gap:10px;
 }
 .tape-head {
@@ -115,6 +121,10 @@ body {
 .cell-score { display:flex; align-items:center; gap:8px; }
 .cell-score .s { font-family:var(--mono); font-size:21px; font-weight:700; line-height:1; }
 .cell-score .lvl { padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:.5px; border:1px solid; white-space:nowrap; }
+
+/* headline op-risk trend cell */
+.cell-trend { display:flex; align-items:center; gap:6px; min-width:0; }
+.cell-trend .d { font-family:var(--mono); font-size:10px; }
 
 /* OVIX overlay cell — muted second reading */
 .cell-ovix { display:flex; align-items:center; gap:7px; min-width:0; }
@@ -210,7 +220,7 @@ a.lnk:hover { text-decoration:underline; }
 ::-webkit-scrollbar-track { background:transparent; }
 
 @media (max-width:860px) {
-  .tape-head, .row { grid-template-columns: 130px 96px 0 1fr 42px 40px; }
+  .tape-head, .row { grid-template-columns: 116px 80px 66px 0 1fr 38px 34px; }
   .cell-ovix, .cell-domain .meta, .ovix-chip { display:none; }
   .drill.open { position:absolute; right:0; top:0; bottom:0; width:92%; max-width:410px; z-index:50; }
 }
@@ -226,6 +236,11 @@ a.lnk:hover { text-decoration:underline; }
     <span class="scale">/10</span>
   </div>
   <span class="level-badge" id="comp-level">—</span>
+  <div class="band-dir">
+    <span class="dir-arrow" id="comp-arrow">—</span>
+    <span class="dir-delta mono" id="comp-delta">/24h</span>
+  </div>
+  <span class="band-spark" id="comp-spark"></span>
   <div class="ovix-chip" id="ovix-chip" title="OVIX geophysical sensor composite — corroboration overlay, not the headline">
     <span class="lbl">OVIX sensor<br>overlay</span>
     <span class="ov-val mono" id="ovix-val">—</span>
@@ -247,7 +262,7 @@ a.lnk:hover { text-decoration:underline; }
 <div class="body">
   <div class="tape">
     <div class="tape-head">
-      <span>Domain</span><span>Op Risk</span><span>OVIX overlay</span>
+      <span>Domain</span><span>Op Risk</span><span>24h Trend</span><span>OVIX overlay</span>
       <span>Top Driver</span><span style="text-align:center">Inc</span><span style="text-align:center">Why</span>
     </div>
     <div class="rows" id="rows">
@@ -278,11 +293,12 @@ a.lnk:hover { text-decoration:underline; }
   var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
   var REFRESH_MS = 30000;
 
-  // HEADLINE = signals-derived Operational Risk Index (all 12 domains).
+  // HEADLINE = signals-derived Operational Risk Index (all 12 domains) + its trend.
   var OP_RISK_URL = OVIX_API + '/api/ovix/op-risk?scope=global';
-  // OVERLAY = OVIX geophysical sensor scores + 6h trend series (corroboration only).
+  var OP_RISK_SERIES_URL = OVIX_API + '/api/ovix/op-risk/series?hours=24&scope=global';
+  // OVERLAY = OVIX geophysical sensor scores + trend series (corroboration only).
   var OVIX_SCORES_URL = OVIX_API + '/api/ovix/scores';
-  var OVIX_SERIES_URL = OVIX_API + '/api/ovix/scores/series?hours=6&region=global';
+  var OVIX_SERIES_URL = OVIX_API + '/api/ovix/scores/series?hours=24&region=global';
 
   // Traceability constants (rule is named + versioned server-side in decision_rules;
   // mirrored here for the member-facing "why this score" trace — display only).
@@ -315,12 +331,18 @@ a.lnk:hover { text-decoration:underline; }
     return 'var(--green)';
   }
   function scoreColorByLevel(d) { return levelColor(levelOf(d)); }
+  // Safe score → string. Guards null/undefined/NaN (CodeRabbit #61 major): a bad
+  // score must never throw and freeze the tape on "loading".
+  function isNum(v) { return typeof v === 'number' && !isNaN(v); }
+  function fmtScore(v) { return isNum(v) ? v.toFixed(1) : '—'; }
 
   // ---- state ----
   var state = {
     risk: null,             // /api/ovix/op-risk  (HEADLINE, all 12 domains)
+    riskSeries: {},         // domain -> {points} from /api/ovix/op-risk/series (HEADLINE trend)
+    riskCompositeSeries: [],
     ovix: null,             // /api/ovix/scores   (OVERLAY sensor reading)
-    ovixSeries: {},         // domain -> {points} from /api/ovix/scores/series
+    ovixSeries: {},         // domain -> {points} from /api/ovix/scores/series (OVERLAY trend)
     ovixCompositeSeries: [],
     incByDomain: {},        // domain -> [open incidents]
     regions: null,          // /api/ovix/regions
@@ -420,16 +442,26 @@ a.lnk:hover { text-decoration:underline; }
 
   function loadCore() {
     return Promise.all([
-      getJSON(OP_RISK_URL).catch(function() { return null; }),         // HEADLINE
+      getJSON(OP_RISK_URL).catch(function() { return null; }),          // HEADLINE scores
+      getJSON(OP_RISK_SERIES_URL).catch(function() { return null; }),   // HEADLINE trend
       getJSON(OVIX_SCORES_URL).catch(function() { return null; }),      // overlay scores
       getJSON(OVIX_SERIES_URL).catch(function() { return null; }),      // overlay trend
       loadIncidents()
     ]).then(function(res) {
       if (res[0]) state.risk = res[0];
-      state.ovix = res[1] || null;
+      // headline trend (op-risk series) — the dead-5 now draw a real line
+      state.riskSeries = {};
+      state.riskCompositeSeries = [];
+      var rs = res[1];
+      if (rs) {
+        (rs.domains || []).forEach(function(d) { state.riskSeries[d.domain] = { points: d.points || [] }; });
+        state.riskCompositeSeries = rs.composite_series || [];
+      }
+      // overlay trend (OVIX series) — demoted to the sensor overlay only
+      state.ovix = res[2] || null;
       state.ovixSeries = {};
       state.ovixCompositeSeries = [];
-      var s = res[2];
+      var s = res[3];
       if (s) {
         (s.domains || []).forEach(function(d) { state.ovixSeries[d.domain] = { points: d.points || [] }; });
         state.ovixCompositeSeries = s.composite_series || [];
@@ -452,7 +484,16 @@ a.lnk:hover { text-decoration:underline; }
     var lb = document.getElementById('comp-level');
     lb.textContent = level; lb.style.color = color; lb.style.borderColor = color;
 
-    // OVIX overlay chip — muted geophysical sensor composite + its 6h trend
+    // HEADLINE composite trend (op-risk series) — 24h shape + delta
+    var cDelta = trendDelta(state.riskCompositeSeries);
+    var cArr = dirArrow(cDelta);
+    var aEl = document.getElementById('comp-arrow');
+    aEl.textContent = cArr.ch; aEl.style.color = cArr.color;
+    var dEl = document.getElementById('comp-delta');
+    dEl.textContent = fmtDelta(cDelta) + ' /24h'; dEl.style.color = cArr.color;
+    document.getElementById('comp-spark').innerHTML = sparkline(state.riskCompositeSeries, 140, 30, color);
+
+    // OVIX overlay chip — muted geophysical sensor composite + its trend
     var chip = document.getElementById('ovix-chip');
     if (state.ovix && typeof state.ovix.composite === 'number') {
       document.getElementById('ovix-val').textContent = state.ovix.composite.toFixed(1);
@@ -501,14 +542,21 @@ a.lnk:hover { text-decoration:underline; }
       var metaBits = sigCount + ' signal' + (sigCount === 1 ? '' : 's');
       if (dom.topSource) metaBits += ' · ' + dom.topSource;
 
-      // OVIX overlay cell
+      // HEADLINE trend cell — op-risk series (all 12, incl. the previously-dead-5)
+      var rPts = (state.riskSeries[dom.domain] || {}).points;
+      var rDelta = trendDelta(rPts);
+      var rArr = dirArrow(rDelta);
+      var trendCell = '<span class="spark">' + sparkline(rPts, 64, 22, color) + '</span>' +
+        '<span class="d" style="color:' + rArr.color + '">' + rArr.ch + ' ' + fmtDelta(rDelta) + '</span>';
+
+      // OVIX overlay cell (sensor domains only)
       var ovCell;
       if (hasOvixOverlay(dom.domain)) {
         var ov = ovixDomain(dom.domain);
-        if (ov && typeof ov.score === 'number') {
+        if (ov && isNum(ov.score)) {
           var ovColor = levelColor(levelOf(ov));
-          ovCell = '<span class="ov" style="color:' + ovColor + '">' + ov.score.toFixed(1) + '</span>' +
-            '<span class="spark">' + sparkline((state.ovixSeries[dom.domain] || {}).points, 62, 22, ovColor) + '</span>';
+          ovCell = '<span class="ov" style="color:' + ovColor + '">' + fmtScore(ov.score) + '</span>' +
+            '<span class="spark">' + sparkline((state.ovixSeries[dom.domain] || {}).points, 52, 22, ovColor) + '</span>';
         } else { ovCell = '<span class="none">sensor idle</span>'; }
       } else {
         ovCell = '<span class="none">no sensor</span>';
@@ -517,8 +565,9 @@ a.lnk:hover { text-decoration:underline; }
       return '<div class="row' + sel + flash + '" data-domain="' + dom.domain + '">' +
         '<div class="cell-domain"><span class="name">' + dom.domain.replace(/_/g, ' ').replace(/-/g, ' ') + '</span>' +
           '<span class="meta" title="' + esc(metaBits) + '">' + esc(metaBits) + '</span></div>' +
-        '<div class="cell-score"><span class="s" style="color:' + color + '">' + dom.score.toFixed(1) + '</span>' +
+        '<div class="cell-score"><span class="s" style="color:' + color + '">' + fmtScore(dom.score) + '</span>' +
           '<span class="lvl" style="color:' + color + ';border-color:' + color + '">' + level + '</span></div>' +
+        '<div class="cell-trend">' + trendCell + '</div>' +
         '<div class="cell-ovix">' + ovCell + '</div>' +
         '<div class="cell-driver" title="' + esc(driver) + '">' + esc(driver) + '</div>' +
         '<div style="text-align:center"><span class="inc-badge' + (incs.length ? '' : ' zero') + '">' + incs.length + '</span></div>' +
@@ -587,10 +636,20 @@ a.lnk:hover { text-decoration:underline; }
 
     document.getElementById('d-name').textContent = key.replace(/_/g, ' ').replace(/-/g, ' ');
     var ds = document.getElementById('d-score');
-    ds.textContent = dom.score.toFixed(1); ds.style.color = color;
+    ds.textContent = fmtScore(dom.score); ds.style.color = color;
 
     var body = document.getElementById('drill-body');
     var html = '';
+
+    // --- HEADLINE 24h trend (op-risk series) ---
+    var hPts = (state.riskSeries[key] || {}).points;
+    var hDelta = trendDelta(hPts);
+    var hArr = dirArrow(hDelta);
+    html += '<div class="sect"><div class="sect-title">24h Trend (op-risk)</div>' +
+      '<div style="display:flex;align-items:center;gap:12px">' +
+      sparkline(hPts, 200, 44, color) +
+      '<div><div class="mono" style="font-size:13px;color:' + hArr.color + '">' + hArr.ch + ' ' + fmtDelta(hDelta) + ' /24h</div>' +
+      '<div class="muted" style="font-style:normal">' + ((hPts && hPts.length > 1) ? (hPts.length + ' hourly points') : 'sparse — flat line is honest') + '</div></div></div></div>';
 
     // --- WHY THIS SCORE (traceability centerpiece) ---
     // Deterministic index: a documented ENGINE decides the member-facing score
@@ -647,7 +706,7 @@ a.lnk:hover { text-decoration:underline; }
           '<div class="ov-head">' +
             '<span class="ov-num" style="color:' + ovColor + '">' + ov.score.toFixed(1) + '</span>' +
             '<span class="spark">' + sparkline((state.ovixSeries[key] || {}).points, 120, 30, ovColor) + '</span>' +
-            '<span class="mono" style="font-size:11px;color:' + ovArr.color + '">' + ovArr.ch + ' ' + fmtDelta(ovDelta) + ' /6h</span>' +
+            '<span class="mono" style="font-size:11px;color:' + ovArr.color + '">' + ovArr.ch + ' ' + fmtDelta(ovDelta) + ' /24h</span>' +
           '</div>' +
           '<div class="ov-tag">Independent geophysical sensor reading — corroboration, not the headline</div>' +
           (ov.topEvent ? '<div class="muted" style="margin-top:6px;font-style:normal">sensor: ' + esc(ov.topEvent) + ' <span style="color:var(--dim2)">(' + esc(ov.topSource || '—') + ')</span></div>' : '') +
