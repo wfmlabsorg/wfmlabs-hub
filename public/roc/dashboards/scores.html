@@ -801,21 +801,22 @@ a.lnk:hover { text-decoration:underline; }
     });
   }
 
-  // Latest brief snippet — /api/newsletter-issues is member-gated; degrade gracefully.
+  // Latest Compass daily brief — the `briefs` collection (briefType=summary), publicly
+  // readable via Payload REST. Degrade gracefully if the API is unavailable.
   function loadBrief(key) {
     var host = function() { return document.getElementById('brief-host'); };
-    getJSON('/api/newsletter-issues?limit=1&sort=-publishedAt&depth=0').then(function(d) {
+    getJSON('/api/briefs?limit=1&sort=-publishedAt&depth=0&where[briefType][equals]=summary&where[status][equals]=published').then(function(d) {
       if (state.selected !== key) return;
       var h = host(); if (!h) return;
       var doc = (d.docs || [])[0];
       if (!doc) { h.innerHTML = '<div class="muted">No briefs published.</div>'; return; }
       var title = doc.title || doc.subject || 'Latest brief';
-      var snip = (doc.summary || doc.excerpt || doc.preheader || '').toString().slice(0, 240);
+      var snip = (doc.excerpt || doc.summary || doc.preheader || '').toString().slice(0, 240);
       h.innerHTML = '<div class="brief-snip"><a class="lnk" target="_top" rel="noopener" href="/briefs">' + esc(title) + '</a>' +
         (snip ? '<div style="margin-top:4px">' + esc(snip) + '…</div>' : '') + '</div>';
     }).catch(function() {
       if (state.selected !== key) return;
-      var h = host(); if (h) h.innerHTML = '<div class="muted">Briefs are in the members area — <a class="lnk" target="_top" rel="noopener" href="/briefs">open briefs ↗</a></div>';
+      var h = host(); if (h) h.innerHTML = '<div class="muted">Brief feed unavailable — <a class="lnk" target="_top" rel="noopener" href="/briefs">open briefs ↗</a></div>';
     });
   }
 

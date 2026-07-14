@@ -228,19 +228,19 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
 function BriefSection({ brief }: { brief: any | null }) {
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <SectionHead icon="🧭" title="Latest Compass Brief" href="/compass" linkLabel="All briefs →" />
+      <SectionHead icon="🧭" title="Latest Compass Brief" href="/briefs" linkLabel="All briefs →" />
       {!brief ? (
         <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)' }}>
           <p style={{ fontSize: '0.9375rem', fontWeight: 500, margin: '0 0 0.25rem' }}>No briefs published yet</p>
           <p style={{ fontSize: '0.8125rem', margin: 0, color: 'var(--fg-faint)' }}>Compass publishes operational briefs as events develop.</p>
         </div>
       ) : (() => {
-        const excerptRaw: string = brief.summary || brief.description || ''
+        const excerptRaw: string = brief.excerpt || brief.summary || brief.description || ''
         const excerpt = excerptRaw.length > 180 ? excerptRaw.slice(0, 180) + '…' : excerptRaw
-        const dateStr = brief.publishDate || brief.publishedAt || brief.createdAt
+        const dateStr = brief.publishedAt || brief.publishDate || brief.createdAt
         return (
           <a
-            href={`/compass/${brief.slug}`}
+            href={`/briefs/${brief.slug}`}
             className="card"
             style={{ display: 'block', padding: '1.25rem 1.5rem', textDecoration: 'none', color: 'inherit', borderTop: '2px solid #14b8a6' }}
           >
@@ -559,7 +559,8 @@ export default async function HomePage() {
     payload.find({ collection: 'signals', limit: 1, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'tools', limit: 8, sort: '-updatedAt', depth: 1, overrideAccess: true, where: { publishedAt: { exists: true } } }).catch(() => ({ docs: [] })),
     fetchOpenIncidents(),
-    payload.find({ collection: 'newsletter-issues', limit: 1, sort: '-publishDate', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
+    // Compass daily briefs live in `briefs` (briefType=summary) — `newsletter-issues` is empty (reserved for a future newsletter).
+    payload.find({ collection: 'briefs', limit: 1, sort: '-publishedAt', depth: 0, overrideAccess: true, where: { and: [{ briefType: { equals: 'summary' } }, { status: { equals: 'published' } }] } }).catch(() => ({ docs: [] })),
     payload.find({ collection: 'papers', limit: 3, sort: '-createdAt', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
     payload.find({ collection: 'members', limit: 6, sort: '-createdAt', depth: 1, overrideAccess: true, where: { and: [{ 'visibility.showInDirectory': { not_equals: false } }, { type: { not_equals: 'agent' } }] } }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'discussions', limit: 3, sort: '-createdAt', depth: 2, overrideAccess: true, where: { parentDiscussion: { exists: false } } }).catch(() => ({ docs: [] })),
