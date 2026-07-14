@@ -1,6 +1,7 @@
 import React from 'react'
 import { isMobile } from '@/lib/mobile'
 import { neonQuery } from '@/lib/neon'
+import { AutoRefresh } from '@/components/AutoRefresh'
 import { DataUnavailable } from '@/components/DataUnavailable'
 import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
 import { CoveragePanel, type DistroItem } from '@/components/incidents/CoveragePanel'
@@ -365,6 +366,7 @@ export default async function IncidentsPage({
   if (!pageData) {
     return (
       <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
+        <AutoRefresh />
         <div style={{ marginBottom: '1.5rem' }}>
           <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>Incidents</h1>
           <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
@@ -394,6 +396,7 @@ export default async function IncidentsPage({
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
+      <AutoRefresh />
       {/* Header */}
       <div style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
