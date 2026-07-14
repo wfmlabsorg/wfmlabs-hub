@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
+import { neonQuery } from '@/lib/neon'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
@@ -57,9 +58,6 @@ function briefDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
-// ── Neon HTTP query (mirrors /incidents/page.tsx) ──
-const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
-
 interface HomeIncident {
   id: number
   title: string
@@ -78,25 +76,18 @@ interface HomeIncident {
 }
 
 async function fetchOpenIncidents(): Promise<HomeIncident[]> {
-  const connStr = process.env.DATABASE_URI || ''
-  if (!connStr) return []
+  if (!process.env.DATABASE_URI) return []
   try {
-    const resp = await fetch(NEON_SQL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
-      body: JSON.stringify({
-        query:
-          `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
-           FROM incidents
-           WHERE status NOT IN ('closed','resolved')
-           ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
-           LIMIT 6`,
-      }),
-      next: { revalidate: 300 },
-    })
-    if (!resp.ok) return []
-    const json = await resp.json()
-    return (json.rows || []) as HomeIncident[]
+    const { rows } = await neonQuery<HomeIncident>(
+      `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
+       FROM incidents
+       WHERE status NOT IN ('closed','resolved')
+       ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
+       LIMIT 6`,
+      [],
+      { next: { revalidate: 300 } },
+    )
+    return rows
   } catch {
     return []
   }

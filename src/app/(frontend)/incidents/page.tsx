@@ -1,26 +1,12 @@
 import React from 'react'
 import { isMobile } from '@/lib/mobile'
+import { neonQuery } from '@/lib/neon'
+import { DataUnavailable } from '@/components/DataUnavailable'
 import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
 import { CoveragePanel, type DistroItem } from '@/components/incidents/CoveragePanel'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
-
-// ── Neon HTTP query ──
-
-const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
-
-async function neonQuery<T = Record<string, unknown>>(query: string, params: unknown[] = []) {
-  const connStr = process.env.DATABASE_URI || ''
-  const resp = await fetch(NEON_SQL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
-    body: JSON.stringify({ query, params }),
-    cache: 'no-store',
-  })
-  if (!resp.ok) throw new Error(`Neon ${resp.status}: ${await resp.text()}`)
-  return (await resp.json()) as { rows: T[]; rowCount: number }
-}
 
 // ── Types ──
 
@@ -331,35 +317,69 @@ export default async function IncidentsPage({
     ? 'closed_at DESC NULLS LAST, declared_at DESC'
     : "CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC"
 
-  const [
-    { rows: incidents },
-    { rows: [countRow] },
-    { rows: sevRows },
-    { rows: persistentIncidents },
-    { rows: recentlyClosed },
-    coverage,
-  ] = await Promise.all([
-    neonQuery<Incident>(
-      `SELECT * FROM incidents ${whereClause} ORDER BY ${sortOrder} LIMIT ${limit} OFFSET ${offset}`,
-      queryParams,
-    ),
-    neonQuery<{ cnt: string }>(
-      `SELECT COUNT(*) as cnt FROM incidents ${whereClause}`,
-      queryParams,
-    ),
-    neonQuery<{ sev_level: string; cnt: string }>(
-      "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status != 'closed' GROUP BY sev_level",
-    ),
-    neonQuery<Incident>(
-      "SELECT * FROM incidents WHERE is_persistent = true AND status != 'closed' ORDER BY declared_at DESC LIMIT 5",
-    ),
-    activeStatus !== 'closed'
-      ? neonQuery<Incident>(
-          "SELECT * FROM incidents WHERE status = 'closed' ORDER BY closed_at DESC NULLS LAST LIMIT 10",
-        )
-      : Promise.resolve({ rows: [] as Incident[], rowCount: 0 }),
-    loadCoverage(),
-  ])
+  // A transient Neon failure degrades to a visible "feed down" state instead of
+  // erroring the whole page (and instead of silently rendering "no incidents").
+  let pageData: {
+    incidents: Incident[]
+    countRow: { cnt: string } | undefined
+    sevRows: { sev_level: string; cnt: string }[]
+    persistentIncidents: Incident[]
+    recentlyClosed: Incident[]
+    coverage: CoverageData | null
+  } | null = null
+  try {
+    const [
+      { rows: incidents },
+      { rows: [countRow] },
+      { rows: sevRows },
+      { rows: persistentIncidents },
+      { rows: recentlyClosed },
+      coverage,
+    ] = await Promise.all([
+      neonQuery<Incident>(
+        `SELECT * FROM incidents ${whereClause} ORDER BY ${sortOrder} LIMIT ${limit} OFFSET ${offset}`,
+        queryParams,
+      ),
+      neonQuery<{ cnt: string }>(
+        `SELECT COUNT(*) as cnt FROM incidents ${whereClause}`,
+        queryParams,
+      ),
+      neonQuery<{ sev_level: string; cnt: string }>(
+        "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status != 'closed' GROUP BY sev_level",
+      ),
+      neonQuery<Incident>(
+        "SELECT * FROM incidents WHERE is_persistent = true AND status != 'closed' ORDER BY declared_at DESC LIMIT 5",
+      ),
+      activeStatus !== 'closed'
+        ? neonQuery<Incident>(
+            "SELECT * FROM incidents WHERE status = 'closed' ORDER BY closed_at DESC NULLS LAST LIMIT 10",
+          )
+        : Promise.resolve({ rows: [] as Incident[], rowCount: 0 }),
+      loadCoverage(),
+    ])
+    pageData = { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage }
+  } catch (e) {
+    console.error('incidents page: live data fetch failed:', e)
+  }
+
+  if (!pageData) {
+    return (
+      <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
+        <div style={{ marginBottom: '1.5rem' }}>
+          <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>Incidents</h1>
+          <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
+            Validated operational events tracked by Watchkeeper
+          </p>
+        </div>
+        <DataUnavailable
+          title="Incident data temporarily unavailable"
+          detail="The incident feed could not be reached just now. This is a connection issue, not an all-clear — incidents may still be active. Please refresh in a moment."
+        />
+      </div>
+    )
+  }
+
+  const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage } = pageData
 
   const totalDocs = parseInt(countRow?.cnt || '0')
   const totalPages = Math.ceil(totalDocs / limit)
