@@ -127,8 +127,8 @@ export default function SignalsPage() {
       .catch(() => {})
   }, [])
 
-  const fetchSignals = useCallback((category: string | null, source: string | null, severity: string | null, pg: number) => {
-    setLoading(true)
+  const fetchSignals = useCallback((category: string | null, source: string | null, severity: string | null, pg: number, silent = false) => {
+    if (!silent) setLoading(true)
     const params = new URLSearchParams()
     params.set('limit', '50')
     params.set('page', String(pg))
@@ -155,6 +155,17 @@ export default function SignalsPage() {
   useEffect(() => {
     if (page > 1) fetchSignals(activeCategory, activeSource, activeSeverity, page)
   }, [page, activeCategory, activeSource, activeSeverity, fetchSignals])
+
+  // Live refresh — silent refetch with the current filters/page every 60s, so a
+  // member watching during an event isn't looking at a frozen list. Skipped while
+  // the tab is hidden or a card is expanded (don't clobber what they're reading).
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden || expandedId !== null) return
+      fetchSignals(activeCategory, activeSource, activeSeverity, page, true)
+    }, 60_000)
+    return () => clearInterval(id)
+  }, [activeCategory, activeSource, activeSeverity, page, expandedId, fetchSignals])
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>

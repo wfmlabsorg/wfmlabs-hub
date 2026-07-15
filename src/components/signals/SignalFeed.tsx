@@ -55,13 +55,27 @@ export function SignalFeed({
     if (category) params.set('category', category)
     if (regionId) params.set('region', regionId)
 
-    fetch(`/api/signals?${params}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setSignals(data.docs || [])
-        setLoading(false)
-      })
-      .catch(() => setLoading(false))
+    let cancelled = false
+    const load = () => {
+      fetch(`/api/signals?${params}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (cancelled) return
+          setSignals(data.docs || [])
+          setLoading(false)
+        })
+        .catch(() => { if (!cancelled) setLoading(false) })
+    }
+
+    load()
+    // Live refresh — keep the ticker moving during an event; pause when hidden.
+    const id = setInterval(() => {
+      if (!document.hidden) load()
+    }, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+    }
   }, [limit, category, regionId])
 
   if (loading) {

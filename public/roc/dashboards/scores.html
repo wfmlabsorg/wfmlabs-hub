@@ -344,7 +344,7 @@ a.lnk:hover { text-decoration:underline; }
     ovix: null,             // /api/ovix/scores   (OVERLAY sensor reading)
     ovixSeries: {},         // domain -> {points} from /api/ovix/scores/series (OVERLAY trend)
     ovixCompositeSeries: [],
-    incByDomain: {},        // domain -> [open incidents]
+    incByDomain: {},        // domain -> [active (non-closed) incidents]
     regions: null,          // /api/ovix/regions
     regionCache: {},        // regionId -> composite response (OVIX)
     selected: null,         // selected domain key
@@ -421,15 +421,16 @@ a.lnk:hover { text-decoration:underline; }
   }
 
   function loadIncidents() {
-    // Same-origin Hub route; raw SQL, no where-filter — fetch two pages, filter open client-side.
+    // Same-origin Hub route. section=active filters server-side to all non-closed
+    // statuses (open, escalated, validated, de-escalated, …) — the same definition
+    // /incidents uses — so the per-domain badges agree with the incidents page.
     return Promise.all([
-      getJSON('/api/incidents?limit=100&offset=0').catch(function() { return { docs: [] }; }),
-      getJSON('/api/incidents?limit=100&offset=100').catch(function() { return { docs: [] }; })
+      getJSON('/api/incidents?limit=100&offset=0&section=active').catch(function() { return { docs: [] }; }),
+      getJSON('/api/incidents?limit=100&offset=100&section=active').catch(function() { return { docs: [] }; })
     ]).then(function(pages) {
       var docs = (pages[0].docs || []).concat(pages[1].docs || []);
       var by = {};
       docs.forEach(function(inc) {
-        if (inc.status !== 'open') return;
         var dom = inc.domain || 'unknown';
         (by[dom] = by[dom] || []).push(inc);
       });
@@ -721,17 +722,17 @@ a.lnk:hover { text-decoration:underline; }
 
     // --- open incidents ---
     var incs = state.incByDomain[key] || [];
-    html += '<div class="sect"><div class="sect-title">Open Incidents (' + incs.length + ')</div>';
+    html += '<div class="sect"><div class="sect-title">Active Incidents (' + incs.length + ')</div>';
     if (incs.length) {
       html += incs.slice(0, 8).map(function(inc) {
-        var sc = sevColor(inc.severity_level);
+        var sc = sevColor(inc.sev_level);
         return '<a class="inc-item" target="_top" rel="noopener" href="/incidents/' + esc(inc.slug || '') + '">' +
-          '<span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(inc.severity_level || ('SEV' + (inc.severity || '?'))) + '</span> ' +
+          '<span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(inc.sev_level || ('SEV' + (inc.severity || '?'))) + '</span> ' +
           '<span class="ii-title">' + esc(inc.title || 'Untitled') + '</span>' +
           '<div class="ii-meta">' + esc((inc.affected_regions || []).slice(0, 3).join(', ') || inc.location_country || '') +
           ' · declared ' + fmtDate(inc.declared_at) + '</div></a>';
       }).join('');
-    } else { html += '<div class="muted">No open incidents in this domain.</div>'; }
+    } else { html += '<div class="muted">No active incidents in this domain.</div>'; }
     html += '</div>';
 
     // --- OVIX regional breakdown (overlay; geophysical domains only) ---
@@ -801,21 +802,22 @@ a.lnk:hover { text-decoration:underline; }
     });
   }
 
-  // Latest brief snippet — /api/newsletter-issues is member-gated; degrade gracefully.
+  // Latest Compass daily brief — the `briefs` collection (briefType=summary), publicly
+  // readable via Payload REST. Degrade gracefully if the API is unavailable.
   function loadBrief(key) {
     var host = function() { return document.getElementById('brief-host'); };
-    getJSON('/api/newsletter-issues?limit=1&sort=-publishedAt&depth=0').then(function(d) {
+    getJSON('/api/briefs?limit=1&sort=-publishedAt&depth=0&where[briefType][equals]=summary&where[status][equals]=published').then(function(d) {
       if (state.selected !== key) return;
       var h = host(); if (!h) return;
       var doc = (d.docs || [])[0];
       if (!doc) { h.innerHTML = '<div class="muted">No briefs published.</div>'; return; }
       var title = doc.title || doc.subject || 'Latest brief';
-      var snip = (doc.summary || doc.excerpt || doc.preheader || '').toString().slice(0, 240);
+      var snip = (doc.excerpt || doc.summary || doc.preheader || '').toString().slice(0, 240);
       h.innerHTML = '<div class="brief-snip"><a class="lnk" target="_top" rel="noopener" href="/briefs">' + esc(title) + '</a>' +
         (snip ? '<div style="margin-top:4px">' + esc(snip) + '…</div>' : '') + '</div>';
     }).catch(function() {
       if (state.selected !== key) return;
-      var h = host(); if (h) h.innerHTML = '<div class="muted">Briefs are in the members area — <a class="lnk" target="_top" rel="noopener" href="/briefs">open briefs ↗</a></div>';
+      var h = host(); if (h) h.innerHTML = '<div class="muted">Brief feed unavailable — <a class="lnk" target="_top" rel="noopener" href="/briefs">open briefs ↗</a></div>';
     });
   }
 

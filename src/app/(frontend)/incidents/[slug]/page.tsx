@@ -9,24 +9,10 @@ import { IncidentCommunityValidation } from '@/components/incidents/IncidentComm
 import { CorroborationBadge, CorroborationSources } from '@/components/incidents/CorroborationBadge'
 import { IncidentEvidencePanel } from '@/components/incidents/IncidentEvidencePanel'
 import { getIncidentEvidence } from '@/lib/evidence'
+import { neonQuery } from '@/lib/neon'
+import { DataUnavailable } from '@/components/DataUnavailable'
 
 export const dynamic = 'force-dynamic'
-
-// ── Neon HTTP query ──
-
-const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
-
-async function neonQuery<T = Record<string, unknown>>(query: string, params: unknown[] = []) {
-  const connStr = process.env.DATABASE_URI || ''
-  const resp = await fetch(NEON_SQL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
-    body: JSON.stringify({ query, params }),
-    cache: 'no-store',
-  })
-  if (!resp.ok) throw new Error(`Neon ${resp.status}: ${await resp.text()}`)
-  return (await resp.json()) as { rows: T[]; rowCount: number }
-}
 
 // ── Types ──
 
@@ -160,12 +146,16 @@ function formatDateTime(date: string): string {
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const { rows } = await neonQuery<{ title: string; sev_level: string }>(
-    'SELECT title, sev_level FROM incidents WHERE slug = $1 LIMIT 1',
-    [slug],
-  )
-  if (!rows[0]) return { title: 'Incident Not Found — WFM Labs Hub' }
-  return { title: `${rows[0].sev_level}: ${rows[0].title} — WFM Labs Hub` }
+  try {
+    const { rows } = await neonQuery<{ title: string; sev_level: string }>(
+      'SELECT title, sev_level FROM incidents WHERE slug = $1 LIMIT 1',
+      [slug],
+    )
+    if (!rows[0]) return { title: 'Incident Not Found — WFM Labs Hub' }
+    return { title: `${rows[0].sev_level}: ${rows[0].title} — WFM Labs Hub` }
+  } catch {
+    return { title: 'Incident — WFM Labs Hub' }
+  }
 }
 
 export default async function IncidentDetailPage({
@@ -176,19 +166,46 @@ export default async function IncidentDetailPage({
   const { slug } = await params
   const session = await auth()
 
-  // Fetch incident
-  const { rows } = await neonQuery<Incident>(
-    'SELECT * FROM incidents WHERE slug = $1 LIMIT 1',
-    [slug],
-  )
-  const incident = rows[0]
+  // Fetch incident — a transient Neon failure renders a visible degraded state
+  // instead of a 500 (and is kept distinct from a genuine 404).
+  let incidentRows: Incident[] | null = null
+  try {
+    const { rows } = await neonQuery<Incident>(
+      'SELECT * FROM incidents WHERE slug = $1 LIMIT 1',
+      [slug],
+    )
+    incidentRows = rows
+  } catch (e) {
+    console.error('incident detail: live data fetch failed:', e)
+  }
+
+  if (!incidentRows) {
+    return (
+      <div style={{ maxWidth: '50rem', margin: '0 auto', padding: '2rem 1rem 4rem' }}>
+        <nav style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)', marginBottom: '1.5rem' }}>
+          <a href="/" style={{ color: 'var(--fg-muted)', textDecoration: 'none' }}>Home</a>
+          {' / '}
+          <a href="/incidents" style={{ color: 'var(--fg-muted)', textDecoration: 'none' }}>Incidents</a>
+        </nav>
+        <DataUnavailable
+          title="Incident data temporarily unavailable"
+          detail="This incident could not be loaded just now. This is a connection issue, not a resolution — please refresh in a moment."
+        />
+      </div>
+    )
+  }
+
+  const incident = incidentRows[0]
   if (!incident) notFound()
 
-  // Fetch timeline
-  const { rows: timeline } = await neonQuery<TimelineEntry>(
+  // Fetch timeline — degrades to a visible "unavailable" note rather than failing the page.
+  const timeline = await neonQuery<TimelineEntry>(
     'SELECT * FROM incident_timeline WHERE incident_id = $1 ORDER BY created_at ASC',
     [incident.id],
-  )
+  ).then((r) => r.rows).catch((e): TimelineEntry[] | null => {
+    console.error('incident detail: timeline fetch failed:', e)
+    return null
+  })
 
   // Resolve the viewer's member identity (for admin actions + community vote state).
   const isAdmin = session?.user?.role === 'admin'
@@ -204,7 +221,7 @@ export default async function IncidentDetailPage({
       .catch(() => null)
     username = (member?.username as string) || ''
   }
-  const hasVoted = !!username && timeline.some(
+  const hasVoted = !!username && (timeline || []).some(
     (t) => t.actor === username && (t.action === 'community_confirm' || t.action === 'community_deny'),
   )
 
@@ -516,10 +533,15 @@ export default async function IncidentDetailPage({
       <div style={{ marginBottom: '2rem' }}>
         <h2 style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--fg-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>
           Timeline
-          {timeline.length > 0 && <span style={{ fontWeight: 400, marginLeft: '0.5rem' }}>{timeline.length}</span>}
+          {timeline !== null && timeline.length > 0 && <span style={{ fontWeight: 400, marginLeft: '0.5rem' }}>{timeline.length}</span>}
         </h2>
 
-        {timeline.length === 0 ? (
+        {timeline === null ? (
+          <DataUnavailable
+            title="Timeline temporarily unavailable"
+            detail="The timeline feed could not be reached just now — events may exist that are not shown. Please refresh in a moment."
+          />
+        ) : timeline.length === 0 ? (
           <div
             style={{
               padding: '1.5rem',

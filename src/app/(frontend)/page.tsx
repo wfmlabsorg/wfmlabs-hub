@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
+import { neonQuery } from '@/lib/neon'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
@@ -57,9 +58,6 @@ function briefDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 }
 
-// ── Neon HTTP query (mirrors /incidents/page.tsx) ──
-const NEON_SQL = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
-
 interface HomeIncident {
   id: number
   title: string
@@ -78,25 +76,18 @@ interface HomeIncident {
 }
 
 async function fetchOpenIncidents(): Promise<HomeIncident[]> {
-  const connStr = process.env.DATABASE_URI || ''
-  if (!connStr) return []
+  if (!process.env.DATABASE_URI) return []
   try {
-    const resp = await fetch(NEON_SQL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
-      body: JSON.stringify({
-        query:
-          `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
-           FROM incidents
-           WHERE status NOT IN ('closed','resolved')
-           ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
-           LIMIT 6`,
-      }),
-      next: { revalidate: 300 },
-    })
-    if (!resp.ok) return []
-    const json = await resp.json()
-    return (json.rows || []) as HomeIncident[]
+    const { rows } = await neonQuery<HomeIncident>(
+      `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
+       FROM incidents
+       WHERE status NOT IN ('closed','resolved')
+       ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
+       LIMIT 6`,
+      [],
+      { next: { revalidate: 300 } },
+    )
+    return rows
   } catch {
     return []
   }
@@ -228,19 +219,19 @@ function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
 function BriefSection({ brief }: { brief: any | null }) {
   return (
     <div style={{ marginBottom: '1.5rem' }}>
-      <SectionHead icon="🧭" title="Latest Compass Brief" href="/compass" linkLabel="All briefs →" />
+      <SectionHead icon="🧭" title="Latest Compass Brief" href="/briefs" linkLabel="All briefs →" />
       {!brief ? (
         <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)' }}>
           <p style={{ fontSize: '0.9375rem', fontWeight: 500, margin: '0 0 0.25rem' }}>No briefs published yet</p>
           <p style={{ fontSize: '0.8125rem', margin: 0, color: 'var(--fg-faint)' }}>Compass publishes operational briefs as events develop.</p>
         </div>
       ) : (() => {
-        const excerptRaw: string = brief.summary || brief.description || ''
+        const excerptRaw: string = brief.excerpt || brief.summary || brief.description || ''
         const excerpt = excerptRaw.length > 180 ? excerptRaw.slice(0, 180) + '…' : excerptRaw
-        const dateStr = brief.publishDate || brief.publishedAt || brief.createdAt
+        const dateStr = brief.publishedAt || brief.publishDate || brief.createdAt
         return (
           <a
-            href={`/compass/${brief.slug}`}
+            href={`/briefs/${brief.slug}`}
             className="card"
             style={{ display: 'block', padding: '1.25rem 1.5rem', textDecoration: 'none', color: 'inherit', borderTop: '2px solid #14b8a6' }}
           >
@@ -559,7 +550,8 @@ export default async function HomePage() {
     payload.find({ collection: 'signals', limit: 1, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'tools', limit: 8, sort: '-updatedAt', depth: 1, overrideAccess: true, where: { publishedAt: { exists: true } } }).catch(() => ({ docs: [] })),
     fetchOpenIncidents(),
-    payload.find({ collection: 'newsletter-issues', limit: 1, sort: '-publishDate', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
+    // Compass daily briefs live in `briefs` (briefType=summary) — `newsletter-issues` is empty (reserved for a future newsletter).
+    payload.find({ collection: 'briefs', limit: 1, sort: '-publishedAt', depth: 0, overrideAccess: true, where: { and: [{ briefType: { equals: 'summary' } }, { status: { equals: 'published' } }] } }).catch(() => ({ docs: [] })),
     payload.find({ collection: 'papers', limit: 3, sort: '-createdAt', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
     payload.find({ collection: 'members', limit: 6, sort: '-createdAt', depth: 1, overrideAccess: true, where: { and: [{ 'visibility.showInDirectory': { not_equals: false } }, { type: { not_equals: 'agent' } }] } }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'discussions', limit: 3, sort: '-createdAt', depth: 2, overrideAccess: true, where: { parentDiscussion: { exists: false } } }).catch(() => ({ docs: [] })),
