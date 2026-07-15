@@ -439,7 +439,7 @@ function CommunitySection({
   )
 }
 
-// 9 — Join / Pricing CTA
+// 9 — Join CTA (pricing page removed 2026-07-15, hub-032 — CTAs point at the community)
 function JoinCTA({ authed }: { authed: boolean }) {
   return (
     <div
@@ -460,11 +460,11 @@ function JoinCTA({ authed }: { authed: boolean }) {
       </p>
       <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
         {authed ? (
-          <a href="/pricing" className="btn btn-primary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>View plans</a>
+          <a href="/members" className="btn btn-primary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>Explore the community</a>
         ) : (
           <>
             <a href="/login" className="btn btn-primary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>Get started</a>
-            <a href="/pricing" className="btn btn-secondary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>View pricing</a>
+            <a href="/members" className="btn btn-secondary" style={{ padding: '0.625rem 1.75rem', fontSize: '0.9375rem' }}>Meet the members</a>
           </>
         )}
       </div>

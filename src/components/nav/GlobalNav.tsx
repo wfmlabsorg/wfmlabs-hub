@@ -16,7 +16,7 @@ const navLinks = [
   { href: '/members', label: 'Members' },
   { href: '/discussions', label: 'Discussions' },
   { href: '/wiki', label: 'Docs' },
-  { href: '/pricing', label: 'Pricing' },
+  // /pricing removed 2026-07-15 (hub-032) — operating model being rethought; /pricing redirects to /.
   // /debates retired 2026-06-23 (WFM-74) → redirects to /research. /articles suspended — reactivate when content strategy is ready.
 ]
 

@@ -497,8 +497,8 @@ export function BeaconCaseCanvas() {
       <Notice>
         <strong style={{ color: T.fg }}>Beacon is a premium feature.</strong> Commissioned, evidence-graded
         cases are part of the premium membership.{' '}
-        <Link href="/pricing" style={{ color: T.accent }}>
-          See plans
+        <Link href="/members" style={{ color: T.accent }}>
+          Learn more about membership
         </Link>
         .
       </Notice>

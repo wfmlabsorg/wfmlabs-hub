@@ -6,9 +6,12 @@ const nextConfig: NextConfig = {
   // bundled by Next — mark external so they load at runtime in the Node serverless function.
   serverExternalPackages: ['sharp', '@xenova/transformers'],
   // Debates retired 2026-06-23 (WFM-74) — old debate URLs redirect to the research surface.
+  // Pricing removed 2026-07-15 (hub-032) — operating model being rethought; temporary (307)
+  // redirect so inbound links don't 404 and the URL isn't permanently claimed.
   redirects: async () => [
     { source: '/debates', destination: '/research', permanent: true },
     { source: '/debates/:slug*', destination: '/research', permanent: true },
+    { source: '/pricing', destination: '/', permanent: false },
   ],
   rewrites: async () => ({
     beforeFiles: [
