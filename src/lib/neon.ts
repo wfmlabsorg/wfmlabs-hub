@@ -8,6 +8,10 @@
 
 const NEON_SQL_FALLBACK = 'https://ep-fancy-tree-apreo0lj-pooler.c-7.us-east-1.aws.neon.tech/sql'
 
+// Hard ceiling on a single Neon call — a hung upstream must fail the query
+// (callers degrade visibly via DataUnavailable) rather than hang the render.
+const NEON_TIMEOUT_MS = 10_000
+
 function neonSqlEndpoint(): string {
   const uri = process.env.DATABASE_URI || ''
   const host = uri.match(/@([^/:?]+)/)?.[1]
@@ -24,6 +28,7 @@ export async function neonQuery<T = Record<string, unknown>>(
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Neon-Connection-String': connStr },
     body: JSON.stringify({ query, params }),
+    signal: AbortSignal.timeout(NEON_TIMEOUT_MS),
     ...fetchOpts,
   })
   if (!resp.ok) throw new Error(`Neon ${resp.status}: ${await resp.text()}`)

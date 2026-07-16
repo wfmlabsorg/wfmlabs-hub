@@ -138,6 +138,7 @@ body {
   background:rgba(239,68,68,0.12); color:var(--red); border:1px solid rgba(239,68,68,0.35);
 }
 .inc-badge.zero { background:transparent; color:var(--dim2); border-color:var(--border2); }
+.inc-badge.down { background:rgba(245,158,11,0.12); color:var(--amber); border-color:rgba(245,158,11,0.4); }
 .why-btn {
   display:inline-flex; align-items:center; justify-content:center; width:26px; height:22px; margin:0 auto;
   border-radius:4px; border:1px solid var(--border2); background:rgba(34,211,238,0.05);
@@ -173,6 +174,12 @@ body {
 .trace-chip.engine { color:var(--green); border-color:rgba(16,185,129,0.35); background:rgba(16,185,129,0.06); }
 .trace-formula { font-family:var(--mono); font-size:10px; color:var(--dim); line-height:1.5; margin-bottom:10px; padding-bottom:9px; border-bottom:1px solid var(--border); }
 .trace-formula b { color:var(--text); }
+/* v2 guard badge — a guard overriding the percentile must be visible, never silent */
+.guard-badge {
+  display:inline-flex; align-items:center; gap:5px; margin-bottom:9px;
+  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.5px;
+  padding:3px 8px; border-radius:3px; border:1px solid; text-transform:uppercase;
+}
 .io-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; }
 .io { display:flex; flex-direction:column; gap:1px; }
 .io .k { font-size:8px; letter-spacing:.5px; color:var(--dim2); text-transform:uppercase; }
@@ -190,6 +197,17 @@ body {
 .reg-row .rbar > i { display:block; height:100%; border-radius:3px; }
 .reg-row .rs { font-family:var(--mono); font-size:12px; font-weight:600; text-align:right; }
 .muted { color:var(--dim2); font-size:10px; font-style:italic; }
+
+/* Degraded-feed state (mirrors the Hub DataUnavailable pattern) — a failed fetch
+   must be distinguishable from a genuine zero: "feed down" is not an all-clear. */
+.feed-down {
+  border:1px solid rgba(245,158,11,0.35); background:rgba(245,158,11,0.06);
+  border-radius:6px; padding:10px 12px; font-size:11px; line-height:1.5; color:var(--dim);
+}
+.feed-down b {
+  display:block; color:var(--amber); font-family:var(--mono); font-size:9px;
+  letter-spacing:1px; text-transform:uppercase; margin-bottom:4px;
+}
 
 .evt { font-size:12px; line-height:1.4; }
 .evt .et { color:var(--text); }
@@ -283,7 +301,7 @@ a.lnk:hover { text-decoration:underline; }
 </div>
 
 <div class="footer">
-  <span>Operational Risk Index · signals-derived, member-geo-weighted (rule op_risk_index v1) · OVIX = geophysical sensor overlay</span>
+  <span>Operational Risk Index · signals-derived, percentile vs 30-day baseline (rule op_risk_index v2) · OVIX = geophysical sensor overlay</span>
   <span id="foot-status">—</span>
 </div>
 
@@ -302,9 +320,11 @@ a.lnk:hover { text-decoration:underline; }
 
   // Traceability constants (rule is named + versioned server-side in decision_rules;
   // mirrored here for the member-facing "why this score" trace — display only).
-  var RISK_SOURCE = 'signals-op-risk-v1';
+  // v2 (live 2026-07-15): displayed score = percentile of the domain's raw activity
+  // vs its own trailing 30-day baseline, with absolute quiet-cap / crisis-floor guards.
+  var RISK_SOURCE = 'signals-op-risk-v2';
   var RISK_RULE   = 'op_risk_index';
-  var RISK_RULE_VERSION = 'v1';
+  var RISK_RULE_VERSION = 'v2';
 
   // Domains where OVIX has a genuine sensor / feed reading worth showing as an
   // overlay (per 12-DOMAIN spec: weather/seismic/disaster/environmental/health/cyber
@@ -345,6 +365,7 @@ a.lnk:hover { text-decoration:underline; }
     ovixSeries: {},         // domain -> {points} from /api/ovix/scores/series (OVERLAY trend)
     ovixCompositeSeries: [],
     incByDomain: {},        // domain -> [active (non-closed) incidents]
+    incFeedDown: false,     // incident feed unreachable — degraded, NOT "zero incidents"
     regions: null,          // /api/ovix/regions
     regionCache: {},        // regionId -> composite response (OVIX)
     selected: null,         // selected domain key
@@ -424,11 +445,21 @@ a.lnk:hover { text-decoration:underline; }
     // Same-origin Hub route. section=active filters server-side to all non-closed
     // statuses (open, escalated, validated, de-escalated, …) — the same definition
     // /incidents uses — so the per-domain badges agree with the incidents page.
-    return Promise.all([
-      getJSON('/api/incidents?limit=100&offset=0&section=active').catch(function() { return { docs: [] }; }),
-      getJSON('/api/incidents?limit=100&offset=100&section=active').catch(function() { return { docs: [] }; })
-    ]).then(function(pages) {
-      var docs = (pages[0].docs || []).concat(pages[1].docs || []);
+    // Pages follow the API's reported `total` (server caps limit at 100) instead
+    // of a hardcoded two-page window; a fetch failure flips a VISIBLE degraded
+    // state instead of silently rendering zero incidents.
+    var LIMIT = 100, MAX_PAGES = 10; // safety valve — 1000 active incidents ≫ reality
+    function fetchPage(offset, acc) {
+      return getJSON('/api/incidents?limit=' + LIMIT + '&offset=' + offset + '&section=active').then(function(page) {
+        var docs = page.docs || [];
+        acc = acc.concat(docs);
+        var total = (typeof page.total === 'number') ? page.total : null;
+        var more = total !== null ? (offset + LIMIT < total) : (docs.length === LIMIT);
+        if (more && offset + LIMIT < LIMIT * MAX_PAGES) return fetchPage(offset + LIMIT, acc);
+        return acc;
+      });
+    }
+    return fetchPage(0, []).then(function(docs) {
       var by = {};
       docs.forEach(function(inc) {
         var dom = inc.domain || 'unknown';
@@ -438,7 +469,12 @@ a.lnk:hover { text-decoration:underline; }
         by[k].sort(function(a, b) { return (b.severity || 0) - (a.severity || 0); });
       });
       state.incByDomain = by;
-    }).catch(function() { state.incByDomain = {}; });
+      state.incFeedDown = false;
+    }).catch(function() {
+      // Degraded, not empty — renderers must show "feed unreachable", never a false 0.
+      state.incByDomain = {};
+      state.incFeedDown = true;
+    });
   }
 
   function loadCore() {
@@ -571,7 +607,9 @@ a.lnk:hover { text-decoration:underline; }
         '<div class="cell-trend">' + trendCell + '</div>' +
         '<div class="cell-ovix">' + ovCell + '</div>' +
         '<div class="cell-driver" title="' + esc(driver) + '">' + esc(driver) + '</div>' +
-        '<div style="text-align:center"><span class="inc-badge' + (incs.length ? '' : ' zero') + '">' + incs.length + '</span></div>' +
+        '<div style="text-align:center">' + (state.incFeedDown
+          ? '<span class="inc-badge down" title="Incident feed unreachable — count unknown, not zero">!</span>'
+          : '<span class="inc-badge' + (incs.length ? '' : ' zero') + '">' + incs.length + '</span>') + '</div>' +
         '<div style="text-align:center"><span class="why-btn" title="Why this score? — trace to source">ⓘ</span></div>' +
       '</div>';
     }).join('');
@@ -655,20 +693,46 @@ a.lnk:hover { text-decoration:underline; }
     // --- WHY THIS SCORE (traceability centerpiece) ---
     // Deterministic index: a documented ENGINE decides the member-facing score
     // (no LLM in the loop). Rule is named + versioned server-side; inputs shown here
-    // are the checkable substrate (signal density, member-geo weight, top driver).
+    // are the checkable substrate (raw activity, 30-day percentile, top driver).
+    // v2: displayed score = percentile of the domain's raw activity vs its OWN
+    // trailing 30-day baseline, with absolute guards. Per-domain v2 fields from
+    // /api/ovix/op-risk: raw, percentile, baselineN, guardApplied, calibrating —
+    // nulls degrade to '—' (calibrating or pre-v2 data), never throw.
     var sigCount = dom.eventCount || 0;
     var eff = (typeof dom.effCount === 'number') ? dom.effCount.toFixed(1) : '—';
     var gw = (typeof dom.geoWeight === 'number') ? dom.geoWeight.toFixed(2) + '×' : '—';
+    var raw = isNum(dom.raw) ? dom.raw.toFixed(1) : '—';
+    var pctl = isNum(dom.percentile) ? 'p' + Math.round(dom.percentile * 100) : '—';
+    var baseN = isNum(dom.baselineN) ? dom.baselineN : null;
+    var guard = dom.guardApplied || 'none';
+    var calibrating = dom.calibrating === true || guard === 'calibrating';
+
+    // Guard badge — when an absolute guard overrides the percentile, say so visibly.
+    var guardBadge = '';
+    if (guard === 'crisis_floor') {
+      guardBadge = '<div class="guard-badge" style="color:var(--red);border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.08)">CRISIS FLOOR — raw ' + raw + ' &ge; 12.0 held HIGH</div>';
+    } else if (guard === 'quiet_cap') {
+      guardBadge = '<div class="guard-badge" style="color:var(--green);border-color:rgba(16,185,129,0.45);background:rgba(16,185,129,0.08)">QUIET CAP — raw ' + raw + ' &lt; 4.0 capped at 6.9</div>';
+    } else if (calibrating) {
+      guardBadge = '<div class="guard-badge" style="color:var(--dim);border-color:var(--border2);background:rgba(148,163,184,0.06)">CALIBRATING — baseline ' + (baseN === null ? '&lt; 168' : baseN) + ' pts · v1 fallback</div>';
+    }
+
     html += '<div class="sect"><div class="sect-title">Why this score</div>' +
       '<div class="trace">' +
         '<div class="trace-rule">' +
           '<span class="trace-chip rule">rule ' + RISK_RULE + ' ' + RISK_RULE_VERSION + '</span>' +
           '<span class="trace-chip engine">engine-decided · no LLM</span>' +
-          '<span class="trace-chip">source ' + esc(dom.available === false ? 'unavailable' : RISK_SOURCE) + '</span>' +
+          '<span class="trace-chip">source ' + esc(dom.available === false ? 'unavailable' : ((state.risk && state.risk.source) || RISK_SOURCE)) + '</span>' +
         '</div>' +
-        '<div class="trace-formula">score = severity-weighted <b>signal density</b> × member-geo <b>exposure weight</b> × <b>time-decay</b>, banded to ' +
-          '<span style="color:' + color + '">' + level + '</span>.</div>' +
+        guardBadge +
+        '<div class="trace-formula">score = <b>percentile</b> of raw activity (severity-weighted <b>signal density</b> × member-geo <b>exposure weight</b> × <b>time-decay</b>) vs this domain’s own trailing <b>30-day baseline</b>, banded to ' +
+          '<span style="color:' + color + '">' + level + '</span>. ' +
+          'HIGH 7–10 = worst decile of the trailing month (p90–p100) · ELEVATED 4–7 = busier than usual (p50–p90) · NORMAL 0–4 = at/below a typical month. ' +
+          'Guards: raw &lt; 4.0 caps display at 6.9 (quiet_cap) · raw &ge; 12.0 floors at 7.0 (crisis_floor) · baseline &lt; 168 pts = calibrating (v1 fallback).</div>' +
         '<div class="io-grid">' +
+          '<div class="io"><span class="k">Raw activity (unclamped)</span><span class="v">' + raw + '</span></div>' +
+          '<div class="io"><span class="k">Percentile</span><span class="v">' + pctl + (pctl !== '—' ? ' <small>vs 30d baseline</small>' : '') + '</span></div>' +
+          '<div class="io"><span class="k">Baseline size</span><span class="v">' + (baseN === null ? '—' : baseN + ' <small>hourly pts</small>') + '</span></div>' +
           '<div class="io"><span class="k">Contributing signals</span><span class="v">' + sigCount + '</span></div>' +
           '<div class="io"><span class="k">Effective (weighted)</span><span class="v">' + eff + '</span></div>' +
           '<div class="io"><span class="k">Member-geo weight</span><span class="v">' + gw + '</span></div>' +
@@ -722,18 +786,27 @@ a.lnk:hover { text-decoration:underline; }
 
     // --- open incidents ---
     var incs = state.incByDomain[key] || [];
-    html += '<div class="sect"><div class="sect-title">Active Incidents (' + incs.length + ')</div>';
-    if (incs.length) {
-      html += incs.slice(0, 8).map(function(inc) {
-        var sc = sevColor(inc.sev_level);
-        return '<a class="inc-item" target="_top" rel="noopener" href="/incidents/' + esc(inc.slug || '') + '">' +
-          '<span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(inc.sev_level || ('SEV' + (inc.severity || '?'))) + '</span> ' +
-          '<span class="ii-title">' + esc(inc.title || 'Untitled') + '</span>' +
-          '<div class="ii-meta">' + esc((inc.affected_regions || []).slice(0, 3).join(', ') || inc.location_country || '') +
-          ' · declared ' + fmtDate(inc.declared_at) + '</div></a>';
-      }).join('');
-    } else { html += '<div class="muted">No active incidents in this domain.</div>'; }
-    html += '</div>';
+    if (state.incFeedDown) {
+      // Degraded, not empty (mirrors the Hub DataUnavailable pattern) — a member
+      // must be able to tell "no incidents" apart from "the feed is down".
+      html += '<div class="sect"><div class="sect-title">Active Incidents</div>' +
+        '<div class="feed-down" role="alert"><b>⚠ Feed degraded</b>' +
+        'The incident feed could not be reached just now. This is a connection issue, not an all-clear — counts are unknown, not zero. ' +
+        '<a class="lnk" target="_top" rel="noopener" href="/incidents">open /incidents ↗</a></div></div>';
+    } else {
+      html += '<div class="sect"><div class="sect-title">Active Incidents (' + incs.length + ')</div>';
+      if (incs.length) {
+        html += incs.slice(0, 8).map(function(inc) {
+          var sc = sevColor(inc.sev_level);
+          return '<a class="inc-item" target="_top" rel="noopener" href="/incidents/' + esc(inc.slug || '') + '">' +
+            '<span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(inc.sev_level || ('SEV' + (inc.severity || '?'))) + '</span> ' +
+            '<span class="ii-title">' + esc(inc.title || 'Untitled') + '</span>' +
+            '<div class="ii-meta">' + esc((inc.affected_regions || []).slice(0, 3).join(', ') || inc.location_country || '') +
+            ' · declared ' + fmtDate(inc.declared_at) + '</div></a>';
+        }).join('');
+      } else { html += '<div class="muted">No active incidents in this domain.</div>'; }
+      html += '</div>';
+    }
 
     // --- OVIX regional breakdown (overlay; geophysical domains only) ---
     if (hasOvixOverlay(key)) {
