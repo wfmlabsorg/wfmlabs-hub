@@ -149,10 +149,14 @@ export default function SignalsPage() {
 
   useEffect(() => {
     setPage(1)
+    // Collapse any expanded card — an open card pauses live polling, so a stale
+    // expandedId from the previous filter set would silently freeze the feed.
+    setExpandedId(null)
     fetchSignals(activeCategory, activeSource, activeSeverity, 1)
   }, [activeCategory, activeSource, activeSeverity, fetchSignals])
 
   useEffect(() => {
+    setExpandedId(null)
     if (page > 1) fetchSignals(activeCategory, activeSource, activeSeverity, page)
   }, [page, activeCategory, activeSource, activeSeverity, fetchSignals])
 
