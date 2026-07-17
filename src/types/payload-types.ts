@@ -980,6 +980,9 @@ export interface Signal {
         | 'environmental'
         | 'geopolitical'
         | 'general'
+        | 'labor'
+        | 'supply_chain'
+        | 'travel'
       )
     | null;
   /**

@@ -9,6 +9,19 @@ import { sql } from '@payloadcms/db-postgres'
  * GET  /api/signals — List recent signals (public)
  */
 
+// Full signals category allowlist — MUST match the Postgres enum
+// `enum_signals_category` (and the options in src/collections/Signals.ts).
+// hub-033: previous list predated the travel/labor/supply_chain domains, so
+// travel-intel signals were being coerced to 'general' and dropped from the
+// travel op-risk index.
+const VALID_CATEGORIES = [
+  'weather', 'seismic', 'disaster', 'events', 'cyber',
+  'infrastructure', 'health', 'financial', 'environmental',
+  'geopolitical', 'general', 'labor', 'supply_chain', 'travel',
+] as const
+
+type SignalCategory = (typeof VALID_CATEGORIES)[number]
+
 export async function POST(req: Request) {
   // Authenticate: ROC API key, Sentinel API key, or admin session
   const rocKey = req.headers.get('x-roc-api-key')
@@ -81,7 +94,10 @@ export async function POST(req: Request) {
         : sig.severity && sig.severity >= 4 ? 'moderate'
         : 'info'
       )) as 'info' | 'moderate' | 'severe' | 'extreme'
-      const category = (['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'geopolitical', 'general'].includes(sig.category || '') ? sig.category : 'general') as 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'geopolitical' | 'general'
+      // Coerce genuinely unknown values to 'general'; known enum values pass through.
+      const category = ((VALID_CATEGORIES as readonly string[]).includes(sig.category || '')
+        ? sig.category
+        : 'general') as SignalCategory
 
       const created = await payload.create({
         collection: 'signals',
@@ -109,12 +125,6 @@ export async function POST(req: Request) {
   }
 }
 
-const VALID_CATEGORIES = [
-  'weather', 'seismic', 'disaster', 'events', 'cyber',
-  'infrastructure', 'health', 'financial', 'environmental',
-  'geopolitical', 'general',
-]
-
 export async function GET(req: Request) {
   const payload = await getPayload({ config })
   const url = new URL(req.url)
@@ -127,7 +137,7 @@ export async function GET(req: Request) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = {}
-  if (category && VALID_CATEGORIES.includes(category)) {
+  if (category && (VALID_CATEGORIES as readonly string[]).includes(category)) {
     where.category = { equals: category }
   }
   if (regionId) where.regionId = { equals: regionId }

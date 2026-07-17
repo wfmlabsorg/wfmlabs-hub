@@ -50,6 +50,9 @@ const domainLabels: Record<string, string> = {
   geopolitical: 'Geopolitical',
   general: 'General',
   events: 'Events',
+  labor: 'Labor',
+  supply_chain: 'Supply Chain',
+  travel: 'Travel',
 }
 
 const categoryIcons: Record<string, string> = {
@@ -63,6 +66,9 @@ const categoryIcons: Record<string, string> = {
   financial: '\ud83d\udcca',
   environmental: '\ud83c\udf3f',
   general: '\u25c6',
+  labor: '\ud83d\udc65',
+  supply_chain: '\ud83d\udce6',
+  travel: '\u2708',
 }
 
 const severityBadgeColors: Record<string, { bg: string; fg: string }> = {
@@ -82,6 +88,9 @@ const filterCategories = [
   'financial',
   'environmental',
   'geopolitical',
+  'labor',
+  'supply_chain',
+  'travel',
   'general',
 ]
 
