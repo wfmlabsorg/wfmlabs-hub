@@ -39,9 +39,10 @@ interface SentinelPayload {
   sourceUrl?: string
 }
 
-/** Map Sentinel category to valid Signals category (signals don't have 'summary') */
-function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'geopolitical' | 'general' {
-  const valid = ['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'geopolitical', 'general'] as const
+/** Map Sentinel category to valid Signals category (signals don't have 'summary').
+ *  Allowlist matches the full Postgres enum_signals_category (hub-033). */
+function toSignalCategory(cat?: string): 'weather' | 'seismic' | 'disaster' | 'events' | 'cyber' | 'infrastructure' | 'health' | 'financial' | 'environmental' | 'geopolitical' | 'general' | 'labor' | 'supply_chain' | 'travel' {
+  const valid = ['weather', 'seismic', 'disaster', 'events', 'cyber', 'infrastructure', 'health', 'financial', 'environmental', 'geopolitical', 'general', 'labor', 'supply_chain', 'travel'] as const
   if (cat && (valid as readonly string[]).includes(cat)) return cat as typeof valid[number]
   return 'general'
 }
