@@ -102,22 +102,54 @@ export function incidentColor(sev: string | null | undefined): string {
 }
 
 // Incidents are the HEADLINE tier — large, dominant. Deliberately sized well
-// above the signal tier (max signal dot = 6px) so the two layers never read as
-// the same kind of thing (hub-014 two-tier model).
+// above the signal tier (max signal dot = 7px) so the two layers never read as
+// the same kind of thing (hub-014 two-tier model). Ramp nudged up a couple px
+// across the board (hub-034) so incident dots read crisply against the density
+// glow and are unmistakably the dominant layer.
 export function incidentSize(sev: string | null | undefined): number {
   switch ((sev || '').toUpperCase()) {
     case 'SEV1':
-      return 20
+      return 22
     case 'SEV2':
-      return 17
+      return 19
     case 'SEV3':
-      return 14
+      return 16
     case 'SEV4':
-      return 12
-    default:
       return 13
+    default:
+      return 15
   }
 }
+
+// Incident DOMAIN color (hub-034). Incident FILL encodes severity (incidentColor
+// above); the marker's identity RING + soft glow encode DOMAIN, drawn from the
+// canonical palette (single source of truth in domainColors.ts) so a travel
+// incident reads as "travel" at a glance instead of being indistinguishable from
+// any other same-severity dot. Kept as a thin wrapper so the globe never reaches
+// past the SSOT for a domain hue.
+export function incidentDomainColor(domain: string | null | undefined): string {
+  return domainColor(domain)
+}
+
+// Optional per-domain GLYPH overlaid on the incident core as a billboard
+// (hub-034). Travel — the strategic showcase — gets a plane so it's identifiable
+// even when its severity fill (often SEV3 cyan) is close to its domain sky ring.
+// U+FE0E forces the monochrome TEXT presentation (never the colored emoji) so it
+// stays on-theme and introduces NO orange. Domains without a glyph fall back to
+// the domain-colored ring alone — the ring covers every domain uniformly.
+const DOMAIN_GLYPH: Record<string, string> = {
+  travel: '✈︎', // ✈ plane
+}
+
+export function domainGlyph(domain: string | null | undefined): string | null {
+  return DOMAIN_GLYPH[(domain || '').toLowerCase()] || null
+}
+
+// Extra core radius (px) granted to TRAVEL incidents (hub-034) so the strategic
+// showcase reads a touch more prominent — without breaking the severity ramp: the
+// boost is smaller than one severity step, so a SEV1 always still outranks a
+// boosted SEV4.
+export const TRAVEL_PROMINENCE_PX = 3
 
 // Numeric severity (0–10) extracted from the signal's severity field.
 export function signalSeverityNum(s: GlobeSignal): number {

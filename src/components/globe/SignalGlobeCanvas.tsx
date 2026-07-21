@@ -28,7 +28,10 @@ import {
   type TourScope,
   signalColor,
   incidentColor,
+  incidentDomainColor,
   incidentSize,
+  domainGlyph,
+  TRAVEL_PROMINENCE_PX,
   signalSize,
   signalSeverityNum,
   clusterPoints,
@@ -154,6 +157,14 @@ const FLY_HEIGHT = 2_600_000
 const SIGNAL_MAX_AGE_MS = 4 * 60 * 60 * 1000 // 4h client fade window (hub-023). Signals older than this never plot/tour; the feed (mins=270) carries a ~30m tail buffer.
 const MAX_FLY_QUEUE = 12
 
+// Incident marker composition (hub-034): SEVERITY = core fill + size; DOMAIN =
+// a crisp identity ring + soft glow (+ an optional domain glyph). A same-severity
+// travel incident and weather incident used to render identically; the domain
+// ring/glyph make each domain — travel especially — legible at a glance.
+const INCIDENT_DOMAIN_RING_GAP = 5 // px beyond the breathing core radius the domain ring sits
+const INCIDENT_DOMAIN_RING_WIDTH = 3.5 // domain identity ring thickness
+const INCIDENT_CORE_OUTLINE_WIDTH = 2.5 // white core rim — crisp edge vs the dark globe
+
 // ── Auto-cycle tour (hub-019) ──
 // When idle (no new signals to land, no recent user interaction, globe in view)
 // the camera tours the signal set: fly → dwell + highlight + popup → advance →
@@ -196,6 +207,42 @@ function getGlowTexture(): string {
   ctx.fillRect(0, 0, size, size)
   glowTexture = canvas.toDataURL()
   return glowTexture
+}
+
+// ── Domain glyph sprites (hub-034) ──────────────────────────────────────────
+// Render a domain glyph (e.g. the travel plane) to a small canvas once and cache
+// the data URL, so a single billboard image serves every incident of that domain
+// (mirrors getGlowTexture's cache-once pattern). Drawn white with a dark stroke
+// so it stays crisp on top of the bright severity core in either theme. Returns
+// '' if 2D context is unavailable so the caller can skip the glyph gracefully.
+const glyphTextures: Record<string, string> = {}
+function getGlyphTexture(char: string): string {
+  if (glyphTextures[char] !== undefined) return glyphTextures[char]
+  const size = 64
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    glyphTextures[char] = ''
+    return ''
+  }
+  ctx.clearRect(0, 0, size, size)
+  ctx.font = `${Math.round(size * 0.66)}px 'IBM Plex Sans', system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const cx = size / 2
+  const cy = size / 2 + size * 0.02
+  // Dark halo stroke first (contrast against a bright core), then white fill.
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 4
+  ctx.strokeStyle = 'rgba(6,10,22,0.9)'
+  ctx.strokeText(char, cx, cy)
+  ctx.fillStyle = '#f8fafc'
+  ctx.fillText(char, cx, cy)
+  const url = canvas.toDataURL()
+  glyphTextures[char] = url
+  return url
 }
 
 // ── Load Cesium from CDN exactly once (module-level singleton) ──
@@ -755,52 +802,48 @@ export default function SignalGlobeCanvas({
       const lat = p.location_lat == null ? NaN : parseFloat(String(p.location_lat))
       const lon = p.location_lon == null ? NaN : parseFloat(String(p.location_lon))
       if (isNaN(lat) || isNaN(lon)) return
-      const css = incidentColor(p.sev_level)
-      const ces = Cesium.Color.fromCssColorString(css)
-      const baseSize = incidentSize(p.sev_level)
+      // Two-color scheme (hub-034): SEVERITY drives the core fill + size (a SEV1
+      // still reads as the biggest, reddest, most urgent dot); DOMAIN drives the
+      // identity ring, the soft glow, and — where one exists — a glyph, so a
+      // travel incident is recognizable at a glance instead of blending into the
+      // same-severity crowd.
+      const sevCss = incidentColor(p.sev_level)
+      const sevColor = Cesium.Color.fromCssColorString(sevCss)
+      const domColor = Cesium.Color.fromCssColorString(incidentDomainColor(p.domain))
+      const isTravel = (p.domain || '').toLowerCase() === 'travel'
+      // Travel gets a small prominence bump — smaller than one severity step, so
+      // the severity hierarchy is preserved (a SEV1 always outranks a boosted SEV4).
+      const baseSize = incidentSize(p.sev_level) + (isTravel ? TRAVEL_PROMINENCE_PX : 0)
+      const glyphChar = domainGlyph(p.domain)
       const position = Cesium.Cartesian3.fromDegrees(lon, lat)
       const eid = `inc-${p.id}`
+
+      // Breathing radius shared by the core + the domain ring (so the ring always
+      // hugs the core at a constant gap as it pulses).
+      const coreRadius = () => baseSize + Math.sin(((Date.now() % 1600) / 1600) * Math.PI * 2) * 3
 
       // Hide the whole marker (core + label) when it rotates behind the globe
       // (hub-020). Entity-level `show` gates the point AND its label together.
       const incidentVisible = new Cesium.CallbackProperty(() => pointVisible(position), false)
 
-      // Headline tier: large SEV-colored core that breathes.
-      const entity = viewer.entities.add({
-        id: eid,
+      // Soft outer glow — now DOMAIN-tinted (was severity), giving an ambient
+      // domain wash readable from a distance. Drawn first → sits beneath.
+      const halo = viewer.entities.add({
+        id: `inc-halo-${p.id}`,
         position,
         show: incidentVisible,
         point: {
-          pixelSize: new Cesium.CallbackProperty(() => {
-            const t = (Date.now() % 1600) / 1600
-            return baseSize + Math.sin(t * Math.PI * 2) * 3
-          }, false),
-          color: ces.withAlpha(0.95),
-          outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
-          outlineWidth: 2,
+          pixelSize: baseSize * 3,
+          color: domColor.withAlpha(0.1),
+          outlineColor: domColor.withAlpha(0.3),
+          outlineWidth: 1,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
         },
-        // Always-on label so incidents are self-identifying headlines.
-        label: {
-          text: `${(p.sev_level || '').toUpperCase()} · ${truncate(p.title || 'Incident', 38)}`,
-          font: "600 12px 'IBM Plex Sans', system-ui, sans-serif",
-          fillColor: Cesium.Color.fromCssColorString('#e2e8f0'),
-          showBackground: true,
-          backgroundColor: Cesium.Color.fromCssColorString('#060a16').withAlpha(0.82),
-          backgroundPadding: new Cesium.Cartesian2(8, 5),
-          outlineColor: ces.withAlpha(0.6),
-          style: Cesium.LabelStyle.FILL,
-          horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-          verticalOrigin: Cesium.VerticalOrigin.CENTER,
-          pixelOffset: new Cesium.Cartesian2(baseSize + 8, 0),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          // Fade the label out when the marker is far/small to avoid clutter.
-          translucencyByDistance: new Cesium.NearFarScalar(4e6, 1.0, 1.6e7, 0.0),
-        },
       })
 
-      // Continuously expanding pulse ring — the signature "live incident" beat.
+      // Continuously expanding pulse ring — the signature "live incident" beat,
+      // kept SEVERITY-colored so the urgency read pulses in the severity hue.
       const ring = viewer.entities.add({
         id: `inc-ring-${p.id}`,
         position,
@@ -813,7 +856,7 @@ export default function SignalGlobeCanvas({
           color: Cesium.Color.TRANSPARENT,
           outlineColor: new Cesium.CallbackProperty(() => {
             const t = (Date.now() % 2200) / 2200
-            return ces.withAlpha((1 - t) * 0.6)
+            return sevColor.withAlpha((1 - t) * 0.6)
           }, false),
           outlineWidth: 2,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
@@ -821,25 +864,88 @@ export default function SignalGlobeCanvas({
         },
       })
 
-      // Static halo glow underneath.
-      const halo = viewer.entities.add({
-        id: `inc-halo-${p.id}`,
+      // DOMAIN identity ring — a crisp domain-colored ring hugging the core just
+      // outside its white rim. This is the primary "which domain is this" cue and
+      // covers every domain uniformly (SSOT domainColors). Transparent fill so the
+      // severity core shows through the middle.
+      const domainRing = viewer.entities.add({
+        id: `inc-domring-${p.id}`,
         position,
         show: incidentVisible,
         point: {
-          pixelSize: baseSize * 3,
-          color: ces.withAlpha(0.1),
-          outlineColor: ces.withAlpha(0.3),
-          outlineWidth: 1,
+          pixelSize: new Cesium.CallbackProperty(
+            () => coreRadius() + INCIDENT_DOMAIN_RING_GAP,
+            false,
+          ),
+          color: Cesium.Color.TRANSPARENT,
+          outlineColor: domColor.withAlpha(0.95),
+          outlineWidth: INCIDENT_DOMAIN_RING_WIDTH,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
           scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
+        },
+      })
+
+      // Headline tier: large SEVERITY-colored core that breathes, with a crisp
+      // white rim so it reads sharply against the dark globe + density glow.
+      const entity = viewer.entities.add({
+        id: eid,
+        position,
+        show: incidentVisible,
+        point: {
+          pixelSize: new Cesium.CallbackProperty(coreRadius, false),
+          color: sevColor.withAlpha(0.97),
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
+          outlineWidth: INCIDENT_CORE_OUTLINE_WIDTH,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
+        },
+        // Always-on label so incidents are self-identifying headlines. Now leads
+        // with the DOMAIN so a travel incident is scannable in the label too.
+        label: {
+          text: `${domainLabel(p.domain).toUpperCase()} · ${(p.sev_level || '').toUpperCase()} · ${truncate(p.title || 'Incident', 30)}`,
+          font: "600 12px 'IBM Plex Sans', system-ui, sans-serif",
+          fillColor: Cesium.Color.fromCssColorString('#e2e8f0'),
+          showBackground: true,
+          backgroundColor: Cesium.Color.fromCssColorString('#060a16').withAlpha(0.82),
+          backgroundPadding: new Cesium.Cartesian2(8, 5),
+          outlineColor: domColor.withAlpha(0.6),
+          style: Cesium.LabelStyle.FILL,
+          horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          pixelOffset: new Cesium.Cartesian2(baseSize + 10, 0),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          // Fade the label out when the marker is far/small to avoid clutter.
+          translucencyByDistance: new Cesium.NearFarScalar(4e6, 1.0, 1.6e7, 0.0),
         },
       })
 
       // focusId in negative space so it never collides with signal ids; the core
       // entity carries the click meta (ring/halo aren't in metaRef → not picked).
       metaRef.current.set(eid, { kind: 'incident' as const, focusId: -p.id, incident: p })
-      incidentEntitiesRef.current.push(entity, ring, halo)
+      incidentEntitiesRef.current.push(entity, ring, halo, domainRing)
+
+      // Optional DOMAIN glyph (travel plane) overlaid on the core — the decisive
+      // "this is travel" cue, robust even when the SEV3 cyan fill is close to the
+      // travel sky ring. Domains without a glyph rely on the ring alone.
+      if (glyphChar) {
+        const glyphImg = getGlyphTexture(glyphChar)
+        if (glyphImg) {
+          const glyph = viewer.entities.add({
+            id: `inc-glyph-${p.id}`,
+            position,
+            show: incidentVisible,
+            billboard: {
+              image: glyphImg,
+              width: baseSize * 1.2,
+              height: baseSize * 1.2,
+              color: Cesium.Color.WHITE,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              scaleByDistance: new Cesium.NearFarScalar(1e6, 1.3, 2e7, 0.6),
+            },
+          })
+          incidentEntitiesRef.current.push(glyph)
+        }
+      }
     })
   }
 
