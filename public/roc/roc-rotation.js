@@ -20,11 +20,15 @@
   if (window.__rocRotationEngine) return; // idempotent — never double-init
   window.__rocRotationEngine = true;
 
-  // Canonical rotation order (domain dashboards only). 'globe' was removed
-  // (hub-013): the landing now has a native Cesium globe hero, so the rotation
-  // must NOT cycle to a second standalone /roc/globe/globe.html slide. ROUTES.globe
-  // is kept below for back-compat (direct navDomain('globe') callers).
-  var ORDER = ['weather', 'seismic', 'disaster', 'cyber', 'health',
+  // Canonical rotation order. 'scores' (the all-indexes overview: 12 domain
+  // indexes + composite + trend) is the FIRST/anchor slide (hub-036) so the
+  // rotation periodically returns to the main index dashboard instead of only
+  // cycling the individual domains — Ted's flag: "once it starts rotating we
+  // don't see the main indexes." 'globe' was removed (hub-013): the landing
+  // now has a native Cesium globe hero, so the rotation must NOT cycle to a
+  // second standalone /roc/globe/globe.html slide. ROUTES.globe is kept below
+  // for back-compat (direct navDomain('globe') callers).
+  var ORDER = ['scores', 'weather', 'seismic', 'disaster', 'cyber', 'health',
                'infrastructure', 'financial', 'environmental', 'geopolitical',
                'travel', 'labor', 'supply_chain'];
   var ROUTES = {
@@ -166,11 +170,15 @@
     setState(s);
     renderSlideChips();
   };
+  // Return to the all-indexes overview (scores.html). Stops rotation first so
+  // the relay does not immediately carry the member off the overview again.
+  window.rocHome = function () { stop(); go('scores'); };
   // Back-compat shim for dashboards' rocNav() button handlers.
   window.rocNav = function (action) {
     if (action === 'next') window.navNext();
     else if (action === 'prev') window.navPrev();
     else if (action === 'toggle') window.toggleRotation();
+    else if (action === 'home') window.rocHome();
   };
 
   // Guarantee a visible play/pause control on every page. If the page's native
@@ -198,13 +206,42 @@
     document.body.appendChild(bar);
   }
 
+  // Persistent "ALL INDEXES" home control on every ROC page (hub-036). Rendered
+  // from this shared script so one definition covers the globe + all dashboards.
+  // It sits at the always-on fixed layer (like #rotation-indicator) so it stays
+  // visible AND clickable while rotation is active — the core fix: a member can
+  // always jump back to the all-indexes overview (scores.html). Hidden on the
+  // overview itself, where it would be redundant. Mission Control palette (cyan
+  // #18BC9C / #22d3ee), NO ORANGE.
+  function ensureHomeControl() {
+    if (currentKey() === 'scores') return;               // already on the overview
+    if (document.getElementById('roc-home-btn')) return; // idempotent
+    if (!document.body) return;
+    var btn = document.createElement('button');
+    btn.id = 'roc-home-btn';
+    btn.type = 'button';
+    btn.title = 'Back to all indexes (overview dashboard)';
+    btn.innerHTML = '&#8962; ALL INDEXES'; // ⌂
+    btn.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:99999;' +
+      'background:rgba(6,6,16,.92);border:1px solid rgba(24,188,156,.45);' +
+      'color:#18BC9C;font-family:\'JetBrains Mono\',ui-monospace,monospace;' +
+      'font-size:10px;letter-spacing:.14em;font-weight:700;padding:5px 10px;' +
+      'border-radius:4px;cursor:pointer;line-height:1;user-select:none;';
+    btn.onmouseover = function () { btn.style.borderColor = '#22d3ee'; btn.style.color = '#22d3ee'; };
+    btn.onmouseout = function () { btn.style.borderColor = 'rgba(24,188,156,.45)'; btn.style.color = '#18BC9C'; };
+    btn.onclick = function () { window.rocHome(); };
+    document.body.appendChild(btn);
+  }
+
   // One-time migration: ensure newly-added slides (labor, supply_chain) appear in
   // any pre-existing saved selection without disturbing the user's other choices.
   function migrate() {
     var s = getState();
     if (s.enabledSlides && s.enabledSlides.length) {
       var changed = false;
-      ['labor', 'supply_chain'].forEach(function (k) {
+      // 'scores' added (hub-036) so the all-indexes overview joins the loop for
+      // members who had already customized their slide selection.
+      ['labor', 'supply_chain', 'scores'].forEach(function (k) {
         if (s.enabledSlides.indexOf(k) === -1) { s.enabledSlides.push(k); changed = true; }
       });
       if (changed) setState(s);
@@ -212,7 +249,7 @@
   }
 
   // ── On load: resume the relay if active (THE FIX) ──
-  function init() { migrate(); ensureControl(); updateUI(); arm(); }
+  function init() { migrate(); ensureControl(); ensureHomeControl(); updateUI(); arm(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
