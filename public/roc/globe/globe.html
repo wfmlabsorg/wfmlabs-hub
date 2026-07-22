@@ -421,14 +421,19 @@
   <div id="breadcrumb"></div>
 
   <div id="ovix-legend">
-    <div class="header">◆ OVIX DOMAINS</div>
-    <div class="cat" onclick="navDomain('weather')" title="Weather Intelligence"><span>Weather</span><span class="val" id="ovix-weather">--</span></div>
-    <div class="cat" onclick="navDomain('seismic')" title="Seismic Activity"><span>Seismic</span><span class="val" id="ovix-seismic">--</span></div>
-    <div class="cat" onclick="navDomain('disaster')" title="Disaster Monitor"><span>Disaster</span><span class="val" id="ovix-disaster">--</span></div>
-    <div class="cat" onclick="navDomain('cyber')" title="Cyber Threat Intel"><span>Cyber</span><span class="val" id="ovix-cyber">--</span></div>
-    <div class="cat" onclick="navDomain('health')" title="Health Surveillance"><span>Health</span><span class="val" id="ovix-health">--</span></div>
-    <div class="cat" onclick="navDomain('infrastructure')" title="Infrastructure Status"><span>Infra</span><span class="val" id="ovix-infra">--</span></div>
-    <div class="cat" onclick="navDomain('financial')" title="Financial Markets"><span>Financial</span><span class="val" id="ovix-financial">--</span></div>
+    <div class="header">◆ OP-RISK DOMAINS</div>
+    <div class="cat" onclick="navDomain('weather')" title="Weather"><span>Weather</span><span class="val" id="ovix-weather">--</span></div>
+    <div class="cat" onclick="navDomain('seismic')" title="Seismic"><span>Seismic</span><span class="val" id="ovix-seismic">--</span></div>
+    <div class="cat" onclick="navDomain('cyber')" title="Cyber"><span>Cyber</span><span class="val" id="ovix-cyber">--</span></div>
+    <div class="cat" onclick="navDomain('health')" title="Health"><span>Health</span><span class="val" id="ovix-health">--</span></div>
+    <div class="cat" onclick="navDomain('geopolitical')" title="Geopolitical"><span>Geopolitical</span><span class="val" id="ovix-geopolitical">--</span></div>
+    <div class="cat" onclick="navDomain('infrastructure')" title="Infrastructure"><span>Infra</span><span class="val" id="ovix-infra">--</span></div>
+    <div class="cat" onclick="navDomain('financial')" title="Financial"><span>Financial</span><span class="val" id="ovix-financial">--</span></div>
+    <div class="cat" onclick="navDomain('environmental')" title="Environmental"><span>Environmental</span><span class="val" id="ovix-environmental">--</span></div>
+    <div class="cat" onclick="navDomain('labor')" title="Labor"><span>Labor</span><span class="val" id="ovix-labor">--</span></div>
+    <div class="cat" onclick="navDomain('supply_chain')" title="Supply Chain"><span>Supply Chain</span><span class="val" id="ovix-supply_chain">--</span></div>
+    <div class="cat" onclick="navDomain('travel')" title="Travel"><span>Travel</span><span class="val" id="ovix-travel">--</span></div>
+    <div class="cat" onclick="navDomain('disaster')" title="Disaster"><span>Disaster</span><span class="val" id="ovix-disaster">--</span></div>
     <div class="sep-line"></div>
     <div class="composite"><span>COMPOSITE</span><span class="val" id="ovix-composite">--</span></div>
     <div class="nav-controls">
@@ -567,11 +572,41 @@
       return fetch(url).then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
     }
     function cssColor(s) {
-      if (s < 4.0) return '#27ae60';   // green: low volatility
-      if (s < 7.0) return '#f39c12';   // orange: elevated
-      return '#e74c3c';                // red: high volatility
+      // Op-risk composite ramp — Mission Control theme, NO ORANGE.
+      if (s < 4.0) return '#18BC9C';   // teal: NORMAL / low op-risk
+      if (s < 7.0) return '#eab308';   // amber: ELEVATED
+      return '#ef4444';                // red: HIGH op-risk
     }
     function cesiumColor(s) { return Cesium.Color.fromCssColorString(cssColor(s)); }
+
+    // ── hub-035: region scoring sourced from the 12-domain signals-derived op-risk
+    // index (/api/ovix/op-risk?scope=region), replacing the legacy geophysical OVIX
+    // scores (/api/ovix/scores, /composite). Adapter maps the op-risk contract
+    // (composite + domains[{domain,score,level,eventCount,topEvent}]) onto the shape
+    // the globe's existing UI consumes (composite + categories[{category,score,level,
+    // pointCount,topEvent}]). op-risk is uniform on region=<nodeId> for macro/sub/metro.
+    function opRiskUrl(id) {
+      return OVIX_API + '/api/ovix/op-risk?scope=region&region=' + encodeURIComponent(id);
+    }
+    function adaptOpRisk(d) {
+      return {
+        composite: d.composite,
+        regionName: d.regionName,
+        domains: d.domains || [],
+        categories: (d.domains || []).map(function(dom) {
+          return {
+            category: dom.domain,
+            score: dom.score,
+            level: dom.level,
+            pointCount: dom.eventCount || 0,
+            topEvent: dom.topEvent || null,
+          };
+        }),
+      };
+    }
+    function fetchOpRiskRegion(id) {
+      return safeFetch(opRiskUrl(id)).then(adaptOpRisk);
+    }
 
     try {
       log('Cesium ' + Cesium.VERSION);
@@ -633,7 +668,7 @@
       var MARKER_STYLES = {
         macro: { size: 24, color: '#18BC9C', outline: '#18BC9C', labelFont: 'bold 14px JetBrains Mono, monospace', labelOffset: -28 },
         sub:   { size: 18, color: '#3498db', outline: '#2980b9', labelFont: 'bold 12px JetBrains Mono, monospace', labelOffset: -24 },
-        metro: { size: 14, color: '#e67e22', outline: '#d35400', labelFont: '11px JetBrains Mono, monospace', labelOffset: -20 },
+        metro: { size: 14, color: '#22d3ee', outline: '#0891b2', labelFont: '11px JetBrains Mono, monospace', labelOffset: -20 },
       };
 
       function clearMarkers() {
@@ -742,7 +777,7 @@
             entity.point.outlineColor = Cesium.Color.fromCssColorString(c).withAlpha(0.6);
             return;
           }
-          safeFetch(OVIX_API + '/api/ovix/composite?region=' + id).then(function(d) {
+          fetchOpRiskRegion(id).then(function(d) {
             watchlistData[id] = d;
             entity.point.color = cesiumColor(d.composite).withAlpha(0.9);
             entity.point.outlineColor = cesiumColor(d.composite).withAlpha(0.6);
@@ -1490,7 +1525,10 @@
         var param = type === 'metro' ? 'metro=' : 'region=';
 
         Promise.all([
-          safeFetch(OVIX_API + '/api/ovix/composite?' + param + id),
+          // hub-035: composite score + domain breakdown now from op-risk (12 domains),
+          // uniform on region=<nodeId>. Disaster/weather/seismic below stay as legacy
+          // raw-sensor detail (demoted to overlay, no longer the scoring substrate).
+          fetchOpRiskRegion(id),
           safeFetch(OVIX_API + '/api/ovix/disasters?' + param + id),
           safeFetch(OVIX_API + '/api/ovix/weather-detail?region=' + id).catch(function() { return null; }),
           safeFetch(OVIX_API + '/api/ovix/seismic?region=' + id).catch(function() { return null; }),
@@ -1513,12 +1551,12 @@
 
           // Score
           h += '<div class="big-score" style="color:' + cssColor(composite.composite) + '">' + composite.composite.toFixed(1) + '</div>';
-          var label = type === 'metro' ? 'METRO OVIX' : (type === 'sub' ? 'REGIONAL OVIX' : 'OVIX COMPOSITE');
+          var label = type === 'metro' ? 'METRO OP-RISK' : (type === 'sub' ? 'REGIONAL OP-RISK' : 'OP-RISK COMPOSITE');
           h += '<div class="score-label">' + label + '</div>';
           h += '<div style="text-align:center;font-size:9px;color:#333;margin-bottom:12px;">Updated: ' + new Date().toLocaleTimeString() + '</div>';
 
-          // Categories
-          h += '<div class="section-title">OVIX CATEGORIES</div>';
+          // Risk domains (12-domain op-risk breakdown)
+          h += '<div class="section-title">RISK DOMAINS</div>';
           (composite.categories || []).forEach(function(c) {
             h += '<div class="cat-row">';
             h += '<span class="cat-name">' + esc(c.category.charAt(0).toUpperCase() + c.category.slice(1)) + '</span>';
@@ -1994,21 +2032,22 @@
       }
 
       function fetchGlobalOVIX() {
-        // Fetch all domain scores from the canonical scores endpoint
-        // (uses domain-specific composite scoring for cyber, health, financial)
-        safeFetch(OVIX_API + '/api/ovix/scores').then(function(d) {
+        // hub-035: global legend now reads the 12-domain signals-derived op-risk
+        // composite (scope=global) instead of legacy /api/ovix/scores (geophysical).
+        safeFetch(OVIX_API + '/api/ovix/op-risk').then(function(d) {
           setLegend('composite', d.composite);
-          log('OVIX: ' + d.composite);
+          log('OP-RISK: ' + d.composite);
           var mapping = {
-            weather: 'weather', seismic: 'seismic', disaster: 'disaster',
-            cyber: 'cyber', infrastructure: 'infra', financial: 'financial',
-            health: 'health', environmental: 'environmental'
+            weather: 'weather', seismic: 'seismic', cyber: 'cyber', health: 'health',
+            geopolitical: 'geopolitical', infrastructure: 'infra', financial: 'financial',
+            environmental: 'environmental', labor: 'labor', supply_chain: 'supply_chain',
+            travel: 'travel', disaster: 'disaster'
           };
           (d.domains || []).forEach(function(dom) {
             var legendId = mapping[dom.domain];
             if (legendId) setLegend(legendId, dom.score);
           });
-        }).catch(function() { log('OVIX scores fetch failed'); });
+        }).catch(function() { log('op-risk global fetch failed'); });
       }
 
       // =============================================
@@ -2770,11 +2809,9 @@
           wlBody.appendChild(card);
         });
 
-        // Fetch data for all cards in parallel
+        // Fetch data for all cards in parallel (hub-035: op-risk per node)
         list.forEach(function(regionId) {
-          var param = (registry.macroRegions || []).some(function(m) { return m.id === regionId; })
-            ? 'region=' : 'region=';
-          safeFetch(OVIX_API + '/api/ovix/composite?' + param + regionId).then(function(d) {
+          fetchOpRiskRegion(regionId).then(function(d) {
             watchlistData[regionId] = d;
             updateWatchlistCard(regionId, d);
             // Enhancement 5 & 7: Update marker colors and pulse rings
@@ -2801,7 +2838,7 @@
 
         scoreEl.textContent = data.composite.toFixed(1);
         scoreEl.style.color = cssColor(data.composite);
-        labelEl.textContent = 'OVIX COMPOSITE';
+        labelEl.textContent = 'OP-RISK COMPOSITE';
 
         // Add category pills
         var catsHtml = '<div class="wl-card-cats">';
@@ -2955,27 +2992,22 @@
       // Score-based marker coloring — update marker colors from OVIX scores
       // =============================================
       function updateMarkerColors() {
-        fetch(OVIX_API + '/api/ovix/scores?category=weather')
-          .then(function(r) { return r.ok ? r.json() : null; })
-          .then(function(d) {
-            if (!d || !d.regions) return;
-            d.regions.forEach(function(r) {
-              // Find the active marker for this region
-              var marker = activeMarkers.find(function(m) {
-                return m.properties && m.properties.itemId &&
-                       m.properties.itemId.getValue() === r.region_id;
-              });
-              if (marker && marker.point) {
-                var color = r.score <= 2 ? '#18BC9C' : r.score <= 4 ? '#27ae60' : r.score <= 6 ? '#f39c12' : r.score <= 8 ? '#e67e22' : '#e74c3c';
-                marker.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.9);
-                marker.point.outlineColor = Cesium.Color.fromCssColorString(color).withAlpha(0.5);
-                // Update label to show score
-                if (marker.label) {
-                  marker.label.text = r.region_id.split('-').map(function(w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ') + ' ' + r.score.toFixed(1);
-                }
-              }
-            });
+        // hub-035: color the currently-visible region markers by their 12-domain
+        // op-risk composite (per node), and annotate the label with the score.
+        // Small marker counts per level (≈5 macros / ≈8 subs / ≈4 metros) → per-node
+        // fetches, not a bulk call. Replaces legacy /api/ovix/scores?category=weather.
+        activeMarkers.forEach(function(entity) {
+          if (!entity.properties || !entity.properties.itemId || !entity.point) return;
+          var id = entity.properties.itemId.getValue();
+          var baseName = entity.properties.itemName ? entity.properties.itemName.getValue() : id;
+          fetchOpRiskRegion(id).then(function(d) {
+            watchlistData[id] = d;
+            var color = cssColor(d.composite);
+            entity.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.9);
+            entity.point.outlineColor = Cesium.Color.fromCssColorString(color).withAlpha(0.5);
+            if (entity.label) entity.label.text = baseName + '  ' + d.composite.toFixed(1);
           }).catch(function() {});
+        });
       }
 
       // =============================================
