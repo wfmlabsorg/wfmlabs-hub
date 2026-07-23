@@ -146,6 +146,42 @@ body {
 }
 .why-btn:hover { border-color:var(--cyan); background:rgba(34,211,238,0.16); }
 
+/* ---------- OPEN INCIDENTS strip (hub-037) — consolidated all-domain feed atop the
+   index. Feed-style + max-height/overflow so a long list scrolls internally instead
+   of shoving the 12-domain index table off-screen. Additive to the per-domain
+   badges + drill-down "Active Incidents" list, which are preserved. ---------- */
+.open-inc {
+  flex-shrink:0; background:var(--panel2); border-bottom:1px solid var(--border);
+  display:flex; flex-direction:column;
+}
+.open-inc-head { display:flex; align-items:center; gap:12px; padding:8px 18px; flex-shrink:0; }
+.open-inc-head .oi-title {
+  font-size:11px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--text); display:flex; align-items:center; gap:8px; white-space:nowrap;
+}
+.open-inc-head .oi-title .oi-warn { color:var(--amber); font-size:13px; }
+.open-inc-head .oi-title .oi-count {
+  font-family:var(--mono); color:var(--cyan); font-size:12px;
+  padding:1px 7px; border-radius:10px; border:1px solid var(--border2); background:rgba(34,211,238,0.06);
+}
+.open-inc-head .oi-sub { font-size:9px; color:var(--dim2); letter-spacing:.5px; text-transform:uppercase; }
+.open-inc-head .oi-all { margin-left:auto; font-size:10px; white-space:nowrap; }
+.open-inc-feed { max-height:144px; overflow-y:auto; display:flex; flex-direction:column; }
+.oi-row {
+  display:grid; grid-template-columns:52px 116px 1fr minmax(0,150px) 62px;
+  align-items:center; gap:12px; padding:6px 18px; border-top:1px solid var(--border);
+  text-decoration:none; cursor:pointer; transition:background .12s ease;
+}
+.oi-row:hover { background:rgba(34,211,238,0.05); }
+.oi-row .oi-sev { justify-self:start; }
+.oi-row .oi-dom { font-family:var(--mono); font-size:10px; color:var(--dim); text-transform:capitalize; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.oi-row .oi-ttl { font-size:12px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.oi-row:hover .oi-ttl { color:var(--cyan); }
+.oi-row .oi-reg { font-family:var(--mono); font-size:10px; color:var(--dim2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.oi-row .oi-time { font-family:var(--mono); font-size:10px; color:var(--dim2); white-space:nowrap; text-align:right; }
+.oi-empty { padding:10px 18px; font-size:11px; color:var(--dim2); font-style:italic; border-top:1px solid var(--border); }
+.open-inc .feed-down { margin:2px 18px 10px; }
+
 /* ---------- DRILL PANEL ---------- */
 .drill {
   width:0; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border);
@@ -241,6 +277,9 @@ a.lnk:hover { text-decoration:underline; }
   .tape-head, .row { grid-template-columns: 116px 80px 66px 0 1fr 38px 34px; }
   .cell-ovix, .cell-domain .meta, .ovix-chip { display:none; }
   .drill.open { position:absolute; right:0; top:0; bottom:0; width:92%; max-width:410px; z-index:50; }
+  .oi-row { grid-template-columns:52px 1fr 62px; }
+  .oi-row .oi-dom, .oi-row .oi-reg { display:none; }
+  .open-inc-head .oi-sub { display:none; }
 }
 </style>
 </head>
@@ -273,6 +312,21 @@ a.lnk:hover { text-decoration:underline; }
       <button id="bnr-play" onclick="rocNav('toggle')" title="Play/Pause">&#9654;</button>
       <button onclick="rocNav('next')" title="Next">&#9197;</button>
     </div>
+  </div>
+</div>
+
+<!-- ========== OPEN INCIDENTS (consolidated all-domain feed — hub-037) ==========
+     Feed-style window atop the index so all open incidents are visible without
+     drilling each domain or scrolling to a per-domain list. Reuses loadIncidents'
+     already-fetched state.incByDomain (no new fetch); severity-ranked (SEV1 first). -->
+<div class="open-inc" id="open-inc">
+  <div class="open-inc-head">
+    <span class="oi-title"><span class="oi-warn">&#9888;</span>OPEN INCIDENTS <span class="oi-count mono" id="oi-count">—</span></span>
+    <span class="oi-sub">all domains · severity-ranked</span>
+    <a class="lnk oi-all" target="_top" rel="noopener" href="/incidents">all incidents ↗</a>
+  </div>
+  <div class="open-inc-feed" id="oi-feed">
+    <div class="oi-empty">Loading open incidents…</div>
   </div>
 </div>
 
@@ -626,6 +680,79 @@ a.lnk:hover { text-decoration:underline; }
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   // ============================================================
+  //  OPEN INCIDENTS strip (hub-037) — one consolidated feed across ALL domains.
+  //  Flattens state.incByDomain (populated by loadIncidents — no extra fetch) and
+  //  ranks by severity descending (SEV1 first), then most-recently-declared first.
+  // ============================================================
+  function sevRank(inc) {
+    var m = /SEV\s*(\d)/i.exec(inc.sev_level || '');
+    if (m) return parseInt(m[1], 10);           // SEV1 (worst) → 1 … SEV4 → 4
+    var s = inc.severity;
+    if (typeof s === 'number') { return s >= 9 ? 1 : s >= 7 ? 2 : s >= 4 ? 3 : 4; }
+    return 5;                                    // unknown severity sinks to the bottom
+  }
+  function fmtRel(s) {
+    if (!s) return '—';
+    var t = new Date(s); if (isNaN(t)) return '—';
+    var mins = Math.floor((Date.now() - t.getTime()) / 60000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return mins + 'm ago';
+    var hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    return Math.floor(hrs / 24) + 'd ago';
+  }
+  function flatIncidents() {
+    var all = [];
+    Object.keys(state.incByDomain).forEach(function(dom) {
+      (state.incByDomain[dom] || []).forEach(function(inc) { all.push(inc); });
+    });
+    all.sort(function(a, b) {
+      var ra = sevRank(a), rb = sevRank(b);
+      if (ra !== rb) return ra - rb;            // SEV1 first
+      var ta = a.declared_at ? new Date(a.declared_at).getTime() : 0;
+      var tb = b.declared_at ? new Date(b.declared_at).getTime() : 0;
+      return tb - ta;                           // then newest declared first
+    });
+    return all;
+  }
+  function renderOpenIncidents() {
+    var countEl = document.getElementById('oi-count');
+    var feed = document.getElementById('oi-feed');
+    if (!feed) return;
+
+    // Degraded, not empty — a failed feed must never read as "0 incidents / all-clear".
+    if (state.incFeedDown) {
+      if (countEl) countEl.textContent = '?';
+      feed.innerHTML = '<div class="feed-down" role="alert"><b>⚠ Feed unreachable</b>' +
+        'The incident feed could not be reached just now — a connection issue, not an all-clear. ' +
+        'Count is unknown, not zero. <a class="lnk" target="_top" rel="noopener" href="/incidents">open /incidents ↗</a></div>';
+      return;
+    }
+
+    var all = flatIncidents();
+    if (countEl) countEl.textContent = all.length;
+
+    if (!all.length) {
+      feed.innerHTML = '<div class="oi-empty">No open incidents — the board is quiet.</div>';
+      return;
+    }
+
+    feed.innerHTML = all.map(function(inc) {
+      var lvl = inc.sev_level || ('SEV' + (inc.severity || '?'));
+      var sc = sevColor(lvl);
+      var dom = (inc.domain || 'unknown').replace(/_/g, ' ').replace(/-/g, ' ');
+      var reg = (inc.affected_regions && inc.affected_regions[0]) || inc.location_country || inc.location_name || '';
+      return '<a class="oi-row" target="_top" rel="noopener" href="/incidents/' + esc(inc.slug || '') + '" title="' + esc(inc.title || '') + '">' +
+        '<span class="oi-sev"><span class="sev-chip" style="color:' + sc + ';border-color:' + sc + '">' + esc(lvl) + '</span></span>' +
+        '<span class="oi-dom">' + esc(dom) + '</span>' +
+        '<span class="oi-ttl">' + esc(inc.title || 'Untitled') + '</span>' +
+        '<span class="oi-reg" title="' + esc(reg) + '">' + esc(reg) + '</span>' +
+        '<span class="oi-time" title="declared ' + esc(fmtDate(inc.declared_at)) + '">' + esc(fmtRel(inc.declared_at)) + '</span>' +
+      '</a>';
+    }).join('');
+  }
+
+  // ============================================================
   //  DRILL PANEL
   // ============================================================
   function domainObj(key) {
@@ -901,6 +1028,7 @@ a.lnk:hover { text-decoration:underline; }
     return loadCore().then(function() {
       renderBand();
       renderRows();
+      renderOpenIncidents();
       if (state.selected) renderDrill();
     }).catch(function() {});
   }
@@ -909,6 +1037,7 @@ a.lnk:hover { text-decoration:underline; }
   loadCore().then(function() {
     renderBand();
     renderRows();
+    renderOpenIncidents();
   });
   setInterval(refresh, REFRESH_MS);
 })();
