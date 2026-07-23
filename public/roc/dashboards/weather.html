@@ -162,25 +162,36 @@
 
   var API = 'https://ovix-api.tedlango.workers.dev';
 
-  // Fetch weather events from multiple regions
+  // Map a Hub `weather`-category signal (/api/roc-signals) into the event
+  // shape render() expects. metadata.eventSource carries nws/spc/meteoalarm so
+  // the banner counts + factor weights still classify correctly; the raw
+  // signal metadata is passed through as raw_severity for urgency/certainty.
+  function mapWeatherSignal(s) {
+    var m = s.metadata || {};
+    return {
+      id: s.id,
+      title: s.title || 'Weather Alert',
+      severity: parseFloat(s.severity) || 0,
+      source: m.eventSource || s.source || 'scout',
+      description: s.message || '',
+      area_desc: s.region_name || '',
+      source_url: s.source_url || '',
+      occurred_at: s.created_at || '',
+      raw_severity: m
+    };
+  }
+
+  // Fetch scored weather events from the Hub `signals` plane (same-origin).
+  // The NWS radar/hazard map (render()) is preserved as a sensor overlay.
   function fetchAll() {
-    Promise.all([
-      fetch(API + '/api/ovix/region-events?region=north-america&hours=24&domain=weather&limit=200', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      fetch(API + '/api/ovix/region-events?region=emea&hours=24&domain=weather&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};})
-    ]).then(function(results) {
-      // Merge and deduplicate
-      var all = [], seen = {};
-      results.forEach(function(d) {
-        (d.events || []).forEach(function(e) {
-          var key = e.id || e.title;
-          if (!seen[key]) { seen[key] = true; all.push(e); }
-        });
+    fetch('/api/roc-signals?category=weather&hours=168&limit=200', {signal:AbortSignal.timeout(12000)})
+      .then(function(r){return r.ok?r.json():{signals:[]};})
+      .catch(function(){return{signals:[]};})
+      .then(function(data) {
+        var all = ((data && data.signals) || []).map(mapWeatherSignal);
+        all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
+        render(all);
       });
-      // Exclude aviation — weather dashboard is NWS + MeteoAlarm + SPC only
-      all = all.filter(function(e) { return e.source !== 'aviation'; });
-      all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
-      render(all);
-    });
   }
 
   function render(events) {

@@ -146,42 +146,52 @@
   'use strict';
   var API = 'https://ovix-api.tedlango.workers.dev';
 
+  // Map a Hub `environmental`-category signal (/api/roc-signals) into the event
+  // shape render() expects, deriving the categorisation (air quality / heat /
+  // UV-dust / wildfire) from the title with metadata.eventSource as fallback.
+  function mapEnvSignal(s) {
+    var m = s.metadata || {};
+    var title = s.title || '';
+    var t = title.toLowerCase();
+    var ev = '';
+    var isFire = false;
+    if (/wildfire|wild fire|\bfire\b|smoke|blaze|\bburn/.test(t)) { isFire = true; }
+    else if (/dust/.test(t)) { ev = 'dust'; }
+    else if (/uv index|very high uv|\buv\b/.test(t)) { ev = 'uv_index'; }
+    else if (/heat|feels like|heatwave|heat danger|temperature/.test(t)) { ev = 'extreme_heat'; }
+    else if (/air quality|aqi|pollution|pm2\.5|pm10|smog|ozone/.test(t)) { ev = 'air_quality'; }
+    var src = m.eventSource || s.source || 'scout';
+    if (!ev && !isFire) {
+      if (src === 'open_meteo_aq') ev = 'air_quality';
+      else if (src === 'open_meteo_heat') ev = 'extreme_heat';
+    }
+    return {
+      id: s.id,
+      title: title,
+      severity: parseFloat(s.severity) || 0,
+      source: src,
+      event_type: ev,
+      _isWildfire: isFire,
+      description: s.message || '',
+      area_desc: s.region_name || '',
+      source_url: s.source_url || '',
+      occurred_at: s.created_at || ''
+    };
+  }
+
+  // Single same-origin fetch from the Hub `signals` plane. This replaces the
+  // legacy OVIX pulls AND drops the `domain=disaster` pull that leaked
+  // cross-domain disaster events onto the environmental board — the board now
+  // shows ONLY environmental-category signals (incl. wildfire-smoke / AQ from
+  // the api-039/040/041/042 work).
   function fetchAll() {
-    Promise.all([
-      // Direct events table query — always has data regardless of spatial mapping
-      fetch(API + '/api/events?domain=environmental&hours=24&limit=100', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[], rows:[]};}).catch(function(){return{events:[], rows:[]};}),
-      // Spatial region events (may have additional spatially-matched events)
-      fetch(API + '/api/ovix/region-events?region=north-america&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      fetch(API + '/api/ovix/region-events?region=emea&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      fetch(API + '/api/ovix/region-events?region=apac&hours=48&domain=environmental&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[]};}).catch(function(){return{events:[]};}),
-      // Disaster domain — grab wildfires/fires
-      fetch(API + '/api/events?domain=disaster&hours=48&limit=50', {signal:AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():{events:[], rows:[]};}).catch(function(){return{events:[], rows:[]};})
-    ]).then(function(results) {
-      var all = [], seen = {};
-      // Direct environmental events (primary source)
-      var directData = results[0];
-      (directData.events || directData.rows || []).forEach(function(e) {
-        var key = e.id || e.source_id || e.title;
-        if (!seen[key]) { seen[key] = true; all.push(e); }
+    fetch('/api/roc-signals?category=environmental&hours=168&limit=200', {signal:AbortSignal.timeout(12000)})
+      .then(function(r){return r.ok?r.json():{signals:[]};})
+      .catch(function(){return{signals:[]};})
+      .then(function(data) {
+        var all = ((data && data.signals) || []).map(mapEnvSignal);
+        render(all);
       });
-      // Spatial region events (supplement)
-      results.slice(1, 4).forEach(function(d) {
-        (d.events || []).forEach(function(e) {
-          var key = e.id || e.title;
-          if (!seen[key]) { seen[key] = true; all.push(e); }
-        });
-      });
-      // Disaster events — only grab wildfires/fires
-      var disasterData = results[4];
-      (disasterData.events || disasterData.rows || []).forEach(function(e) {
-        var title = (e.title || '').toLowerCase();
-        if (title.indexOf('fire') >= 0 || title.indexOf('wildfire') >= 0 || title.indexOf('burn') >= 0 || title.indexOf('blaze') >= 0) {
-          var key = e.id || e.title;
-          if (!seen[key]) { seen[key] = true; e._isWildfire = true; all.push(e); }
-        }
-      });
-      render(all);
-    });
   }
 
   function render(events) {
