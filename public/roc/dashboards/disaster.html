@@ -390,7 +390,8 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?domain=disaster&hours=168&limit=200';
+  // hub-038: body event list now sourced from canonical Hub signals plane
+  var API_URL = '/api/roc-signals?category=disaster&hours=168&limit=200';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -425,6 +426,47 @@
     if (s >= 5) return 'var(--accent-orange)';
     if (s >= 3) return 'var(--accent-yellow)';
     return 'var(--accent-green)';
+  }
+
+  // hub-038: strip the "[Region] domain X.X — " prefix Hub signals carry
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Hub disaster signals do not carry event_type; derive it from the title so
+  // the Natural Events grouping (renderNatural) stays meaningful.
+  function deriveDisasterType(t) {
+    t = (t || '').toLowerCase();
+    if (/wildfire|\bfire\b/.test(t)) return 'wildfire';
+    if (/volcan/.test(t)) return 'volcano';
+    if (/storm|cyclone|hurricane|typhoon|tropical/.test(t)) return 'storm';
+    if (/flood/.test(t)) return 'flood';
+    if (/earthquake|seismic|\bquake\b/.test(t)) return 'earthquake';
+    if (/iceberg|sea ice|\bice\b/.test(t)) return 'ice';
+    if (/drought/.test(t)) return 'drought';
+    if (/landslide|mudslide/.test(t)) return 'landslide';
+    return 'other';
+  }
+
+  // Map a Hub `disaster` signal (/api/roc-signals) into the event shape the
+  // render code expects. The Hub plane is GDACS-agnostic (nearly all EONET), so
+  // non-GDACS sources are routed to the Natural Events column.
+  function mapDisasterSignal(s) {
+    var m = s.metadata || {};
+    var title = cleanTitle(s.title);
+    var es = m.eventSource;
+    var source = es === 'gdacs' ? 'gdacs' : es === 'smithsonian' ? 'smithsonian' : 'eonet';
+    return {
+      title: title,
+      severity: s.severity,
+      severity_label: s.severity_label,
+      description: s.message || '',
+      event_type: deriveDisasterType(title),
+      source: source,
+      source_url: s.source_url || '',
+      occurred_at: s.created_at || '',
+      lat: m.lat, lon: m.lon
+    };
   }
 
   // --- Disaster Index ---
@@ -681,8 +723,7 @@
         return res.json();
       })
       .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
+        var events = (data.signals || []).map(mapDisasterSignal);
 
         var gdacs = events.filter(function(e) { return e.source === 'gdacs'; });
         var natural = events.filter(function(e) { return e.source === 'eonet' || e.source === 'smithsonian'; });

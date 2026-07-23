@@ -491,6 +491,30 @@
     return Math.floor(h / 24) + 'd ago';
   }
 
+  // hub-038: strip the "[Region] domain X.X — " prefix Hub signals may carry
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Numeric Hub severity (0-10) -> textual bucket renderEvents expects
+  function sevText(s) {
+    var n = parseFloat(s) || 0;
+    return n >= 7 ? 'high' : n >= 4 ? 'medium' : 'low';
+  }
+
+  // Map a Hub `financial` signal (/api/roc-signals) into the event shape
+  // renderEvents expects. FRED indicators + TradingView widgets are unchanged.
+  function mapFinancialSignal(s) {
+    return {
+      title: cleanTitle(s.title),
+      description: s.message || '',
+      severity: sevText(s.severity),
+      timestamp: s.created_at || '',
+      source: s.source || 'scout',
+      source_url: s.source_url || ''
+    };
+  }
+
   // --- Determine card status ---
   function getCardStatus(indicator, current, previous) {
     var change = current - previous;
@@ -780,10 +804,14 @@
     fetchAllIndicators()
       .then(function(results) {
         renderCards(results);
-        // Events come from the same proxy call (cached in closure)
-        fetch(API_URL).then(function(r) { return r.json(); }).then(function(d) {
-          renderEvents(d.events || []);
-        }).catch(function() { renderEvents([]); });
+        // hub-038: financial EVENT LIST now sourced from the canonical Hub
+        // signals plane (same-origin). FRED indicators above still come from
+        // /api/financial; TradingView widgets are untouched.
+        fetch('/api/roc-signals?category=financial&hours=168&limit=200')
+          .then(function(r) { return r.ok ? r.json() : { signals: [] }; })
+          .then(function(d) {
+            renderEvents((d.signals || []).map(mapFinancialSignal));
+          }).catch(function() { renderEvents([]); });
         var luEl = document.getElementById('last-updated');
         if (luEl) luEl.textContent = 'Updated: ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
       })
