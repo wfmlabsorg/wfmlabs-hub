@@ -250,7 +250,7 @@
   function render(data) {
     var sum = data.summary || {};
     document.getElementById('s-scouts').textContent = (sum.scouts_healthy || 0) + '/' + (sum.scouts_total || 0);
-    document.getElementById('s-issues').textContent = (sum.scout_issues || 0) + (sum.pipeline_issues || 0);
+    document.getElementById('s-issues').textContent = (sum.scout_issues || 0) + (sum.pipeline_issues || 0) + (sum.domain_issues || 0);
     document.getElementById('s-domains').textContent = sum.domain_issues || 0;
     document.getElementById('s-signals').textContent = (sum.signals_24h || 0).toLocaleString();
     document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
