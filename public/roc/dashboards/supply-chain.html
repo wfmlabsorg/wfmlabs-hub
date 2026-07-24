@@ -362,6 +362,13 @@
     return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
   }
 
+  // Only allow http(s) source links — reject javascript:/data: (and any other
+  // scheme) so an untrusted stored source_url can't become a clickable XSS.
+  function safeUrl(u) {
+    var s = String(u || '').trim();
+    return /^https?:\/\//i.test(s) ? s : '';
+  }
+
   // Map a scout `supply_chain` signal (/api/roc-signals) into the story shape
   // this dashboard renders.
   function mapSupplyChainSignal(s) {
@@ -535,7 +542,7 @@
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
 
       var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
-      var url = s.source_url || '';
+      var url = safeUrl(s.source_url);
 
       return '<div class="card">' +
         '<div style="display:flex;align-items:center;gap:6px;">' +

@@ -455,16 +455,26 @@
 
   function classifyGeo(story) {
     var text = (story.title || '') + ' ' + (story.summary || '');
-    if (GEO_KEYWORDS.conflict.test(text)) return 'conflict';
+    // Specific buckets are tested BEFORE the generic conflict bucket so its
+    // bare keywords (war, strike) don't shadow "trade war" (trade) or a labor
+    // "strike" (labor). conflict is the explicit final catch-all.
     if (GEO_KEYWORDS.trade.test(text)) return 'trade';
     if (GEO_KEYWORDS.labor.test(text)) return 'labor';
     if (GEO_KEYWORDS.regulation.test(text)) return 'regulation';
+    if (GEO_KEYWORDS.conflict.test(text)) return 'conflict';
     return 'conflict'; // catch-all: signals are already geopolitical-relevant
   }
 
   // Strip the "[Region] domain X.X — " prefix Hub signals carry.
   function cleanTitle(t) {
     return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Only allow http(s) source links — reject javascript:/data: (and any other
+  // scheme) so an untrusted stored source_url can't become a clickable XSS.
+  function safeUrl(u) {
+    var s = String(u || '').trim();
+    return /^https?:\/\//i.test(s) ? s : '';
   }
 
   // Map a scout `geopolitical` signal (/api/roc-signals) into the story shape.
@@ -646,7 +656,7 @@
       var sCount = s.source_count || 0;
 
       var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
-      var url = s.source_url || '';
+      var url = safeUrl(s.source_url);
 
       return '<div class="card">' +
         '<div style="display:flex;align-items:center;gap:6px;">' +
