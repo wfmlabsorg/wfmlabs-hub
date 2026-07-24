@@ -440,7 +440,8 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?domain=health&hours=168&limit=100';
+  // hub-038: body event list now sourced from canonical Hub signals plane
+  var API_URL = '/api/roc-signals?category=health&hours=168&limit=200';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -483,6 +484,30 @@
     if (s >= 5) return 'ELEVATED';
     if (s >= 3) return 'MODERATE';
     return 'LOW';
+  }
+
+  // hub-038: strip the "[Region] domain X.X — " prefix Hub signals carry
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Map a Hub `health` signal (/api/roc-signals) into the event shape the
+  // render code expects. The Hub plane is CDC-agnostic (nearly all WHO), so
+  // non-CDC sources are routed to the WHO Disease Outbreaks column.
+  function mapHealthSignal(s) {
+    var m = s.metadata || {};
+    return {
+      title: cleanTitle(s.title),
+      severity: s.severity,
+      severity_label: s.severity_label,
+      description: s.message || '',
+      source: m.eventSource === 'cdc' ? 'cdc' : 'who',
+      source_url: s.source_url || '',
+      occurred_at: s.created_at || '',
+      area_desc: s.region_name || '',
+      country: s.region_name || '',
+      lat: m.lat, lon: m.lon
+    };
   }
 
   // --- Health Index ---
@@ -825,7 +850,7 @@
         return res.json();
       })
       .then(function(data) {
-        var allEvents = data.events || [];
+        var allEvents = (data.signals || []).map(mapHealthSignal);
 
         // Sort by occurred_at descending (most recent first)
         allEvents.sort(function(a, b) {

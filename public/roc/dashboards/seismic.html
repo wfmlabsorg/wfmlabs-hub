@@ -414,7 +414,8 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/events?domain=seismic&hours=24&limit=200';
+  // hub-038: body event list now sourced from canonical Hub signals plane
+  var API_URL = '/api/roc-signals?category=seismic&hours=24&limit=200';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
@@ -452,6 +453,27 @@
     if (s >= 4) return 4.5;
     if (s >= 2) return 3.5;
     return 2.5;
+  }
+
+  // hub-038: strip the "[Region] domain X.X — " prefix Hub signals carry
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Map a Hub `seismic` signal (/api/roc-signals) into the event shape the
+  // render code (renderQuakeList/renderMagDist/renderSignificant) expects.
+  function mapSeismicSignal(s) {
+    var m = s.metadata || {};
+    return {
+      title: cleanTitle(s.title),
+      severity: s.severity,
+      severity_label: s.severity_label,
+      description: s.message || '',
+      source: m.eventSource || s.source || '',
+      source_url: s.source_url || '',
+      occurred_at: s.created_at || '',
+      lat: m.lat, lon: m.lon
+    };
   }
 
   // --- Seismic Index ---
@@ -719,8 +741,7 @@
         return res.json();
       })
       .then(function(data) {
-        var events = data.events || data || [];
-        if (!Array.isArray(events)) events = [];
+        var events = (data.signals || []).map(mapSeismicSignal);
 
         var result = computeSeismicIndex(events);
 

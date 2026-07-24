@@ -470,6 +470,45 @@
     return 'var(--accent-green)';
   }
 
+  // hub-038: strip the "[Region] domain X.X — " prefix Hub signals carry
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+  function cveOf(t) {
+    var m = String(t || '').match(/CVE-\d{4}-\d{3,}/i);
+    return m ? m[0].toUpperCase() : '';
+  }
+
+  // Map a Hub `cyber` signal (/api/roc-signals) into the shape renderKEV
+  // expects (raw_data.cveID / vendor / product + description + severity).
+  function mapCyberSignal(s) {
+    var title = cleanTitle(s.title);
+    var cve = cveOf(title);
+    var product = title.replace(/CVE-\d{4}-\d{3,}\s*—?\s*/i, '').trim();
+    return {
+      raw_data: { cveID: cve, vendor: '', product: product },
+      description: s.message || title,
+      severity: s.severity,
+      severity_label: s.severity_label,
+      occurred_at: s.created_at || '',
+      source_url: s.source_url || ''
+    };
+  }
+
+  // The Hub cyber plane geo-fans one CVE across many workforce-footprint
+  // regions; collapse duplicates (by CVE id, else cleaned title) keeping the
+  // highest severity so the KEV column reads as a clean CVE list.
+  function dedupeCyber(sigs) {
+    var seen = {}, out = [];
+    sigs.forEach(function(s) {
+      var key = (cveOf(s.title) || cleanTitle(s.title)).toLowerCase();
+      var sev = parseFloat(s.severity) || 0;
+      if (!(key in seen)) { seen[key] = { idx: out.length, sev: sev }; out.push(s); }
+      else if (sev > seen[key].sev) { out[seen[key].idx] = s; seen[key].sev = sev; }
+    });
+    return out;
+  }
+
   // --- CTI Score ---
   function computeCTI(kevs, advisories, otxEvents, threatLevel, topPorts) {
     var kevCount = kevs.length;
@@ -739,15 +778,28 @@
   }
 
   // --- Fetch & Process ---
+  // hub-038: the CVE EVENT LIST (KEV column) now comes from the canonical Hub
+  // signals plane (/api/roc-signals). /api/cyber is still called, but ONLY for
+  // enrichment: SANS ISC ports + InfoCon, AlienVault OTX threat intel, and CISA
+  // advisories — these are external sensor overlays, not the scored-events list.
   function fetchData() {
-    fetch(API_URL)
+    Promise.all([
+      fetch(API_URL)
+        .then(function(res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
+        .catch(function(err) { console.error('CTI enrichment error:', err); return {}; }),
+      fetch('/api/roc-signals?category=cyber&hours=168&limit=200')
+        .then(function(res) { return res.ok ? res.json() : { signals: [] }; })
+        .catch(function() { return { signals: [] }; })
+    ])
       .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
-      .then(function(data) {
-        // /api/cyber returns pre-split data + SANS ISC
-        var kevs = data.recentKEV || [];
+        var data = res[0] || {};
+        var sigs = (res[1] && res[1].signals) || [];
+
+        // KEV column ← Hub signals (deduped CVE list)
+        var kevs = dedupeCyber(sigs).map(mapCyberSignal).sort(function(a, b) {
+          return (parseFloat(b.severity) || 0) - (parseFloat(a.severity) || 0);
+        });
+        // Enrichment ← /api/cyber (OTX, CISA advisories, SANS ports + InfoCon)
         var advisories = data.advisories || [];
         var otxEvents = data.threats || [];
         var topPorts = data.topPorts || [];
