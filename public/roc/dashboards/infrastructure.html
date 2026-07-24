@@ -144,6 +144,7 @@
     .data-area { grid-template-columns: 1fr; }
   }
 </style>
+  <script src="/roc/roc-config.js"></script>
 </head>
 <body>
 <div class="page-grid">
@@ -246,7 +247,7 @@
 </div>
 
 <script>
-var API = 'https://ovix-api.tedlango.workers.dev';
+var API = window.RocConfig.ovixApi;
 var IODA_BASE = 'https://api.ioda.inetintel.cc.gatech.edu/v2';
 // Power data now comes from ROC API (events table, source=power_outage)
 // Scraped by GitHub Actions every 15 min → written directly to Neon

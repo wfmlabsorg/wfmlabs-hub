@@ -282,6 +282,7 @@ a.lnk:hover { text-decoration:underline; }
   .open-inc-head .oi-sub { display:none; }
 }
 </style>
+  <script src="/roc/roc-config.js"></script>
 </head>
 <body>
 
@@ -362,7 +363,7 @@ a.lnk:hover { text-decoration:underline; }
 <script>
 (function() {
   "use strict";
-  var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
+  var OVIX_API = window.RocConfig.ovixApi;
   var REFRESH_MS = 30000;
 
   // HEADLINE = signals-derived Operational Risk Index (all 12 domains) + its trend.

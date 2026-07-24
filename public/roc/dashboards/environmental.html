@@ -68,6 +68,7 @@
     .data-area { grid-template-columns:1fr; }
   }
 </style>
+  <script src="/roc/roc-config.js"></script>
 </head>
 <body>
 <div class="page-grid">
@@ -144,7 +145,7 @@
 <script>
 (function() {
   'use strict';
-  var API = 'https://ovix-api.tedlango.workers.dev';
+  var API = window.RocConfig.ovixApi;
 
   // Map a Hub `environmental`-category signal (/api/roc-signals) into the event
   // shape render() expects, deriving the categorisation (air quality / heat /

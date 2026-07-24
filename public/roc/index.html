@@ -293,7 +293,7 @@
       // =============================================
       // Persistence: D1 (authenticated) or LocalStorage (fallback)
       // =============================================
-      var ROC_API = 'https://ovix-api.tedlango.workers.dev';
+      var ROC_API = window.RocConfig.ovixApi;
       var rocToken = localStorage.getItem('roc-token');
 
       if (rocToken) {
@@ -429,7 +429,7 @@
       //   weather:global     → Global Composite telemetry
       //   weather:<regionId> → Per-region telemetry (38 sub-regions)
 
-      var OVIX_API = 'https://ovix-api.tedlango.workers.dev';
+      var OVIX_API = window.RocConfig.ovixApi;
 
       // 38 sub-regions mirroring regions.ts SUB_REGIONS, ordered by macro-region
       var OVIX_REGIONS = [
@@ -977,7 +977,7 @@
             canView: function (o) { return o.type === 'roc.signalFeed'; },
             view: function () {
               var el, ablyChannel;
-              var SF_API = 'https://ovix-api.tedlango.workers.dev';
+              var SF_API = window.RocConfig.ovixApi;
               return {
                 show: function (container) {
                   el = document.createElement('div');
@@ -1814,7 +1814,7 @@
     var detailTitle = document.getElementById('detail-title');
     var detailBody = document.getElementById('detail-body');
     // Production: Cloudflare Worker. Local dev: override OVIX_API_OVERRIDE in console
-    var OVIX_API = window.OVIX_API_OVERRIDE || 'https://ovix-api.tedlango.workers.dev';
+    var OVIX_API = window.OVIX_API_OVERRIDE || window.RocConfig.ovixApi;
 
     function ovixCSSColor(s) {
       if (s <= 1.5) return '#18BC9C';
@@ -2043,7 +2043,7 @@
 
     // Fetch OVIX composite periodically and update ambient audio
     function fetchOVIXForAudio() {
-      fetch('https://ovix-api.tedlango.workers.dev/api/ovix/composite')
+      fetch(window.RocConfig.ovixApi + '/api/ovix/composite')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(d) {
           if (d && d.composite !== undefined && window.rocUpdateOVIX) {
@@ -2523,8 +2523,8 @@
 
         <!-- OAuth -->
         <div id="g-oauth">
-          <button class="gate-oauth-btn" onclick="window.location.href='https://ovix-api.tedlango.workers.dev/auth/google'">Continue with Google</button>
-          <button class="gate-oauth-btn" onclick="window.location.href='https://ovix-api.tedlango.workers.dev/auth/github'">Continue with GitHub</button>
+          <button class="gate-oauth-btn" onclick="window.location.href=window.RocConfig.ovixApi+'/auth/google'">Continue with Google</button>
+          <button class="gate-oauth-btn" onclick="window.location.href=window.RocConfig.ovixApi+'/auth/github'">Continue with GitHub</button>
           <div style="text-align:center;margin:12px 0 4px;color:#333;font-size:9px;letter-spacing:0.1em;">OR</div>
         </div>
 
@@ -2580,7 +2580,7 @@
 
   <script>
   (function() {
-    var API = 'https://ovix-api.tedlango.workers.dev';
+    var API = window.RocConfig.ovixApi;
     var mode = 'login';
     var hTimer = null;
 
