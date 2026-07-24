@@ -264,18 +264,24 @@ function fetchAll() {
   Promise.all([fetchISPs(), fetchEvents(), fetchSignals()])
     .then(function(results) {
       var isps = results[0], events = results[1], signals = results[2];
-      var iodaEvts = events.filter(function(e) { return e.source === 'ioda' || e.source === 'ioda_isp'; });
-      var cfEvts = events.filter(function(e) { return e.source === 'cloudflare' || e.source === 'cloudflare_radar'; });
-      var spaceEvts = events.filter(function(e) { return e.source === 'swpc'; });
-      var powerEvts = events.filter(function(e) { return e.source === 'power_outage'; });
+      // Hub infra signals are news-derived, not sensor-tagged, so route by
+      // content: power/grid stories → US Power Outages panel; everything else
+      // (internet/telecom + general infra) → the Internet Outages event list.
+      // IODA-tagged signals (metadata.eventSource==='ioda') feed the IODA
+      // Outages panel via renderIODA2's internal source filter. CF Radar has
+      // no Hub-signals equivalent and stays a sensor-only (currently empty)
+      // panel. ISP Health + US Signal Health come from live IODA telemetry.
+      var powerRe = /power|grid|blackout|electric|substation|utility|megawatt|kilowatt/i;
+      var powerEvts = events.filter(function(e) { return powerRe.test((e.title || '') + ' ' + (e.description || '')); });
+      var netEvts = events.filter(function(e) { return powerEvts.indexOf(e) === -1; });
 
       renderISPGrid(isps);
-      renderIODA(iodaEvts);
+      renderIODA(netEvts);
       renderPowerFromEvents(powerEvts);
-      renderCF(cfEvts);
-      renderIODA2(iodaEvts);
+      renderCF([]);
+      renderIODA2(events);
       renderSignalHealth(signals);
-      computeScore(isps, iodaEvts, powerEvts, cfEvts, [], signals);
+      computeScore(isps, netEvts, powerEvts, [], [], signals);
     });
 }
 
@@ -316,24 +322,34 @@ function renderISPGrid(isps) {
   }).join('');
 }
 
-// ── Events from ROC API ──
+// ── Events from Hub signals plane ──
+// Map a Hub `infrastructure`-category signal (/api/roc-signals) into the event
+// shape the render functions expect. metadata.eventSource carries `ioda` for
+// IODA-derived signals so the IODA Outages panel still classifies correctly.
+function mapInfraSignal(s) {
+  var m = s.metadata || {};
+  return {
+    id: s.id,
+    title: s.title || 'Infrastructure event',
+    severity: parseFloat(s.severity) || 0,
+    source: m.eventSource || s.source || 'scout',
+    description: s.message || '',
+    area_desc: s.region_name || '',
+    source_url: s.source_url || '',
+    occurred_at: s.created_at || ''
+  };
+}
 function fetchEvents() {
-  // Fetch infra events from multiple macro regions to get global coverage
-  var regions = ['north-america','emea','apac','south-america'];
-  return Promise.all(regions.map(function(r) {
-    return fetch(API + '/api/ovix/region-events?region=' + r + '&hours=48&domain=infrastructure&limit=50', {signal: AbortSignal.timeout(10000)})
-      .then(function(resp) { return resp.ok ? resp.json() : {events:[]}; })
-      .catch(function() { return {events:[]}; });
-  })).then(function(results) {
-    var all = [], seen = {};
-    results.forEach(function(d) {
-      (d.events || []).forEach(function(e) {
-        var key = e.id || e.title;
-        if (!seen[key]) { seen[key] = true; all.push(e); }
-      });
+  // Scored infrastructure events now come from the Hub `signals` plane
+  // (same-origin). The live IODA telemetry (ISP Health grid + US Signal
+  // Health) is fetched separately and preserved as a sensor overlay.
+  return fetch('/api/roc-signals?category=infrastructure&hours=168&limit=200', {signal: AbortSignal.timeout(12000)})
+    .then(function(resp) { return resp.ok ? resp.json() : {signals:[]}; })
+    .catch(function() { return {signals:[]}; })
+    .then(function(data) {
+      var all = ((data && data.signals) || []).map(mapInfraSignal);
+      return all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
     });
-    return all.sort(function(a,b) { return (parseFloat(b.severity)||0) - (parseFloat(a.severity)||0); });
-  });
 }
 
 // ── Power (from events table, source=power_outage) ──
