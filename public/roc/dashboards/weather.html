@@ -85,6 +85,7 @@
     .sev-grid { grid-template-columns:1fr 1fr; }
   }
 </style>
+  <script src="/roc/roc-config.js"></script>
 </head>
 <body>
 <div class="page-grid">
@@ -160,7 +161,7 @@
 (function() {
   'use strict';
 
-  var API = 'https://ovix-api.tedlango.workers.dev';
+  var API = window.RocConfig.ovixApi;
 
   // Map a Hub `weather`-category signal (/api/roc-signals) into the event
   // shape render() expects. metadata.eventSource carries nws/spc/meteoalarm so

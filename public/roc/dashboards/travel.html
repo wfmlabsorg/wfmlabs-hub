@@ -91,12 +91,12 @@ body.in-iframe .tp{display:none!important}
 <script>
 (function(){
 'use strict';
-var API='https://travel-intel.tedlango.workers.dev';
+var API=window.RocConfig.travelIntel;
 var TOMTOM_KEY='uJptvcBgfQCcumeYWk5wYwWPly3qn1J0';
 var REFRESH=300000;
 var map,markers=[],infoWin,ttLayer,ttVisible=true,mapFitted=false;
 
-var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories',MTA:'https://new.mta.info/alerts',SEPTA:'https://www.septa.org/service-alerts',TTC:'https://www.ttc.ca/service-advisories',NWS:'https://www.weather.gov/marine/','IMF PortWatch':'https://portwatch.imf.org/',MARAD:'https://www.maritime.dot.gov/msci-advisories','News-Intel':'https://news-intel.tedlango.workers.dev/stories',maritime:'https://www.weather.gov/marine/'};
+var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/traffic-index/',TfL:'https://tfl.gov.uk/tube-dlr-overground/status/',MBTA:'https://www.mbta.com/alerts/subway',CTA:'https://www.transitchicago.com/travel-information/alert-center/',BART:'https://www.bart.gov/schedules/advisories',MTA:'https://new.mta.info/alerts',SEPTA:'https://www.septa.org/service-alerts',TTC:'https://www.ttc.ca/service-advisories',NWS:'https://www.weather.gov/marine/','IMF PortWatch':'https://portwatch.imf.org/',MARAD:'https://www.maritime.dot.gov/msci-advisories','News-Intel':window.RocConfig.newsIntel+'/stories',maritime:'https://www.weather.gov/marine/'};
 
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
 function ts(iso){if(!iso)return'';var ms=Date.now()-new Date(iso).getTime(),m=Math.floor(ms/60000);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago'}

@@ -330,6 +330,7 @@
   body.in-iframe #rotation-indicator { display:none !important; }
 }
 </style>
+  <script src="/roc/roc-config.js"></script>
 </head>
 <body>
 <script>try { if (window !== window.top && window.top.location.pathname.indexOf('/roc/dashboards/scores') !== -1) document.body.classList.add('in-iframe'); } catch(e) { /* cross-origin — likely MCT, don't hide */ }</script>
@@ -432,7 +433,7 @@
 (function() {
   'use strict';
 
-  var API_URL = 'https://ovix-api.tedlango.workers.dev/api/cyber';
+  var API_URL = window.RocConfig.ovixApi + '/api/cyber';
   var REFRESH_MS = 5 * 60 * 1000;
 
   // --- Utility ---
