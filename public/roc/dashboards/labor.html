@@ -239,8 +239,8 @@
       Relevance scored 0&ndash;10 for workforce operations impact.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: news-intel.tedlango.workers.dev/stories &middot; Claude Haiku classification<br>
-      Keyword-filtered for labor &amp; workforce relevance &middot; Clustered 3x daily.
+      Sources: Hub signals plane (/api/roc-signals) &middot; scout <code>labor</code> domain (168h)<br>
+      Keyword-filtered into sub-domains for labor &amp; workforce relevance.
       <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
@@ -305,7 +305,10 @@
 (function() {
   'use strict';
 
-  var NEWS_API = 'https://news-intel.tedlango.workers.dev';
+  // hub-040 (4C): primary body now reads the Hub signals plane (relative,
+  // same-origin) instead of the news-intel worker. Uniform with the migrated
+  // event-dashboards; keyword sub-bucketing keeps the 2x2 category layout.
+  var SIGNALS_API = '/api/roc-signals?category=labor&hours=168&limit=200';
   var REFRESH_MS = 5 * 60 * 1000;
 
   function esc(str) {
@@ -522,6 +525,7 @@
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
 
       var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
+      var url = safeUrl(s.source_url);
 
       return '<div class="card">' +
         '<div style="display:flex;align-items:center;gap:6px;">' +
@@ -532,42 +536,49 @@
         '<div class="card-date">' +
           esc(regions) + ' &middot; ' + timeSince(s.first_seen) +
           ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' &middot; <a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--accent-cyan);text-decoration:none;" onclick="event.stopPropagation();">Source &#8599;</a>' : '') +
         '</div>' +
         '<div class="card-details">' + esc(s.summary || '') + '</div>' +
       '</div>';
     }).join('');
   }
 
+  // Strip the "[Region] domain X.X — " prefix Hub signals carry so cards read
+  // clean (mirrors the migrated event-dashboards, e.g. cyber.html).
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Only allow http(s) source links — reject javascript:/data: (and any other
+  // scheme) so an untrusted stored source_url can't become a clickable XSS.
+  function safeUrl(u) {
+    var s = String(u || '').trim();
+    return /^https?:\/\//i.test(s) ? s : '';
+  }
+
   // Map a scout `labor`-category signal (from /api/roc-signals) into the
-  // news-intel story shape this dashboard renders. Tagging category:'labor'
-  // lets isLaborRelevant/classifyLabor accept and bucket it.
+  // story shape this dashboard renders. Tagging category:'labor' lets
+  // isLaborRelevant/classifyLabor accept and bucket it (catch-all → strikes).
   function mapLaborSignal(s) {
     return {
-      title: s.title || '',
+      title: cleanTitle(s.title),
       summary: s.message || '',
       severity: parseFloat(s.severity) || 0,
       category: 'labor',
       trajectory: 'steady',
       affected_regions: s.region_name || '',
       first_seen: s.created_at || '',
+      source_url: s.source_url || '',
     };
   }
 
   function fetchData() {
-    Promise.all([
-      // News-intel clustered stories (RSS) — may or may not carry labor topics
-      fetch(NEWS_API + '/stories')
-        .then(function(res) { return res.ok ? res.json() : { stories: [] }; })
-        .catch(function() { return { stories: [] }; }),
-      // Scout `labor` signals (NewsAPI.ai) — Hub same-origin route
-      fetch('/api/roc-signals?category=labor&hours=72&limit=50')
-        .then(function(res) { return res.ok ? res.json() : { signals: [] }; })
-        .catch(function() { return { signals: [] }; })
-    ])
-      .then(function(results) {
-        var data = results[0] || {};
-        var sigs = (results[1] && results[1].signals) || [];
-        var allStories = (data.stories || []).concat(sigs.map(mapLaborSignal));
+    fetch(SIGNALS_API, { signal: AbortSignal.timeout(12000) })
+      .then(function(res) { return res.ok ? res.json() : { signals: [] }; })
+      .catch(function() { return { signals: [] }; })
+      .then(function(data) {
+        var sigs = (data && data.signals) || [];
+        var allStories = sigs.map(mapLaborSignal);
 
         // Filter to labor-relevant stories, then classify into sub-categories
         var groups = { strikes: [], wage: [], layoffs: [], union: [] };
@@ -608,10 +619,7 @@
 
         var luEl = document.getElementById('last-updated');
         if (luEl) {
-          var clustered = data.lastClustered ? timeSince(data.lastClustered) : 'never';
-          var ingested = data.lastIngested ? timeSince(data.lastIngested) : 'never';
-          var recent = data.recentHeadlines || 0;
-          luEl.textContent = 'Stories clustered: ' + clustered + ' | RSS ingested: ' + ingested + ' | ' + recent + ' headlines (6h)';
+          luEl.textContent = sigs.length + ' signals (168h) · ' + totalLabor + ' labor-relevant · refreshed ' + new Date().toLocaleTimeString();
         }
       })
       .catch(function(err) {
