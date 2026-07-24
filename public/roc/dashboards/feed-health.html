@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Feed Health — ROC</title>
+<title>Pipeline Health — ROC</title>
 <style>
   :root {
     --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
@@ -33,187 +33,286 @@
   .grid-area::-webkit-scrollbar { width:6px; }
   .grid-area::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 
-  .feed-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:10px; }
+  .section-title { font-size:10px; font-weight:700; color:var(--text-dim); letter-spacing:1.5px; text-transform:uppercase; margin:16px 0 8px; }
+  .section-title:first-child { margin-top:0; }
+
+  .feed-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:10px; }
+  .chip-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:8px; }
 
   .feed-card {
     background:var(--bg-panel); border:1px solid var(--border); border-radius:8px;
     padding:12px 14px; transition:border-color .2s;
   }
   .feed-card:hover { border-color:var(--accent-cyan); }
-  .feed-card.live { border-left:3px solid var(--accent-green); }
-  .feed-card.ok { border-left:3px solid var(--accent-cyan); }
-  .feed-card.delayed { border-left:3px solid var(--accent-yellow); }
+  .feed-card.ok { border-left:3px solid var(--accent-green); }
   .feed-card.stale { border-left:3px solid var(--accent-orange); }
   .feed-card.dead { border-left:3px solid var(--accent-red); }
 
-  .feed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-  .feed-name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; }
-  .feed-status { font-size:9px; font-weight:700; padding:2px 8px; border-radius:3px; letter-spacing:.5px; }
-  .feed-status.live { background:rgba(34,197,94,.15); color:var(--accent-green); }
-  .feed-status.ok { background:rgba(6,182,212,.12); color:var(--accent-cyan); }
-  .feed-status.delayed { background:rgba(234,179,8,.12); color:var(--accent-yellow); }
+  .feed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:8px; }
+  .feed-name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .feed-status { font-size:9px; font-weight:700; padding:2px 8px; border-radius:3px; letter-spacing:.5px; flex-shrink:0; }
+  .feed-status.ok { background:rgba(34,197,94,.15); color:var(--accent-green); }
   .feed-status.stale { background:rgba(249,115,22,.12); color:var(--accent-orange); }
   .feed-status.dead { background:rgba(239,68,68,.12); color:var(--accent-red); }
 
-  .feed-domain { font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
-
-  .feed-stats { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .feed-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:8px; }
   .feed-stat { text-align:center; }
-  .feed-stat b { display:block; font-size:13px; }
+  .feed-stat b { display:block; font-size:14px; }
   .feed-stat small { font-size:8px; color:var(--text-dim); text-transform:uppercase; }
+  .feed-meta { margin-top:6px; font-size:9px; color:var(--text-dim); }
 
-  .feed-bar { margin-top:8px; height:4px; background:var(--bg-card); border-radius:2px; overflow:hidden; }
-  .feed-bar-fill { height:100%; border-radius:2px; transition:width .5s; }
+  /* Compact domain chip */
+  .chip { background:var(--bg-panel); border:1px solid var(--border); border-radius:6px; padding:8px 10px; border-left:3px solid var(--border); }
+  .chip.ok { border-left-color:var(--accent-green); }
+  .chip.stale { border-left-color:var(--accent-red); }
+  .chip-top { display:flex; align-items:center; justify-content:space-between; }
+  .chip-name { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
+  .chip-count { font-size:14px; font-weight:700; }
+  .chip-sub { font-size:8px; color:var(--text-dim); text-transform:uppercase; margin-top:2px; }
 
-  .feed-meta { margin-top:6px; font-size:9px; color:var(--text-dim); display:flex; justify-content:space-between; }
-
-  .section-title { font-size:10px; font-weight:700; color:var(--text-dim); letter-spacing:1.5px; text-transform:uppercase; margin:16px 0 8px; }
-  .section-title:first-child { margin-top:0; }
+  /* Coverage auditor panel */
+  .cov-panel { background:var(--bg-panel); border:1px solid var(--border); border-radius:8px; padding:14px 16px; }
+  .cov-head { display:flex; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .cov-verdict { font-size:11px; font-weight:700; padding:3px 10px; border-radius:3px; letter-spacing:1px; }
+  .cov-prose { font-size:11px; color:var(--text-secondary); line-height:1.6; margin:8px 0; }
+  .cov-findings { display:grid; grid-template-columns:repeat(auto-fill, minmax(220px,1fr)); gap:10px; margin-top:10px; }
+  .cov-block { background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px 12px; }
+  .cov-block h4 { font-size:9px; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }
+  .cov-list { list-style:none; margin:0; padding:0; }
+  .cov-list li { font-size:10px; color:var(--text-secondary); line-height:1.5; padding:2px 0; border-bottom:1px solid rgba(51,65,85,.4); }
+  .cov-list li:last-child { border-bottom:none; }
+  .cov-metrics { display:flex; gap:14px; flex-wrap:wrap; font-size:10px; color:var(--text-dim); margin-top:6px; }
+  .cov-metrics b { color:var(--text-primary); }
 
   .empty { color:var(--text-dim); text-align:center; padding:30px; font-size:11px; }
-
-  .feed-details { display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); font-size:10px; color:var(--text-secondary); line-height:1.6; }
-  .feed-card.expanded .feed-details { display:block; }
 </style>
 </head>
 <body>
 <div class="page">
   <div class="banner">
-    <span class="banner-title">Feed Health Monitor</span>
+    <span class="banner-title">Pipeline Health Monitor</span>
     <div class="banner-stats">
-      <div class="stat-box"><div class="stat-value" id="s-total">--</div><div class="stat-label">Feeds</div></div>
-      <div class="stat-box"><div class="stat-value" id="s-healthy" style="color:var(--accent-green)">--</div><div class="stat-label">Healthy</div></div>
-      <div class="stat-box"><div class="stat-value" id="s-stale" style="color:var(--accent-orange)">--</div><div class="stat-label">Stale/Dead</div></div>
-      <div class="stat-box"><div class="stat-value" id="s-events">--</div><div class="stat-label">Events/24h</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-scouts" style="color:var(--accent-green)">--</div><div class="stat-label">Scouts OK</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-issues" style="color:var(--accent-orange)">--</div><div class="stat-label">Issues</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-domains">--</div><div class="stat-label">Domains 0/24h</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-signals">--</div><div class="stat-label">Signals/24h</div></div>
     </div>
-    <span class="level-badge" id="health-badge" style="background:rgba(34,197,94,.15);color:var(--accent-green);border:1px solid rgba(34,197,94,.3)">ALL HEALTHY</span>
+    <span class="level-badge" id="health-badge" style="background:rgba(34,197,94,.15);color:var(--accent-green);border:1px solid rgba(34,197,94,.3)">--</span>
     <span class="updated" id="updated">--</span>
   </div>
 
   <div class="grid-area">
-    <div id="feed-container"><div class="empty">Loading feed health data...</div></div>
+    <div id="content"><div class="empty">Loading pipeline health…</div></div>
   </div>
 </div>
 
 <script>
-var API = 'https://ovix-api.tedlango.workers.dev';
+(function () {
+  'use strict';
 
-document.addEventListener('DOMContentLoaded', function() { fetchHealth(); setInterval(fetchHealth, 60000); });
+  // Monitors the signals-derived pipeline (scouts -> news_events -> IWS ->
+  // signals -> op-risk) + the two always-on workers, via the Hub Next.js route
+  // that reads Neon directly. Replaces the retired /api/ovix/feed-health +
+  // /api/ovix/feeds 35-feed OVIX health.
+  var API = '/api/roc-pipeline-health';
 
-var feedRegistry = {};
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
-function fetchHealth() {
-  Promise.all([
-    fetch(API + '/api/ovix/feed-health', {signal: AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}),
-    fetch(API + '/api/ovix/feeds', {signal: AbortSignal.timeout(10000)}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;})
-  ]).then(function(results) {
-    var health = results[0], registry = results[1];
-    if (registry && registry.feeds) {
-      registry.feeds.forEach(function(f) { feedRegistry[f.id] = f; });
+  function statusClass(st) {
+    if (st === 'OK') return 'ok';
+    if (st === 'STALE') return 'stale';
+    return 'dead';
+  }
+
+  function ago(mins) {
+    if (mins == null) return 'never';
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    if (mins < 1440) return Math.round(mins / 60) + 'h ago';
+    return Math.round(mins / 1440) + 'd ago';
+  }
+
+  function minsSince(iso) {
+    if (!iso) return null;
+    return Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  }
+
+  function scoutCard(s) {
+    var cls = statusClass(s.status);
+    return '<div class="feed-card ' + cls + '">' +
+      '<div class="feed-header">' +
+        '<span class="feed-name">' + esc(s.source) + '</span>' +
+        '<span class="feed-status ' + cls + '">' + esc(s.status) + '</span>' +
+      '</div>' +
+      '<div class="feed-stats">' +
+        '<div class="feed-stat"><b>' + (s.events_24h || 0) + '</b><small>24h</small></div>' +
+        '<div class="feed-stat"><b>' + (s.total_events || 0).toLocaleString() + '</b><small>Total</small></div>' +
+        '<div class="feed-stat"><b>' + ago(s.age_minutes) + '</b><small>Last</small></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function domainChip(d) {
+    var cls = d.status === 'OK' ? 'ok' : 'stale';
+    var color = d.signals_24h > 0 ? 'var(--text-primary)' : 'var(--accent-red)';
+    return '<div class="chip ' + cls + '">' +
+      '<div class="chip-top">' +
+        '<span class="chip-name">' + esc(d.domain) + '</span>' +
+        '<span class="chip-count" style="color:' + color + '">' + (d.signals_24h || 0) + '</span>' +
+      '</div>' +
+      '<div class="chip-sub">signals / 24h &middot; ' + ago(minsSince(d.last_at)) + '</div>' +
+    '</div>';
+  }
+
+  function workerCard(name, sub, statsHtml, status) {
+    var cls = statusClass(status);
+    return '<div class="feed-card ' + cls + '">' +
+      '<div class="feed-header">' +
+        '<span class="feed-name">' + esc(name) + '</span>' +
+        '<span class="feed-status ' + cls + '">' + esc(status) + '</span>' +
+      '</div>' +
+      '<div class="feed-meta">' + sub + '</div>' +
+      '<div class="feed-stats">' + statsHtml + '</div>' +
+    '</div>';
+  }
+
+  function renderCoverage(ca) {
+    if (!ca) return '<div class="empty">No coverage-auditor run recorded yet.</div>';
+
+    var verdict = (ca.verdict || 'UNKNOWN').toUpperCase();
+    var vColor = verdict.indexOf('HEALTHY') !== -1 || verdict === 'OK' || verdict === 'PASS'
+      ? 'var(--accent-green)'
+      : verdict.indexOf('WARN') !== -1 || verdict.indexOf('DRIFT') !== -1 || verdict.indexOf('STUCK') !== -1
+        ? 'var(--accent-orange)'
+        : verdict.indexOf('FAIL') !== -1 || verdict.indexOf('CRIT') !== -1
+          ? 'var(--accent-red)'
+          : 'var(--text-dim)';
+
+    var html = '<div class="cov-panel">';
+    html += '<div class="cov-head">' +
+      '<span class="cov-verdict" style="background:rgba(148,163,184,.12);color:' + vColor + ';border:1px solid ' + vColor + '">' + esc(verdict) + '</span>' +
+      '<span style="font-size:10px;color:var(--text-dim);">Last run ' + ago(ca.age_minutes) + ' &middot; ' + (ca.window_hours || '?') + 'h window</span>' +
+    '</div>';
+
+    if (ca.summary_prose) html += '<div class="cov-prose">' + esc(ca.summary_prose) + '</div>';
+
+    html += '<div class="cov-metrics">' +
+      '<span>Signals: <b>' + (ca.signal_count || 0) + '</b></span>' +
+      '<span>High-sev: <b>' + (ca.high_sev_signal_count || 0) + '</b></span>' +
+      '<span>Incidents: <b>' + (ca.incident_count || 0) + '</b></span>' +
+      '<span>Open: <b>' + (ca.open_count || 0) + '</b></span>' +
+      '<span>Auto-close: <b>' + (ca.close_auto_pct != null ? ca.close_auto_pct + '%' : '—') + '</b></span>' +
+      '<span>Oldest open: <b>' + (ca.oldest_open_days != null ? ca.oldest_open_days + 'd' : '—') + '</b></span>' +
+    '</div>';
+
+    html += '<div class="cov-findings">';
+
+    // Coverage gaps (world headlines with no matching signal)
+    var gaps = ca.gaps || [];
+    if (typeof gaps === 'string') { try { gaps = JSON.parse(gaps); } catch (e) { gaps = []; } }
+    html += '<div class="cov-block"><h4>Coverage Gaps (' + (ca.gap_count != null ? ca.gap_count : gaps.length) + ')</h4>';
+    if (gaps.length) {
+      html += '<ul class="cov-list">' + gaps.slice(0, 8).map(function (g) {
+        var t = typeof g === 'string' ? g : (g.title || g.headline || g.topic || JSON.stringify(g));
+        return '<li>' + esc(t) + '</li>';
+      }).join('') + '</ul>';
+    } else { html += '<div style="font-size:10px;color:var(--accent-green)">No uncovered headlines.</div>'; }
+    html += '</div>';
+
+    // Drift (silence / flood)
+    var drift = ca.drift_detail;
+    if (typeof drift === 'string') { try { drift = JSON.parse(drift); } catch (e) { drift = null; } }
+    html += '<div class="cov-block"><h4>Drift &middot; ' + esc((ca.drift_direction || 'none').toUpperCase()) + '</h4>';
+    if (drift && (Array.isArray(drift) ? drift.length : Object.keys(drift).length)) {
+      var driftItems = Array.isArray(drift) ? drift : Object.keys(drift).map(function (k) { return k + ': ' + JSON.stringify(drift[k]); });
+      html += '<ul class="cov-list">' + driftItems.slice(0, 8).map(function (d) {
+        return '<li>' + esc(typeof d === 'string' ? d : JSON.stringify(d)) + '</li>';
+      }).join('') + '</ul>';
+    } else { html += '<div style="font-size:10px;color:var(--text-dim)">No drift flagged.</div>'; }
+    html += '</div>';
+
+    // Stuck incidents (lifecycle)
+    var stuck = ca.stuck_incident_ids || [];
+    if (typeof stuck === 'string') { try { stuck = JSON.parse(stuck); } catch (e) { stuck = []; } }
+    html += '<div class="cov-block"><h4>Lifecycle &middot; Stuck (' + (ca.stuck_count != null ? ca.stuck_count : stuck.length) + ')</h4>';
+    if (stuck.length) {
+      html += '<ul class="cov-list">' + stuck.slice(0, 10).map(function (id) {
+        return '<li>incident #' + esc(id) + '</li>';
+      }).join('') + '</ul>';
+    } else { html += '<div style="font-size:10px;color:var(--accent-green)">No stuck incidents.</div>'; }
+    html += '</div>';
+
+    html += '</div>'; // cov-findings
+    html += '</div>'; // cov-panel
+    return html;
+  }
+
+  function render(data) {
+    var sum = data.summary || {};
+    document.getElementById('s-scouts').textContent = (sum.scouts_healthy || 0) + '/' + (sum.scouts_total || 0);
+    document.getElementById('s-issues').textContent = (sum.scout_issues || 0) + (sum.pipeline_issues || 0) + (sum.domain_issues || 0);
+    document.getElementById('s-domains').textContent = sum.domain_issues || 0;
+    document.getElementById('s-signals').textContent = (sum.signals_24h || 0).toLocaleString();
+    document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+    var issues = (sum.scout_issues || 0) + (sum.pipeline_issues || 0) + (sum.domain_issues || 0);
+    var badge = document.getElementById('health-badge');
+    if (issues > 0) {
+      badge.textContent = issues + ' ISSUE' + (issues > 1 ? 'S' : '');
+      badge.style.background = 'rgba(249,115,22,.15)'; badge.style.color = 'var(--accent-orange)'; badge.style.borderColor = 'rgba(249,115,22,.3)';
+    } else {
+      badge.textContent = 'ALL HEALTHY';
+      badge.style.background = 'rgba(34,197,94,.15)'; badge.style.color = 'var(--accent-green)'; badge.style.borderColor = 'rgba(34,197,94,.3)';
     }
-    if (health) render(health);
-  });
-}
 
-function render(data) {
-  var feeds = data.feeds || [];
-  document.getElementById('s-total').textContent = data.totalFeeds || 0;
-  document.getElementById('s-healthy').textContent = data.healthy || 0;
-  document.getElementById('s-stale').textContent = data.stale || 0;
-  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+    var html = '';
 
-  var total24h = feeds.reduce(function(s, f) { return s + parseInt(f.events_24h || 0); }, 0);
-  document.getElementById('s-events').textContent = total24h.toLocaleString();
+    // 1. Scouts (problem scouts first)
+    var scouts = (data.scouts || []).slice().sort(function (a, b) {
+      var order = { DOWN: 0, STALE: 1, OK: 2 };
+      return (order[a.status] - order[b.status]);
+    });
+    html += '<div class="section-title">Scout Freshness (news_events)</div><div class="feed-grid">' +
+      (scouts.length ? scouts.map(scoutCard).join('') : '<div class="empty">No scouts reporting.</div>') + '</div>';
 
-  // Badge
-  var badge = document.getElementById('health-badge');
-  if (data.stale > 0) {
-    badge.textContent = data.stale + ' ISSUE' + (data.stale > 1 ? 'S' : '');
-    badge.style.background = 'rgba(249,115,22,.15)'; badge.style.color = 'var(--accent-orange)'; badge.style.borderColor = 'rgba(249,115,22,.3)';
-  } else {
-    badge.textContent = 'ALL HEALTHY';
-    badge.style.background = 'rgba(34,197,94,.15)'; badge.style.color = 'var(--accent-green)'; badge.style.borderColor = 'rgba(34,197,94,.3)';
+    // 2. Signals by domain
+    html += '<div class="section-title">Signals Throughput — 12 Domains (24h)</div><div class="chip-grid">' +
+      (data.signals_by_domain || []).map(domainChip).join('') + '</div>';
+
+    // 3. Pipeline core (op-risk + web-scout)
+    var or = data.op_risk || {};
+    var ws = data.web_scout || {};
+    var orStats = '<div class="feed-stat"><b>' + (or.region_nodes || 0) + '</b><small>Region nodes</small></div>' +
+      '<div class="feed-stat"><b>' + ago(or.global_age_minutes) + '</b><small>Global scored</small></div>' +
+      '<div class="feed-stat"><b>' + ago(minsSince(or.region_scored_at)) + '</b><small>Region scored</small></div>';
+    var wsStats = '<div class="feed-stat"><b>' + (ws.signals_24h || 0) + '</b><small>Signals 24h</small></div>' +
+      '<div class="feed-stat"><b>' + ago(ws.age_minutes) + '</b><small>Last</small></div>' +
+      '<div class="feed-stat"><b>&nbsp;</b><small>&nbsp;</small></div>';
+    html += '<div class="section-title">Pipeline Core</div><div class="feed-grid">' +
+      workerCard('op-risk INDEX', 'Signals-derived 12-domain score (global + region planes)', orStats, or.status) +
+      workerCard('web-scout', 'Always-on web scout feeding news_events / signals', wsStats, ws.status) +
+      '</div>';
+
+    // 4. Coverage auditor (the G6 monitor — shows WHY, not a bare green light)
+    html += '<div class="section-title">Coverage Auditor (self-review)</div>' + renderCoverage(data.coverage_auditor);
+
+    document.getElementById('content').innerHTML = html;
   }
 
-  // Group by status
-  var groups = {LIVE:[], OK:[], DELAYED:[], STALE:[], DEAD:[]};
-  feeds.forEach(function(f) { var s = (f.status || 'DEAD').toUpperCase(); if (groups[s]) groups[s].push(f); else groups.DEAD.push(f); });
-
-  var html = '';
-
-  // Show problematic feeds first
-  if (groups.STALE.length + groups.DEAD.length > 0) {
-    html += '<div class="section-title">Needs Attention</div><div class="feed-grid">';
-    groups.DEAD.concat(groups.STALE).forEach(function(f) { html += feedCard(f); });
-    html += '</div>';
-  }
-  if (groups.DELAYED.length > 0) {
-    html += '<div class="section-title">Delayed (30min-2h)</div><div class="feed-grid">';
-    groups.DELAYED.forEach(function(f) { html += feedCard(f); });
-    html += '</div>';
+  function fetchHealth() {
+    fetch(API, { signal: AbortSignal.timeout(12000) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (data && !data.error) render(data);
+        else document.getElementById('content').innerHTML = '<div class="empty">Pipeline health unavailable.</div>';
+      })
+      .catch(function () {
+        document.getElementById('content').innerHTML = '<div class="empty">Failed to load pipeline health.</div>';
+      });
   }
 
-  // Healthy feeds
-  var healthy = groups.LIVE.concat(groups.OK);
-  if (healthy.length > 0) {
-    html += '<div class="section-title">Healthy (' + healthy.length + ' feeds)</div><div class="feed-grid">';
-    healthy.forEach(function(f) { html += feedCard(f); });
-    html += '</div>';
-  }
-
-  document.getElementById('feed-container').innerHTML = html || '<div class="empty">No feed data available</div>';
-}
-
-function feedCard(f) {
-  var status = (f.status || 'DEAD').toLowerCase();
-  var mins = Math.round(parseFloat(f.minutes_since_last) || 0);
-  var ago = mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : mins < 1440 ? Math.round(mins/60) + 'h ago' : Math.round(mins/1440) + 'd ago';
-  var e1h = parseInt(f.events_1h) || 0;
-  var e6h = parseInt(f.events_6h) || 0;
-  var e24h = parseInt(f.events_24h) || 0;
-  var total = parseInt(f.total_events) || 0;
-
-  var activityPct = e24h > 0 ? Math.min(100, Math.round((e1h / e24h) * 100)) : 0;
-  var barColor = status === 'live' ? 'var(--accent-green)' : status === 'ok' ? 'var(--accent-cyan)' : status === 'delayed' ? 'var(--accent-yellow)' : 'var(--accent-orange)';
-
-  // Enrich with registry metadata
-  var reg = feedRegistry[f.source] || {};
-  var srcUrl = reg.source_url || '';
-  var docsUrl = reg.docs || '';
-  var detailParts = [];
-  if (reg.name) detailParts.push('<b>' + esc(reg.name) + '</b>');
-  if (reg.provider) detailParts.push('Provider: ' + esc(reg.provider));
-  if (reg.api_type) detailParts.push('API: ' + esc(reg.api_type));
-  if (reg.coverage) detailParts.push('Coverage: ' + esc(reg.coverage));
-  if (reg.refresh) detailParts.push('Refresh: ' + esc(reg.refresh));
-  if (reg.scoring) detailParts.push('Scoring: ' + esc(reg.scoring));
-  if (srcUrl) detailParts.push('Endpoint: <span style="color:var(--accent-cyan);word-break:break-all">' + esc(srcUrl) + '</span>');
-  var detailHtml = detailParts.join('<br>');
-
-  return '<div class="feed-card ' + status + '">' +
-    '<div class="feed-header">' +
-      '<span class="feed-name">' + esc(reg.name || f.source) + '</span>' +
-      '<span class="feed-status ' + status + '">' + f.status + '</span>' +
-    '</div>' +
-    '<span class="feed-domain">' + esc(f.domain || '?') + ' &middot; avg sev ' + (f.avg_severity || '?') + ' &middot; max ' + (f.max_severity || '?') + '</span>' +
-    '<div class="feed-stats">' +
-      '<div class="feed-stat"><b>' + e1h + '</b><small>1h</small></div>' +
-      '<div class="feed-stat"><b>' + e6h + '</b><small>6h</small></div>' +
-      '<div class="feed-stat"><b>' + e24h + '</b><small>24h</small></div>' +
-      '<div class="feed-stat"><b>' + total.toLocaleString() + '</b><small>Total</small></div>' +
-    '</div>' +
-    '<div class="feed-bar"><div class="feed-bar-fill" style="width:' + activityPct + '%;background:' + barColor + '"></div></div>' +
-    '<div class="feed-meta"><span>Last: ' + ago + '</span>' +
-      '<span>' +
-        '<span style="cursor:pointer;color:var(--text-dim);font-size:9px" onclick="this.closest(\'.feed-card\').classList.toggle(\'expanded\')">Details</span>' +
-        (docsUrl ? ' &middot; <a href="' + docsUrl + '" target="_blank" rel="noopener" style="color:var(--accent-cyan);font-size:9px;text-decoration:none">Docs ↗</a>' : '') +
-      '</span>' +
-    '</div>' +
-    '<div class="feed-details">' + detailHtml + '</div>' +
-  '</div>';
-}
-
-function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  document.addEventListener('DOMContentLoaded', function () { fetchHealth(); setInterval(fetchHealth, 60000); });
+})();
 </script>
   <script src="/roc/roc-rotation.js"></script>
 
