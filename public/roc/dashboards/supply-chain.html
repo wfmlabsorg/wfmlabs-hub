@@ -239,8 +239,8 @@
       Relevance scored 0&ndash;10 for workforce operations impact.
     </div>
     <div style="width:100%;margin-top:auto;padding-top:10px;border-top:1px solid var(--border);font-size:10px;color:var(--text-dim);">
-      Sources: news-intel.tedlango.workers.dev/stories &middot; Claude Haiku classification<br>
-      Keyword-filtered for supply chain &amp; trade relevance &middot; Clustered 3x daily.
+      Sources: Hub signals plane (/api/roc-signals) &middot; scout <code>supply_chain</code> domain (168h)<br>
+      Keyword-filtered into sub-domains for supply chain &amp; trade relevance.
       <div id="last-updated" style="margin-top:6px;color:var(--text-dim);font-size:9px;">Last updated: --</div>
     </div>
   </div>
@@ -305,7 +305,10 @@
 (function() {
   'use strict';
 
-  var NEWS_API = 'https://news-intel.tedlango.workers.dev';
+  // hub-040 (4C): primary body now reads the Hub signals plane (relative,
+  // same-origin) instead of the news-intel worker. Uniform with the migrated
+  // event-dashboards; keyword sub-bucketing keeps the 2x2 category layout.
+  var SIGNALS_API = '/api/roc-signals?category=supply_chain&hours=168&limit=200';
   var REFRESH_MS = 5 * 60 * 1000;
 
   function esc(str) {
@@ -349,19 +352,29 @@
     if (SC_KEYWORDS.tariff.test(text)) return 'tariff';
     if (SC_KEYWORDS.port.test(text)) return 'port';
     if (SC_KEYWORDS.disruption.test(text)) return 'disruption';
-    // Stories tagged as trade_policy/economics by news-intel
-    if (story.category === 'trade_policy') return 'tariff';
-    if (story.category === 'economics') return 'disruption';
-    return null;
+    // Signals are already category-filtered to supply_chain, so anything that
+    // matches no sub-domain keyword still belongs — catch-all → disruption.
+    return 'disruption';
   }
 
-  function isSupplyChainRelevant(story) {
-    // Accept trade_policy and economics categories from news-intel
-    if (story.category === 'trade_policy' || story.category === 'economics') return true;
-    // Also check any story for supply chain keywords
-    var text = (story.title || '') + ' ' + (story.summary || '');
-    return SC_KEYWORDS.shipping.test(text) || SC_KEYWORDS.tariff.test(text) ||
-           SC_KEYWORDS.port.test(text) || SC_KEYWORDS.disruption.test(text);
+  // Strip the "[Region] domain X.X — " prefix Hub signals carry.
+  function cleanTitle(t) {
+    return String(t || '').replace(/^\[[^\]]*\]\s*[a-z_]+\s+[\d.]+\s*—\s*/i, '');
+  }
+
+  // Map a scout `supply_chain` signal (/api/roc-signals) into the story shape
+  // this dashboard renders.
+  function mapSupplyChainSignal(s) {
+    return {
+      title: cleanTitle(s.title),
+      summary: s.message || '',
+      severity: parseFloat(s.severity) || 0,
+      category: 'supply_chain',
+      trajectory: 'steady',
+      affected_regions: s.region_name || '',
+      first_seen: s.created_at || '',
+      source_url: s.source_url || '',
+    };
   }
 
   // --- Supply Chain & Trade Index ---
@@ -522,6 +535,7 @@
       if (typeof regions === 'string' && regions.startsWith('[')) { try { regions = JSON.parse(regions).join(', '); } catch(e){} }
 
       var shortTitle = s.title.length > 45 ? s.title.slice(0, 42) + '...' : s.title;
+      var url = s.source_url || '';
 
       return '<div class="card">' +
         '<div style="display:flex;align-items:center;gap:6px;">' +
@@ -532,6 +546,7 @@
         '<div class="card-date">' +
           esc(regions) + ' &middot; ' + timeSince(s.first_seen) +
           ' &middot; <span class="card-expand" onclick="event.stopPropagation();this.closest(\'.card\').classList.toggle(\'expanded\')">Details</span>' +
+          (url ? ' &middot; <a href="' + esc(url) + '" target="_blank" rel="noopener" style="color:var(--accent-cyan);text-decoration:none;" onclick="event.stopPropagation();">Source &#8599;</a>' : '') +
         '</div>' +
         '<div class="card-details">' + esc(s.summary || '') + '</div>' +
       '</div>';
@@ -539,20 +554,18 @@
   }
 
   function fetchData() {
-    fetch(NEWS_API + '/stories')
-      .then(function(res) {
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        return res.json();
-      })
+    fetch(SIGNALS_API, { signal: AbortSignal.timeout(12000) })
+      .then(function(res) { return res.ok ? res.json() : { signals: [] }; })
+      .catch(function() { return { signals: [] }; })
       .then(function(data) {
-        var allStories = data.stories || [];
+        var sigs = (data && data.signals) || [];
+        var allStories = sigs.map(mapSupplyChainSignal);
 
-        // Filter to supply-chain-relevant stories, then classify into sub-categories
+        // Classify each (already supply_chain-relevant) signal into a sub-domain
         var groups = { shipping: [], tariff: [], port: [], disruption: [] };
         var totalSC = 0;
 
         allStories.forEach(function(s) {
-          if (!isSupplyChainRelevant(s)) return;
           var bucket = classifySupplyChain(s);
           if (bucket && groups[bucket]) {
             groups[bucket].push(s);
@@ -586,10 +599,7 @@
 
         var luEl = document.getElementById('last-updated');
         if (luEl) {
-          var clustered = data.lastClustered ? timeSince(data.lastClustered) : 'never';
-          var ingested = data.lastIngested ? timeSince(data.lastIngested) : 'never';
-          var recent = data.recentHeadlines || 0;
-          luEl.textContent = 'Stories clustered: ' + clustered + ' | RSS ingested: ' + ingested + ' | ' + recent + ' headlines (6h)';
+          luEl.textContent = sigs.length + ' signals (168h) · refreshed ' + new Date().toLocaleTimeString();
         }
       })
       .catch(function(err) {
