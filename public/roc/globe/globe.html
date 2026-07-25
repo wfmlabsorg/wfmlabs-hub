@@ -3271,7 +3271,7 @@
         // Color by score severity, not just category
         var score = parseFloat(data.score) || 0;
         if (score >= 7.0) return '#e74c3c';   // red — high
-        if (score >= 4.0) return '#eab308';   // orange — elevated
+        if (score >= 4.0) return '#eab308';   // amber — elevated
         return '#3498db';                      // blue — moderate change
       }
 
@@ -3559,11 +3559,11 @@
       // =============================================
       var eventEntities = [];
 
-      // Event fill color based on severity (matches OVIX green/orange/red scheme)
+      // Event fill color based on severity (matches OVIX green/amber/red scheme)
       function eventSeverityColor(severity) {
         var s = parseFloat(severity) || 1;
         if (s >= 7) return '#e74c3c';   // red
-        if (s >= 5) return '#eab308';   // orange
+        if (s >= 5) return '#eab308';   // amber
         return '#27ae60';               // green
       }
 
