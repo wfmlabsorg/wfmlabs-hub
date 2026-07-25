@@ -3,12 +3,10 @@ import { headers } from 'next/headers'
 import { getPayload } from 'payload'
 import config from '@payload-config'
 import { auth } from '@/lib/auth'
-import { neonQuery } from '@/lib/neon'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
 import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
-import LiveIncidentCard from '@/components/globe/LiveIncidentCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,17 +33,6 @@ const trajectoryArrows: Record<string, string> = {
   escalating: '↑', peak: '⬆', steady: '→', declining: '↓', emerging: '↗', resolved: '✓',
 }
 
-// ── Incident design tokens (mirrors /incidents/page.tsx) ──
-const sevConfig: Record<string, { label: string; color: string; bg: string; borderColor: string; pulse?: boolean }> = {
-  SEV1: { label: 'SEV1', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', borderColor: '#ef4444', pulse: true },
-  SEV2: { label: 'SEV2', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', borderColor: '#f59e0b' },
-  SEV3: { label: 'SEV3', color: '#eab308', bg: 'transparent', borderColor: '#eab308' },
-  SEV4: { label: 'SEV4', color: '#64748b', bg: 'transparent', borderColor: '#475569' },
-}
-
-// Domain colors + labels now come from the canonical map (hub-017): the Live
-// Incident card (LiveIncidentCard) resolves them via domainBadge()/domainLabel().
-
 function timeAgo(date: string): string {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
   if (seconds < 60) return 'just now'
@@ -56,41 +43,6 @@ function timeAgo(date: string): string {
 
 function briefDate(date: string): string {
   return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
-}
-
-interface HomeIncident {
-  id: number
-  title: string
-  slug: string
-  domain: string
-  severity: number
-  sev_level: string
-  status: string
-  declared_at: string
-  affected_regions: string[] | null
-  location_name: string | null
-  location_country: string | null
-  location_lat: number | string | null
-  location_lon: number | string | null
-  event_count: number | null
-}
-
-async function fetchOpenIncidents(): Promise<HomeIncident[]> {
-  if (!process.env.DATABASE_URI) return []
-  try {
-    const { rows } = await neonQuery<HomeIncident>(
-      `SELECT id, title, slug, domain, severity, sev_level, status, declared_at, affected_regions, location_name, location_country, location_lat, location_lon, event_count
-       FROM incidents
-       WHERE status NOT IN ('closed','resolved')
-       ORDER BY CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC
-       LIMIT 6`,
-      [],
-      { next: { revalidate: 300 } },
-    )
-    return rows
-  } catch {
-    return []
-  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -173,47 +125,6 @@ function SectionHead({ icon, title, count, href, linkLabel }: { icon?: string; t
   )
 }
 
-// 3 — Live Incidents
-function IncidentsSection({ incidents }: { incidents: HomeIncident[] }) {
-  return (
-    <div style={{ marginBottom: '1.5rem' }}>
-      <SectionHead icon="🚨" title="Live Incidents" count={incidents.length || undefined} href="/incidents" linkLabel="View all incidents →" />
-      {incidents.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '1.75rem 1rem', border: '1px dashed var(--border)', borderRadius: 'var(--radius-lg)', color: 'var(--fg-muted)' }}>
-          <p style={{ fontSize: '0.9375rem', fontWeight: 500, margin: '0 0 0.25rem' }}>No active incidents</p>
-          <p style={{ fontSize: '0.8125rem', margin: 0, color: 'var(--fg-faint)' }}>Watchkeeper will declare incidents when severity thresholds are met.</p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: '0.75rem', overflowX: 'auto', paddingBottom: '0.5rem' }}>
-          {incidents.map((inc) => {
-            const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
-            const regions = Array.isArray(inc.affected_regions) && inc.affected_regions.length > 0
-              ? inc.affected_regions.join(', ')
-              : [inc.location_name, inc.location_country].filter(Boolean).join(', ') || 'Global'
-            const lat = inc.location_lat == null ? NaN : Number(inc.location_lat)
-            const lon = inc.location_lon == null ? NaN : Number(inc.location_lon)
-            const hasCoords = !Number.isNaN(lat) && !Number.isNaN(lon)
-            return (
-              <LiveIncidentCard
-                key={inc.id}
-                slug={inc.slug}
-                title={inc.title}
-                domain={inc.domain}
-                regions={regions}
-                time={timeAgo(inc.declared_at)}
-                lat={lat}
-                lon={lon}
-                hasCoords={hasCoords}
-                sev={sc}
-              />
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // 4 — Latest Compass Brief
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function BriefSection({ brief }: { brief: any | null }) {
@@ -248,6 +159,40 @@ function BriefSection({ brief }: { brief: any | null }) {
         )
       })()}
     </div>
+  )
+}
+
+// Compact top-of-page entry point to the latest Compass brief. Renders nothing
+// when no brief exists (no empty bar). The fuller BriefSection stays below.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BriefLink({ brief }: { brief: any | null }) {
+  if (!brief) return null
+  return (
+    <a
+      href={`/briefs/${brief.slug}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        padding: '0.5rem 0.875rem',
+        marginBottom: '1rem',
+        background: 'rgba(34,211,238,0.06)',
+        border: '1px solid rgba(34,211,238,0.25)',
+        borderRadius: 'var(--radius)',
+        textDecoration: 'none',
+        color: 'inherit',
+        fontSize: '0.8125rem',
+      }}
+    >
+      <span style={{ flexShrink: 0 }}>🧭</span>
+      <span style={{ color: 'var(--fg-faint)', fontWeight: 600, flexShrink: 0, textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.625rem' }}>
+        Latest Compass brief
+      </span>
+      <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+        {brief.title}
+      </span>
+      <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>→</span>
+    </a>
   )
 }
 
@@ -542,14 +487,13 @@ export default async function HomePage() {
   // All fetches run in parallel; every one degrades to an empty/null fallback.
   const [
     feedHealth, travelScores, newsStories, signalsResult, toolsResult,
-    incidents, briefResult, papersResult, membersResult, discussionsResult,
+    briefResult, papersResult, membersResult, discussionsResult,
   ] = await Promise.all([
     fetch('https://ovix-api.tedlango.workers.dev/api/ovix/feed-health', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
     fetch('https://travel-intel.tedlango.workers.dev/api/travel/scores', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
     fetch('https://news-intel.tedlango.workers.dev/stories', { next: { revalidate: 300 } }).then(r => r.json()).catch(() => null),
     payload.find({ collection: 'signals', limit: 1, sort: '-createdAt', overrideAccess: true }).catch(() => ({ docs: [], totalDocs: 0 })),
     payload.find({ collection: 'tools', limit: 8, sort: '-updatedAt', depth: 1, overrideAccess: true, where: { publishedAt: { exists: true } } }).catch(() => ({ docs: [] })),
-    fetchOpenIncidents(),
     // Compass daily briefs live in `briefs` (briefType=summary) — `newsletter-issues` is empty (reserved for a future newsletter).
     payload.find({ collection: 'briefs', limit: 1, sort: '-publishedAt', depth: 0, overrideAccess: true, where: { and: [{ briefType: { equals: 'summary' } }, { status: { equals: 'published' } }] } }).catch(() => ({ docs: [] })),
     payload.find({ collection: 'papers', limit: 3, sort: '-createdAt', depth: 1, overrideAccess: true }).catch(() => ({ docs: [] })),
@@ -589,7 +533,6 @@ export default async function HomePage() {
 
   const sharedSections = () => (
     <>
-      <IncidentsSection incidents={incidents} />
       <BriefSection brief={latestBrief} />
       <IntelSection stories={stories} />
       <ToolsSection tools={featuredTools} />
@@ -606,6 +549,7 @@ export default async function HomePage() {
         <SignalGlobeHero mobile />
         <div style={{ padding: '0.75rem' }}>
           <HeroTape mobile />
+          <BriefLink brief={latestBrief} />
           <StatusStrip {...statusProps} />
           {!isAuthed && (
             <div style={{ textAlign: 'center', padding: '0 0.25rem 1rem' }}>
@@ -625,6 +569,7 @@ export default async function HomePage() {
       <SignalGlobeHero mobile={false} />
       <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
         <HeroTape mobile={false} />
+        <BriefLink brief={latestBrief} />
         <StatusStrip {...statusProps} />
         {sharedSections()}
         <PulseStyle />
