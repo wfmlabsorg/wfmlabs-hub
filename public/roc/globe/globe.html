@@ -96,7 +96,7 @@
     #alert-popup {
       position: absolute; display: none;
       background: rgba(6, 6, 16, 0.97);
-      border: 1px solid rgba(243, 156, 18, 0.5);
+      border: 1px solid rgba(24, 188, 156, 0.5);
       border-radius: 6px; padding: 14px 16px;
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px; color: #ccc; z-index: 500;
@@ -331,7 +331,7 @@
       position: absolute; bottom: 60px; left: 12px;
       width: 280px;
       background: rgba(6, 6, 16, 0.97);
-      border: 1px solid rgba(230, 126, 34, 0.4);
+      border: 1px solid rgba(24, 188, 156, 0.4);
       border-radius: 4px;
       font-family: 'JetBrains Mono', 'SF Mono', monospace;
       font-size: 11px; color: #ccc; z-index: 200;
@@ -340,20 +340,20 @@
     #disaster-panel.open { display: block; }
     .dp-header {
       display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 14px; border-bottom: 1px solid rgba(230,126,34,0.2);
+      padding: 10px 14px; border-bottom: 1px solid rgba(24,188,156,0.2);
     }
     .dp-type { font-size: 13px; font-weight: bold; letter-spacing: 0.08em; }
     .dp-close {
       background: none; border: 1px solid rgba(255,255,255,0.15); color: #888;
       font-size: 11px; cursor: pointer; padding: 2px 8px; border-radius: 3px; font-family: inherit;
     }
-    .dp-close:hover { border-color: #e67e22; color: #e67e22; }
+    .dp-close:hover { border-color: #18BC9C; color: #18BC9C; }
     .dp-body { padding: 10px 14px; }
     .dp-title { color: #ccc; font-size: 11px; margin-bottom: 6px; line-height: 1.4; }
     .dp-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
     .dp-row .dp-key { color: #555; }
     .dp-row .dp-val { color: #aaa; }
-    .dp-link { display: block; margin-top: 8px; color: #e67e22; font-size: 10px; text-decoration: none; }
+    .dp-link { display: block; margin-top: 8px; color: #18BC9C; font-size: 10px; text-decoration: none; }
     .dp-link:hover { text-decoration: underline; }
 
     #debug {
@@ -790,7 +790,7 @@
       // =============================================
       function quakeColor(mag) {
         if (mag >= 6) return '#e74c3c';
-        if (mag >= 5) return '#e67e22';
+        if (mag >= 5) return '#eab308';
         return '#f1c40f';
       }
 
@@ -857,7 +857,7 @@
       function disasterColor(type) {
         if (!type) return '#f1c40f';
         var t = type.toLowerCase();
-        if (t.indexOf('wildfire') !== -1 || t.indexOf('fire') !== -1) return '#e67e22';
+        if (t.indexOf('wildfire') !== -1 || t.indexOf('fire') !== -1) return '#eab308';
         if (t.indexOf('volcano') !== -1 || t.indexOf('volcanic') !== -1) return '#e74c3c';
         if (t.indexOf('flood') !== -1) return '#3498db';
         if (t.indexOf('storm') !== -1 || t.indexOf('hurricane') !== -1 || t.indexOf('cyclone') !== -1 || t.indexOf('typhoon') !== -1) return '#8e44ad';
