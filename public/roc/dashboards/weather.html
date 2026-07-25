@@ -8,7 +8,7 @@
   :root {
     --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
     --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
-    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-amber: #eab308;
     --accent-yellow: #eab308; --accent-green: #22c55e; --accent-blue: #3b82f6;
     --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
   }
@@ -66,7 +66,7 @@
   .sev-badge { font-size:9px; font-weight:700; padding:1px 6px; border-radius:3px; flex-shrink:0; }
   .card-area { font-size:10px; color:var(--text-secondary); line-height:1.3; }
   .card-meta { font-size:9px; color:var(--text-dim); margin-top:3px; display:flex; justify-content:space-between; }
-  .card-expires { color:var(--accent-orange); }
+  .card-expires { color:var(--accent-amber); }
   .severity-dot { display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:4px; flex-shrink:0; }
   .empty-state { color:var(--text-dim); font-size:10px; text-align:center; padding:20px; }
 
@@ -144,7 +144,7 @@
         <div class="sev-body" id="col-extreme"><div class="empty-state">No extreme alerts</div></div>
       </div>
       <div class="sev-col">
-        <div class="sev-header"><span class="sev-title" style="color:var(--accent-orange)">Severe</span><span class="sev-count" id="cnt-severe">0</span></div>
+        <div class="sev-header"><span class="sev-title" style="color:var(--accent-amber)">Severe</span><span class="sev-count" id="cnt-severe">0</span></div>
         <div class="sev-body" id="col-severe"><div class="empty-state">No severe alerts</div></div>
       </div>
       <div class="sev-col">
@@ -212,7 +212,7 @@
     });
 
     renderColumn('extreme', extreme, '#ef4444');
-    renderColumn('severe', severe, '#f97316');
+    renderColumn('severe', severe, '#eab308');
     renderColumn('moderate', moderate, '#eab308');
 
     // Banner stats
@@ -236,7 +236,7 @@
     // Level badge
     var level, bg, color;
     if (extreme.length > 0) { level = 'CRITICAL'; bg = 'rgba(239,68,68,.15)'; color = 'var(--accent-red)'; }
-    else if (severe.length > 0) { level = 'ELEVATED'; bg = 'rgba(249,115,22,.15)'; color = 'var(--accent-orange)'; }
+    else if (severe.length > 0) { level = 'ELEVATED'; bg = 'rgba(234,179,8,.15)'; color = 'var(--accent-amber)'; }
     else if (moderate.length > 5) { level = 'GUARDED'; bg = 'rgba(234,179,8,.15)'; color = 'var(--accent-yellow)'; }
     else { level = 'LOW'; bg = 'rgba(34,197,94,.15)'; color = 'var(--accent-green)'; }
     var badge = document.getElementById('wx-level-badge');
@@ -321,7 +321,7 @@
   function drawGauge(score) {
     var svg = document.getElementById('gauge-svg');
     var cx = 110, cy = 110, r = 90, startAngle = Math.PI, endAngle = 2 * Math.PI;
-    var segments = [{start:0,end:.25,color:'#22c55e'},{start:.25,end:.50,color:'#eab308'},{start:.50,end:.75,color:'#f97316'},{start:.75,end:1,color:'#ef4444'}];
+    var segments = [{start:0,end:.25,color:'#22c55e'},{start:.25,end:.50,color:'#eab308'},{start:.50,end:.75,color:'#eab308'},{start:.75,end:1,color:'#ef4444'}];
     var font = getComputedStyle(document.body).fontFamily;
     var html = '<path d="' + arcPath(cx,cy,r,startAngle,endAngle) + '" fill="none" stroke="#1e293b" stroke-width="18" stroke-linecap="butt"/>';
     segments.forEach(function(seg) { html += '<path d="' + arcPath(cx,cy,r,startAngle+(endAngle-startAngle)*seg.start,startAngle+(endAngle-startAngle)*seg.end) + '" fill="none" stroke="' + seg.color + '" stroke-width="18" stroke-linecap="butt" opacity="0.3"/>'; });
@@ -344,7 +344,7 @@
     var html = '';
     factors.forEach(function(f) {
       var pct = Math.min(100, f.value * 10);
-      var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-orange)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-amber)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
       html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
         '<span style="font-size:9px;color:var(--text-secondary);width:70px;">' + f.label + '</span>' +
         '<div style="flex:1;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;">' +

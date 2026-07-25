@@ -15,7 +15,7 @@
     --text-dim: #64748b;
     --accent-cyan: #06b6d4;
     --accent-red: #ef4444;
-    --accent-orange: #f97316;
+    --accent-amber: #eab308;
     --accent-yellow: #eab308;
     --accent-green: #22c55e;
     --accent-purple: #8b5cf6;
@@ -370,7 +370,7 @@ function renderPowerFromEvents(events) {
 
   list.innerHTML = events.map(function(e) {
     var sev = parseFloat(e.severity) || 0;
-    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#eab308' : '#eab308';
     var label = sev >= 7 ? 'CRITICAL' : sev >= 5 ? 'MAJOR' : 'MODERATE';
     // Extract state name for PowerOutage.us link
     var rawData = {};
@@ -398,7 +398,7 @@ function renderIODA(events) {
 
   list.innerHTML = events.map(function(e) {
     var sev = parseFloat(e.severity) || 0;
-    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : sev >= 3 ? '#eab308' : '#22c55e';
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#eab308' : sev >= 3 ? '#eab308' : '#22c55e';
     var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
     var url = e.source_url || '';
     var desc = e.description || '';
@@ -425,7 +425,7 @@ function renderCF(events) {
 
   list.innerHTML = events.map(function(e) {
     var sev = parseFloat(e.severity) || 0;
-    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#eab308' : '#eab308';
     var time = e.occurred_at ? new Date(e.occurred_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
     return '<div class="card"><div class="card-row">' +
       '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
@@ -447,7 +447,7 @@ function renderIODA2(events) {
 
   list.innerHTML = iodaOnly.slice(0, 8).map(function(e) {
     var sev = parseFloat(e.severity) || 0;
-    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#f97316' : '#eab308';
+    var sevColor = sev >= 7 ? '#ef4444' : sev >= 5 ? '#eab308' : '#eab308';
     return '<div class="card"><div class="card-row">' +
       '<span class="severity-dot" style="background:' + sevColor + '"></span>' +
       '<span class="card-title">' + esc(e.title || 'Internet outage') + '</span>' +
@@ -485,7 +485,7 @@ function renderSignalHealth(sig) {
   var signals = [
     {key: 'bgp', label: 'BGP Routing', base: BASELINES.bgp, color: 'var(--accent-blue)', fmt: function(v) { return (v/1e6).toFixed(1) + 'M prefixes'; }},
     {key: 'probe', label: 'Active Probing', base: BASELINES.probe, color: 'var(--accent-green)', fmt: function(v) { return (v/1e3).toFixed(0) + 'K /24s'; }},
-    {key: 'dark', label: 'Darknet Telescope', base: BASELINES.dark, color: 'var(--accent-orange)', fmt: function(v) { return v.toFixed(0) + ' pkt/s'; }},
+    {key: 'dark', label: 'Darknet Telescope', base: BASELINES.dark, color: 'var(--accent-amber)', fmt: function(v) { return v.toFixed(0) + ' pkt/s'; }},
     {key: 'gtr', label: 'Google Traffic', base: BASELINES.gtr, color: 'var(--accent-purple)', fmt: function(v) { return (v * 100).toFixed(0) + '% norm'; }}
   ];
   var html = '<div style="font-size:9px;font-weight:700;color:var(--accent-cyan);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;">US Signal Health</div>';
@@ -521,7 +521,7 @@ function drawGauge(score) {
   var segments = [
     {start: 0, end: 0.25, color: '#22c55e'},
     {start: 0.25, end: 0.50, color: '#eab308'},
-    {start: 0.50, end: 0.75, color: '#f97316'},
+    {start: 0.50, end: 0.75, color: '#eab308'},
     {start: 0.75, end: 1.0, color: '#ef4444'}
   ];
   var font = getComputedStyle(document.body).fontFamily;
@@ -551,7 +551,7 @@ function renderFactors(factors) {
   var html = '';
   factors.forEach(function(f) {
     var pct = Math.min(100, f.value * 10);
-    var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-orange)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+    var color = f.value >= 7 ? 'var(--accent-red)' : f.value >= 4 ? 'var(--accent-amber)' : f.value >= 2 ? 'var(--accent-yellow)' : 'var(--accent-green)';
     html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
       '<span style="font-size:9px;color:var(--text-secondary);width:60px;">' + f.label + '</span>' +
       '<div style="flex:1;height:8px;background:var(--bg-card);border-radius:4px;overflow:hidden;">' +
