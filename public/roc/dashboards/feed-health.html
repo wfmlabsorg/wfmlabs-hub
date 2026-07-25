@@ -8,7 +8,7 @@
   :root {
     --bg-primary: #0a0e1a; --bg-panel: #141b2d; --bg-card: #1e293b; --border: #334155;
     --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-dim: #64748b;
-    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-orange: #f97316;
+    --accent-cyan: #06b6d4; --accent-red: #ef4444; --accent-amber: #eab308;
     --accent-yellow: #eab308; --accent-green: #22c55e;
     --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
   }
@@ -45,14 +45,14 @@
   }
   .feed-card:hover { border-color:var(--accent-cyan); }
   .feed-card.ok { border-left:3px solid var(--accent-green); }
-  .feed-card.stale { border-left:3px solid var(--accent-orange); }
+  .feed-card.stale { border-left:3px solid var(--accent-amber); }
   .feed-card.dead { border-left:3px solid var(--accent-red); }
 
   .feed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:8px; }
   .feed-name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .feed-status { font-size:9px; font-weight:700; padding:2px 8px; border-radius:3px; letter-spacing:.5px; flex-shrink:0; }
   .feed-status.ok { background:rgba(34,197,94,.15); color:var(--accent-green); }
-  .feed-status.stale { background:rgba(249,115,22,.12); color:var(--accent-orange); }
+  .feed-status.stale { background:rgba(234,179,8,.12); color:var(--accent-amber); }
   .feed-status.dead { background:rgba(239,68,68,.12); color:var(--accent-red); }
 
   .feed-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:8px; }
@@ -93,7 +93,7 @@
     <span class="banner-title">Pipeline Health Monitor</span>
     <div class="banner-stats">
       <div class="stat-box"><div class="stat-value" id="s-scouts" style="color:var(--accent-green)">--</div><div class="stat-label">Scouts OK</div></div>
-      <div class="stat-box"><div class="stat-value" id="s-issues" style="color:var(--accent-orange)">--</div><div class="stat-label">Issues</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-issues" style="color:var(--accent-amber)">--</div><div class="stat-label">Issues</div></div>
       <div class="stat-box"><div class="stat-value" id="s-domains">--</div><div class="stat-label">Domains 0/24h</div></div>
       <div class="stat-box"><div class="stat-value" id="s-signals">--</div><div class="stat-label">Signals/24h</div></div>
     </div>
@@ -183,7 +183,7 @@
     var vColor = verdict.indexOf('HEALTHY') !== -1 || verdict === 'OK' || verdict === 'PASS'
       ? 'var(--accent-green)'
       : verdict.indexOf('WARN') !== -1 || verdict.indexOf('DRIFT') !== -1 || verdict.indexOf('STUCK') !== -1
-        ? 'var(--accent-orange)'
+        ? 'var(--accent-amber)'
         : verdict.indexOf('FAIL') !== -1 || verdict.indexOf('CRIT') !== -1
           ? 'var(--accent-red)'
           : 'var(--text-dim)';
@@ -259,7 +259,7 @@
     var badge = document.getElementById('health-badge');
     if (issues > 0) {
       badge.textContent = issues + ' ISSUE' + (issues > 1 ? 'S' : '');
-      badge.style.background = 'rgba(249,115,22,.15)'; badge.style.color = 'var(--accent-orange)'; badge.style.borderColor = 'rgba(249,115,22,.3)';
+      badge.style.background = 'rgba(234,179,8,.15)'; badge.style.color = 'var(--accent-amber)'; badge.style.borderColor = 'rgba(234,179,8,.3)';
     } else {
       badge.textContent = 'ALL HEALTHY';
       badge.style.background = 'rgba(34,197,94,.15)'; badge.style.color = 'var(--accent-green)'; badge.style.borderColor = 'rgba(34,197,94,.3)';

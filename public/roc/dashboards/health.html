@@ -16,7 +16,7 @@
     --accent-cyan: #06b6d4;
     --accent-green: #22c55e;
     --accent-yellow: #eab308;
-    --accent-orange: #f97316;
+    --accent-amber: #eab308;
     --accent-red: #ef4444;
     --font-mono: 'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace;
   }
@@ -256,7 +256,7 @@
   .cdc-summary-value {
     font-size: 28px;
     font-weight: 700;
-    color: var(--accent-orange);
+    color: var(--accent-amber);
     line-height: 1;
   }
   .cdc-summary-label {
@@ -473,7 +473,7 @@
   function severityColor(sev) {
     var s = parseFloat(sev) || 0;
     if (s >= 7) return 'var(--accent-red)';
-    if (s >= 5) return 'var(--accent-orange)';
+    if (s >= 5) return 'var(--accent-amber)';
     if (s >= 3) return 'var(--accent-yellow)';
     return 'var(--accent-green)';
   }
@@ -558,11 +558,11 @@
     var el = document.getElementById('factor-bars');
     if (!el) return;
     var ovix = (totalScore / 10).toFixed(1);
-    var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-orange)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+    var ovixColor = totalScore >= 70 ? 'var(--accent-red)' : totalScore >= 40 ? 'var(--accent-amber)' : totalScore >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
 
     var html = '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-secondary);">OVIX Score: <span style="font-weight:700;color:' + ovixColor + ';">' + ovix + '</span> / 10</div>';
     factors.forEach(function(f) {
-      var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-orange)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
+      var barColor = f.value >= 70 ? 'var(--accent-red)' : f.value >= 40 ? 'var(--accent-amber)' : f.value >= 20 ? 'var(--accent-yellow)' : 'var(--accent-green)';
       html += '<div style="display:grid;grid-template-columns:100px 1fr 30px 25px;align-items:center;gap:6px;font-size:9px;margin-bottom:3px;">' +
         '<span style="text-align:right;color:var(--text-secondary);">' + f.name + '</span>' +
         '<div style="height:8px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +
@@ -577,7 +577,7 @@
 
   function hiLevel(score) {
     if (score >= 75) return { label: 'CRITICAL', color: 'var(--accent-red)' };
-    if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-orange)' };
+    if (score >= 50) return { label: 'ELEVATED', color: 'var(--accent-amber)' };
     if (score >= 25) return { label: 'GUARDED', color: 'var(--accent-yellow)' };
     return { label: 'LOW', color: 'var(--accent-green)' };
   }
@@ -592,7 +592,7 @@
     var segments = [
       { start: 0, end: 0.25, color: '#22c55e' },
       { start: 0.25, end: 0.50, color: '#eab308' },
-      { start: 0.50, end: 0.75, color: '#f97316' },
+      { start: 0.50, end: 0.75, color: '#eab308' },
       { start: 0.75, end: 1.0, color: '#ef4444' }
     ];
 
@@ -796,7 +796,7 @@
       ['Flu', 'COVID', 'RSV'].forEach(function(name) {
         var count = pathogens[name];
         var pct = Math.round((count / maxP) * 100);
-        var barCol = count > 0 ? 'var(--accent-orange)' : 'var(--border)';
+        var barCol = count > 0 ? 'var(--accent-amber)' : 'var(--border)';
         html += '<div style="display:grid;grid-template-columns:50px 1fr 30px;align-items:center;gap:8px;font-size:10px;margin-bottom:4px;">' +
           '<span style="text-align:right;color:var(--text-secondary);font-weight:600;">' + name + '</span>' +
           '<div style="height:10px;background:rgba(51,65,85,0.3);border-radius:2px;overflow:hidden;">' +

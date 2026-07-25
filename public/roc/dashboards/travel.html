@@ -6,7 +6,7 @@
 <title>Travel Disruption Index — ROC</title>
 <script src="/roc/roc-config.js"></script>
 <style>
-:root{--bg:#0a0e1a;--panel:#141b2d;--card:#1e293b;--bdr:#334155;--fg:#f1f5f9;--fg2:#94a3b8;--dim:#64748b;--cyan:#06b6d4;--red:#ef4444;--orange:#f97316;--yellow:#eab308;--green:#22c55e;--purple:#a855f7;--blue:#3b82f6;--mono:'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace}
+:root{--bg:#0a0e1a;--panel:#141b2d;--card:#1e293b;--bdr:#334155;--fg:#f1f5f9;--fg2:#94a3b8;--dim:#64748b;--cyan:#06b6d4;--red:#ef4444;--orange:#eab308;--yellow:#eab308;--green:#22c55e;--purple:#a855f7;--blue:#3b82f6;--mono:'JetBrains Mono','Fira Code','SF Mono','Cascadia Code',monospace}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:13px;line-height:1.5;overflow:hidden;height:100vh}
 .pg{display:grid;grid-template-columns:260px 1fr;grid-template-rows:auto 1fr;height:100vh}
@@ -101,13 +101,13 @@ var SRCS={aviation:'https://nasstatus.faa.gov/',roads:'https://www.tomtom.com/tr
 function esc(s){if(!s)return'';var d=document.createElement('div');d.textContent=String(s);return d.innerHTML}
 function ts(iso){if(!iso)return'';var ms=Date.now()-new Date(iso).getTime(),m=Math.floor(ms/60000);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago'}
 function sc(s){s=parseFloat(s)||0;if(s>=7)return'var(--red)';if(s>=5)return'var(--orange)';if(s>=3)return'var(--yellow)';return'var(--green)'}
-function scHex(s){s=parseFloat(s)||0;if(s>=7)return'#ef4444';if(s>=5)return'#f97316';if(s>=3)return'#eab308';return'#22c55e'}
+function scHex(s){s=parseFloat(s)||0;if(s>=7)return'#ef4444';if(s>=5)return'#eab308';if(s>=3)return'#eab308';return'#22c55e'}
 function ls(l){switch(l){case'CRITICAL':return'var(--red)';case'SEVERE':return'var(--orange)';case'SIGNIFICANT':return'var(--yellow)';case'ELEVATED':return'var(--cyan)';default:return'var(--green)'}}
 
 // Gauge
 function drawGauge(score,level){
   var svg=document.getElementById('gauge'),cx=105,cy=105,r=85,sa=Math.PI,ea=2*Math.PI;
-  var segs=[{s:0,e:.3,c:'#22c55e'},{s:.3,e:.5,c:'#eab308'},{s:.5,e:.7,c:'#f97316'},{s:.7,e:1,c:'#ef4444'}];
+  var segs=[{s:0,e:.3,c:'#22c55e'},{s:.3,e:.5,c:'#eab308'},{s:.5,e:.7,c:'#eab308'},{s:.7,e:1,c:'#ef4444'}];
   var h='<path d="'+arc(cx,cy,r,sa,ea)+'" fill="none" stroke="#1e293b" stroke-width="16"/>';
   segs.forEach(function(g){h+='<path d="'+arc(cx,cy,r,sa+(ea-sa)*g.s,sa+(ea-sa)*g.e)+'" fill="none" stroke="'+g.c+'" stroke-width="16" opacity="0.25"/>'});
   var f=Math.max(0,Math.min(score/10,1)),lc=ls(level);

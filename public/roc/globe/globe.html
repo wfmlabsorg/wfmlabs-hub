@@ -103,7 +103,7 @@
       max-width: 320px; white-space: normal;
       box-shadow: 0 4px 20px rgba(0,0,0,0.6);
     }
-    #alert-popup .ap-event { color: #f39c12; font-weight: bold; font-size: 13px; margin-bottom: 6px; }
+    #alert-popup .ap-event { color: #eab308; font-weight: bold; font-size: 13px; margin-bottom: 6px; }
     #alert-popup .ap-severity { font-size: 10px; font-weight: bold; margin-bottom: 6px; padding: 2px 8px; border-radius: 3px; display: inline-block; }
     #alert-popup .ap-area { color: #888; font-size: 10px; margin-bottom: 6px; }
     #alert-popup .ap-desc { color: #aaa; font-size: 10px; line-height: 1.5; margin-bottom: 8px; max-height: 80px; overflow-y: auto; }
@@ -165,7 +165,7 @@
     .cat-val { font-weight: bold; }
     .section-title { font-size: 10px; color: #555; letter-spacing: 0.1em; margin: 20px 0 10px; }
     .alert-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 3px; padding: 8px 10px; margin-bottom: 6px; font-size: 11px; }
-    .alert-event { color: #f39c12; font-weight: bold; }
+    .alert-event { color: #eab308; font-weight: bold; }
     .alert-meta { color: #555; font-size: 10px; margin-top: 2px; }
     .drill-card {
       background: rgba(24, 188, 156, 0.05); border: 1px solid rgba(24, 188, 156, 0.15);
@@ -243,7 +243,7 @@
     .wl-card .wl-card-score { font-size: 22px; font-weight: bold; margin: 4px 0 2px; }
     .wl-card .wl-card-label { font-size: 9px; color: #444; letter-spacing: 0.05em; }
     .wl-card .wl-card-alert { font-size: 10px; color: #888; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.04); }
-    .wl-card .wl-card-alert .alert-text { color: #f39c12; }
+    .wl-card .wl-card-alert .alert-text { color: #eab308; }
     .wl-card .wl-card-cats {
       display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;
     }
@@ -544,7 +544,7 @@
     </div>
     <div id="pp-title" style="font-size:15px; font-weight:bold; color:#fff; margin-bottom:4px;"></div>
     <div id="pp-region" style="font-size:11px; color:#aaa; margin-bottom:8px;"></div>
-    <div id="pp-delta" style="margin-bottom:8px; padding:6px 10px; background:#ffffff08; border-radius:4px; border-left:3px solid #f39c12;"></div>
+    <div id="pp-delta" style="margin-bottom:8px; padding:6px 10px; background:#ffffff08; border-radius:4px; border-left:3px solid #eab308;"></div>
     <div id="pp-area" style="margin-bottom:8px; color:#bbb; font-size:11px; line-height:1.4;"></div>
     <div id="pp-severity" style="margin-bottom:8px; font-size:11px;"></div>
     <div id="pp-time" style="margin-bottom:8px; color:#888; font-size:10px;"></div>
@@ -1190,12 +1190,12 @@
         var rowsHtml = '';
         // GDACS alert level badge (Green / Orange / Red)
         if (alertLevel) {
-          var alertColor = alertLevel === 'Red' ? '#e74c3c' : alertLevel === 'Orange' ? '#f39c12' : '#27ae60';
+          var alertColor = alertLevel === 'Red' ? '#e74c3c' : alertLevel === 'Orange' ? '#eab308' : '#27ae60';
           rowsHtml += '<div class="dp-row"><span class="dp-key">Alert Level</span><span class="dp-val" style="color:' + alertColor + ';font-weight:bold;">' + esc(alertLevel) + '</span></div>';
         }
         if (severity !== '') {
           var sevNum = parseFloat(String(severity));
-          var sevColor = sevNum >= 8 ? '#e74c3c' : sevNum >= 6 ? '#f39c12' : sevNum >= 4 ? '#f1c40f' : color;
+          var sevColor = sevNum >= 8 ? '#e74c3c' : sevNum >= 6 ? '#eab308' : sevNum >= 4 ? '#f1c40f' : color;
           rowsHtml += '<div class="dp-row"><span class="dp-key">Severity</span><span class="dp-val" style="color:' + sevColor + ';font-weight:bold;">' + esc(sevNum.toFixed(1)) + '/10</span></div>';
         }
         if (source) {
@@ -1577,12 +1577,12 @@
             var totalAlerts = weatherDetail.alerts.length;
             h += '<div style="margin-bottom:10px;"><div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:rgba(255,255,255,0.05);">';
             if (sevCounts.Extreme > 0) h += '<div style="width:' + (sevCounts.Extreme/totalAlerts*100) + '%;background:#e74c3c;"></div>';
-            if (sevCounts.Severe > 0) h += '<div style="width:' + (sevCounts.Severe/totalAlerts*100) + '%;background:#f39c12;"></div>';
+            if (sevCounts.Severe > 0) h += '<div style="width:' + (sevCounts.Severe/totalAlerts*100) + '%;background:#eab308;"></div>';
             if (sevCounts.Moderate > 0) h += '<div style="width:' + (sevCounts.Moderate/totalAlerts*100) + '%;background:#f1c40f;"></div>';
             if (sevCounts.Minor > 0) h += '<div style="width:' + (sevCounts.Minor/totalAlerts*100) + '%;background:#95a5a6;"></div>';
             h += '</div><div style="display:flex;gap:8px;margin-top:4px;font-size:9px;color:#666;flex-wrap:wrap;">';
             if (sevCounts.Extreme > 0) h += '<span style="color:#e74c3c;">Extreme ' + sevCounts.Extreme + '</span>';
-            if (sevCounts.Severe > 0) h += '<span style="color:#f39c12;">Severe ' + sevCounts.Severe + '</span>';
+            if (sevCounts.Severe > 0) h += '<span style="color:#eab308;">Severe ' + sevCounts.Severe + '</span>';
             if (sevCounts.Moderate > 0) h += '<span style="color:#f1c40f;">Moderate ' + sevCounts.Moderate + '</span>';
             if (sevCounts.Minor > 0) h += '<span style="color:#95a5a6;">Minor ' + sevCounts.Minor + '</span>';
             h += '</div></div>';
@@ -1600,13 +1600,13 @@
             if (total > 0) {
               h += '<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;margin-bottom:8px;">';
               if (sc.extreme) h += '<div style="flex:' + sc.extreme + ';background:#e74c3c;" title="Extreme: ' + sc.extreme + '"></div>';
-              if (sc.severe) h += '<div style="flex:' + sc.severe + ';background:#f39c12;" title="Severe: ' + sc.severe + '"></div>';
+              if (sc.severe) h += '<div style="flex:' + sc.severe + ';background:#eab308;" title="Severe: ' + sc.severe + '"></div>';
               if (sc.moderate) h += '<div style="flex:' + sc.moderate + ';background:#f1c40f;" title="Moderate: ' + sc.moderate + '"></div>';
               if (sc.minor) h += '<div style="flex:' + sc.minor + ';background:#95a5a6;" title="Minor: ' + sc.minor + '"></div>';
               h += '</div>';
               h += '<div style="display:flex;justify-content:space-between;font-size:9px;color:#555;margin-bottom:8px;">';
               if (sc.extreme) h += '<span style="color:#e74c3c;">Extreme: ' + sc.extreme + '</span>';
-              if (sc.severe) h += '<span style="color:#f39c12;">Severe: ' + sc.severe + '</span>';
+              if (sc.severe) h += '<span style="color:#eab308;">Severe: ' + sc.severe + '</span>';
               if (sc.moderate) h += '<span style="color:#f1c40f;">Moderate: ' + sc.moderate + '</span>';
               if (sc.minor) h += '<span style="color:#95a5a6;">Minor: ' + sc.minor + '</span>';
               h += '</div>';
@@ -1694,7 +1694,7 @@
             var weatherInitialCount = 5;
             var allWeatherCards = [];
             weatherDetail.alerts.forEach(function(a) {
-              var sevColor = a.severity === 'Extreme' ? '#e74c3c' : a.severity === 'Severe' ? '#f39c12' : a.severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
+              var sevColor = a.severity === 'Extreme' ? '#e74c3c' : a.severity === 'Severe' ? '#eab308' : a.severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
               var card = document.createElement('div');
               card.className = 'alert-card';
               card.style.cssText = 'border-left:3px solid ' + sevColor + ';cursor:pointer;';
@@ -1836,7 +1836,7 @@
           if (quakeContainer && seismicDetail && seismicDetail.quakes) {
             var allQuakeCards = [];
             seismicDetail.quakes.forEach(function(q) {
-              var magColor = q.mag >= 7 ? '#e74c3c' : q.mag >= 5 ? '#f39c12' : q.mag >= 4 ? '#f1c40f' : '#95a5a6';
+              var magColor = q.mag >= 7 ? '#e74c3c' : q.mag >= 5 ? '#eab308' : q.mag >= 4 ? '#f1c40f' : '#95a5a6';
               var impact = q.mag >= 7 ? 'Major' : q.mag >= 6 ? 'Strong' : q.mag >= 5 ? 'Moderate' : q.mag >= 4 ? 'Light' : 'Minor';
               var card = document.createElement('div');
               card.className = 'alert-card';
@@ -1911,11 +1911,11 @@
             var allDisasterCards = [];
 
             disasters.points.forEach(function(d) {
-              var sevColor = d.severity >= 8 ? '#e74c3c' : d.severity >= 6 ? '#f39c12' : d.severity >= 4 ? '#f1c40f' : '#95a5a6';
+              var sevColor = d.severity >= 8 ? '#e74c3c' : d.severity >= 6 ? '#eab308' : d.severity >= 4 ? '#f1c40f' : '#95a5a6';
               // Use d.type (GDACS short codes: EQ/TC/FL/VO/DR/WF) first, then title substring
               var typeLabel = disasterTypeLabel(d.type || d.title || '');
               // GDACS alert level color
-              var alertLevelColor = d.alertLevel === 'Red' ? '#e74c3c' : d.alertLevel === 'Orange' ? '#f39c12' : d.alertLevel === 'Green' ? '#27ae60' : '';
+              var alertLevelColor = d.alertLevel === 'Red' ? '#e74c3c' : d.alertLevel === 'Orange' ? '#eab308' : d.alertLevel === 'Green' ? '#27ae60' : '';
               var card = document.createElement('div');
               card.className = 'alert-card';
               card.style.cssText = 'border-left:3px solid ' + sevColor + ';';
@@ -2135,7 +2135,7 @@
           var area = props.alertArea ? props.alertArea.getValue() : '';
           var description = props.alertDescription ? props.alertDescription.getValue() : '';
           var expires = props.alertExpires ? props.alertExpires.getValue() : '';
-          var sevColor = severity === 'Extreme' ? '#e74c3c' : severity === 'Severe' ? '#f39c12' : severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
+          var sevColor = severity === 'Extreme' ? '#e74c3c' : severity === 'Severe' ? '#eab308' : severity === 'Moderate' ? '#f1c40f' : '#95a5a6';
 
           alertPopup.querySelector('.ap-event').textContent = event;
           alertPopup.querySelector('.ap-severity').textContent = severity;
@@ -3271,7 +3271,7 @@
         // Color by score severity, not just category
         var score = parseFloat(data.score) || 0;
         if (score >= 7.0) return '#e74c3c';   // red — high
-        if (score >= 4.0) return '#f39c12';   // orange — elevated
+        if (score >= 4.0) return '#eab308';   // orange — elevated
         return '#3498db';                      // blue — moderate change
       }
 
@@ -3404,7 +3404,7 @@
       function showPingPopup(data, screenPos) {
         var badge = document.getElementById('pp-badge');
         var score = parseFloat(data.score) || 0;
-        var badgeColor = score >= 7 ? '#e74c3c' : score >= 4 ? '#f39c12' : '#3498db';
+        var badgeColor = score >= 7 ? '#e74c3c' : score >= 4 ? '#eab308' : '#3498db';
         var isSeismic = data.category === 'seismic';
         badge.textContent = isSeismic ? 'SEISMIC' : 'WEATHER';
         badge.style.background = badgeColor + '30';
@@ -3439,7 +3439,7 @@
         // Severity
         var sevEl = document.getElementById('pp-severity');
         if (data.severity) {
-          var sevColor = data.severity === 'Extreme' ? '#e74c3c' : data.severity === 'Severe' ? '#f39c12' : '#f1c40f';
+          var sevColor = data.severity === 'Extreme' ? '#e74c3c' : data.severity === 'Severe' ? '#eab308' : '#f1c40f';
           sevEl.style.display = 'block';
           sevEl.innerHTML = '<span style="color:#888;">Severity:</span> <span style="color:' + sevColor + ';font-weight:bold;">' + esc(data.severity) + '</span>' +
             '<span style="color:#888;margin-left:12px;">Source:</span> ' + esc(data.source || '');
@@ -3563,14 +3563,14 @@
       function eventSeverityColor(severity) {
         var s = parseFloat(severity) || 1;
         if (s >= 7) return '#e74c3c';   // red
-        if (s >= 5) return '#f39c12';   // orange
+        if (s >= 5) return '#eab308';   // orange
         return '#27ae60';               // green
       }
 
       // Domain outline color — distinguishes event type at a glance
       function domainColor(domain) {
         var colors = {
-          weather: '#3498db', seismic: '#e74c3c', disaster: '#f39c12',
+          weather: '#3498db', seismic: '#e74c3c', disaster: '#eab308',
           cyber: '#9b59b6', health: '#2ecc71', infrastructure: '#f1c40f',
           financial: '#ecf0f1', environmental: '#1abc9c'
         };
