@@ -1,6 +1,12 @@
 import React from 'react'
 
-const footerLinks = [
+export interface FooterGroup {
+  title: string
+  links: { href: string; label: string }[]
+}
+
+// Community footer — the default. A Footer rendered with no props is unchanged.
+const DEFAULT_FOOTER_LINKS: FooterGroup[] = [
   {
     title: 'Content',
     links: [
@@ -27,7 +33,21 @@ const footerLinks = [
   },
 ]
 
-export function Footer() {
+/**
+ * Site footer.
+ *
+ * PARAMETERISED, NOT FORKED (hub-047). travelrisk.wfmlabs.com renders this same
+ * component with its own link groups and a "part of WFM Labs" tagline. Both
+ * props default to the community values.
+ */
+export function Footer({
+  groups = DEFAULT_FOOTER_LINKS,
+  tagline = 'Built for practitioners.',
+}: {
+  groups?: FooterGroup[]
+  tagline?: string
+} = {}) {
+  const footerLinks = groups
   return (
     <footer
       style={{
@@ -93,7 +113,7 @@ export function Footer() {
         }}
       >
         <span style={{ fontSize: '0.8125rem', color: 'var(--fg-faint)' }}>
-          &copy; {new Date().getFullYear()} WFM Labs. Built for practitioners.
+          &copy; {new Date().getFullYear()} WFM Labs. {tagline}
         </span>
         <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>
           Powered by Payload CMS + Next.js
