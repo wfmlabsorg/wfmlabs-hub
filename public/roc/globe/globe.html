@@ -6,6 +6,8 @@
   <title>ROC Globe — OVIX</title>
   <meta name="roc-version" content="1.3.0">
   <script src="/roc/roc-config.js"></script>
+  <!-- hub-045: op-risk PROVISIONAL/SETTLED score-state (api-065 contract) -->
+  <script src="/roc/roc-score-state.js"></script>
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
   <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
   <style>
@@ -55,6 +57,13 @@
     #ovix-legend .cat { display: flex; justify-content: space-between; gap: 24px; padding: 3px 4px; margin: 1px -4px; border-radius: 2px; cursor: pointer; transition: background 0.15s ease; }
     #ovix-legend .cat:hover { background: rgba(24, 188, 156, 0.12); }
     #ovix-legend .cat .val { font-weight: bold; min-width: 28px; text-align: right; }
+    /* hub-045: a provisional value keeps its hazard colour (severity axis) and is
+       marked with a dashed underline plus a neutral chip (confidence axis). */
+    #ovix-legend .val.prov { border-bottom: 1px dashed rgba(148,163,184,0.38); }
+    /* Applies to the composite row too, which has its own .val rule. */
+    #ovix-legend .st-mark { color: #64748b; font-weight: 600; font-size: 9px; margin-right: 6px; letter-spacing: .5px; }
+    #ovix-legend #ovix-state-slot:empty { display: none; }
+    #ovix-legend #ovix-state-slot { margin: 0 -4px 8px; max-width: 232px; }
     #ovix-legend .sep-line { border-top: 1px solid rgba(24, 188, 156, 0.15); margin: 6px -4px 4px; padding-top: 6px; }
     #ovix-legend .composite { display: flex; justify-content: space-between; gap: 24px; padding: 3px 4px; }
     #ovix-legend .composite span:first-child { color: #18BC9C; font-weight: bold; letter-spacing: 0.05em; }
@@ -422,6 +431,9 @@
 
   <div id="ovix-legend">
     <div class="header">◆ OP-RISK DOMAINS</div>
+    <!-- hub-045: populated only while compositeState is PROVISIONAL; removed
+         automatically once it settles. Never hardcoded, never dated. -->
+    <div id="ovix-state-slot"></div>
     <div class="cat" onclick="navDomain('weather')" title="Weather"><span>Weather</span><span class="val" id="ovix-weather">--</span></div>
     <div class="cat" onclick="navDomain('seismic')" title="Seismic"><span>Seismic</span><span class="val" id="ovix-seismic">--</span></div>
     <div class="cat" onclick="navDomain('cyber')" title="Cyber"><span>Cyber</span><span class="val" id="ovix-cyber">--</span></div>
@@ -579,6 +591,12 @@
     }
     function cesiumColor(s) { return Cesium.Color.fromCssColorString(cssColor(s)); }
 
+    // hub-045 — op-risk score state (api-065 / roc#124). Severity keeps the hazard
+    // ramp above; state is a SEPARATE neutral axis, so nothing here recolours a band.
+    var RS = window.RocScoreState || null;
+    if (RS) RS.injectStyles();
+    function stSummary(payload) { return RS ? RS.summarize(payload) : { provisional: false }; }
+
     // ── hub-035: region scoring sourced from the 12-domain signals-derived op-risk
     // index (/api/ovix/op-risk?scope=region), replacing the legacy geophysical OVIX
     // scores (/api/ovix/scores, /composite). Adapter maps the op-risk contract
@@ -589,9 +607,19 @@
       return OVIX_API + '/api/ovix/op-risk?scope=region&region=' + encodeURIComponent(id);
     }
     function adaptOpRisk(d) {
+      // hub-045: carry the score-state contract through the adapter. `st` is the
+      // index-level summary; each category keeps its own state so the drill panel
+      // can mark provisional domains individually. Recomputed on every fetch —
+      // nothing cached, nothing dated, so it clears itself.
+      var st = stSummary(d);
       return {
         composite: d.composite,
         regionName: d.regionName,
+        lastUpdated: d.lastUpdated || null,
+        source: d.source || null,
+        compositeLevel: d.compositeLevel || null,
+        st: st,
+        provisional: st.provisional,
         domains: d.domains || [],
         categories: (d.domains || []).map(function(dom) {
           return {
@@ -600,6 +628,7 @@
             level: dom.level,
             pointCount: dom.eventCount || 0,
             topEvent: dom.topEvent || null,
+            st: RS ? RS.domainState(dom) : { provisional: false },
           };
         }),
       };
@@ -1549,18 +1578,30 @@
 
           var h = '';
 
-          // Score
+          // Score — hub-045: the band keeps its hazard colour; state is surfaced
+          // beside it as a separate neutral badge, never as a recoloured score.
+          var rst = composite.st || { provisional: false };
           h += '<div class="big-score" style="color:' + cssColor(composite.composite) + '">' + composite.composite.toFixed(1) + '</div>';
           var label = type === 'metro' ? 'METRO OP-RISK' : (type === 'sub' ? 'REGIONAL OP-RISK' : 'OP-RISK COMPOSITE');
           h += '<div class="score-label">' + label + '</div>';
-          h += '<div style="text-align:center;font-size:9px;color:#333;margin-bottom:12px;">Updated: ' + new Date().toLocaleTimeString() + '</div>';
+          // Traceability gate 2: show when the SERVER computed this, not the client clock.
+          h += '<div style="text-align:center;font-size:9px;color:#555;margin-bottom:8px;">Computed: ' +
+            esc(RS ? RS.fmtUpdated(composite.lastUpdated) : 'unknown') + '</div>';
+          if (rst.provisional && RS) {
+            h += '<div style="margin:0 0 10px;display:flex;justify-content:center;">' + RS.badgeHTML(rst, { compact: true }) + '</div>';
+            h += '<div style="font-size:9px;color:#64748b;line-height:1.5;margin-bottom:12px;">' + esc(RS.explain(rst)) + '</div>';
+          }
 
-          // Risk domains (12-domain op-risk breakdown)
+          // Risk domains (12-domain op-risk breakdown). Ordering is the API's;
+          // provisional scores are comparable to each other, so no suppression.
           h += '<div class="section-title">RISK DOMAINS</div>';
           (composite.categories || []).forEach(function(c) {
+            var cst = c.st || { provisional: false };
             h += '<div class="cat-row">';
             h += '<span class="cat-name">' + esc(c.category.charAt(0).toUpperCase() + c.category.slice(1)) + '</span>';
-            h += '<span class="cat-val" style="color:' + cssColor(c.score) + '">' + c.score.toFixed(1);
+            h += '<span class="cat-val" style="color:' + cssColor(c.score) + '">';
+            if (cst.provisional && RS) h += RS.chipHTML(cst) + ' ';
+            h += '<span' + (cst.provisional ? ' class="roc-st-prov-val"' : '') + '>' + c.score.toFixed(1) + '</span>';
             if (c.pointCount > 0) h += ' <span style="color:#555;font-size:10px;">(' + c.pointCount + ')</span>';
             h += '</span></div>';
             if (c.topEvent) {
@@ -2026,17 +2067,43 @@
       // =============================================
       // OVIX Legend (globe level)
       // =============================================
-      function setLegend(k, v) {
+      // hub-045: `st` (optional) is the per-domain RocScoreState record. A
+      // provisional value KEEPS its hazard colour — confidence and severity are
+      // separate axes — and is marked with a PROV tag plus a dashed underline.
+      // Passing no state (or a settled one) restores the plain cell, so the
+      // treatment removes itself with no manual step.
+      function setLegend(k, v, st) {
         var el = document.getElementById('ovix-' + k);
-        if (el) { el.textContent = v.toFixed(1); el.style.color = cssColor(v); }
+        if (!el) return;
+        var prov = !!(st && st.provisional);
+        var num = (typeof v === 'number' && isFinite(v)) ? v.toFixed(1) : '--';
+        el.innerHTML = (prov ? '<span class="st-mark">PROV</span>' : '') + num;
+        el.style.color = cssColor(v);
+        el.className = 'val' + (prov ? ' prov' : '');
+        el.title = prov && RS ? RS.explain(st) : '';
       }
 
       function fetchGlobalOVIX() {
         // hub-035: global legend now reads the 12-domain signals-derived op-risk
         // composite (scope=global) instead of legacy /api/ovix/scores (geophysical).
         safeFetch(OVIX_API + '/api/ovix/op-risk').then(function(d) {
-          setLegend('composite', d.composite);
-          log('OP-RISK: ' + d.composite);
+          // hub-045: derive score state fresh on EVERY poll. Nothing persists
+          // between refreshes, so the badge appears and disappears purely as a
+          // function of what the API is currently reporting.
+          var st = stSummary(d);
+          var byDomain = {};
+          (d.domains || []).forEach(function(dom) {
+            byDomain[dom.domain] = RS ? RS.domainState(dom) : { provisional: false };
+          });
+
+          setLegend('composite', d.composite, st.provisional ? { provisional: true } : null);
+          if (RS) {
+            RS.attachBadge(document.getElementById('ovix-state-slot'), st, {
+              key: 'globe-legend', compact: true, slotStyle: 'margin:0'
+            });
+          }
+          log('OP-RISK: ' + d.composite + (st.provisional ? ' [PROVISIONAL ' +
+            (typeof st.progress === 'number' ? Math.round(st.progress * 100) + '%' : '?') + ']' : ''));
           var mapping = {
             weather: 'weather', seismic: 'seismic', cyber: 'cyber', health: 'health',
             geopolitical: 'geopolitical', infrastructure: 'infra', financial: 'financial',
@@ -2045,7 +2112,7 @@
           };
           (d.domains || []).forEach(function(dom) {
             var legendId = mapping[dom.domain];
-            if (legendId) setLegend(legendId, dom.score);
+            if (legendId) setLegend(legendId, dom.score, byDomain[dom.domain]);
           });
         }).catch(function() { log('op-risk global fetch failed'); });
       }

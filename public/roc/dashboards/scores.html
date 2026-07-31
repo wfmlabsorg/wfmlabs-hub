@@ -94,7 +94,9 @@ body {
 .tape { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
 .tape-head, .row {
   display:grid;
-  grid-template-columns: 158px 106px 100px 120px 1fr 46px 42px;
+  /* hub-045: op-risk column widened 106->164px so the PROVISIONAL chip sits
+     beside the widest level band (ELEVATED) without wrapping. */
+  grid-template-columns: 158px 164px 100px 120px 1fr 46px 42px;
   align-items:center; gap:10px;
 }
 .tape-head {
@@ -121,6 +123,16 @@ body {
 .cell-score { display:flex; align-items:center; gap:8px; }
 .cell-score .s { font-family:var(--mono); font-size:21px; font-weight:700; line-height:1; }
 .cell-score .lvl { padding:2px 6px; border-radius:3px; font-size:8px; font-weight:700; letter-spacing:.5px; border:1px solid; white-space:nowrap; }
+/* hub-045 — score state is the CONFIDENCE axis and is rendered separately from
+   the hazard band: the level chip keeps its own colour, and a neutral dashed
+   PROV chip sits beside it. Never a fourth level, never a recoloured band. */
+.cell-score { flex-wrap:wrap; row-gap:2px; }
+#band-state-slot:empty { display:none; }
+.tape-head .st-note { color:var(--dim2); font-weight:500; letter-spacing:.4px; text-transform:none; }
+.basis-note {
+  display:flex; align-items:center; gap:8px; padding:5px 18px; font-size:10px; color:var(--dim2);
+  background:rgba(148,163,184,0.05); border-bottom:1px solid var(--border);
+}
 
 /* headline op-risk trend cell */
 .cell-trend { display:flex; align-items:center; gap:6px; min-width:0; }
@@ -283,6 +295,8 @@ a.lnk:hover { text-decoration:underline; }
 }
 </style>
   <script src="/roc/roc-config.js"></script>
+  <!-- hub-045: op-risk PROVISIONAL/SETTLED score-state (api-065 contract) -->
+  <script src="/roc/roc-score-state.js"></script>
 </head>
 <body>
 
@@ -294,6 +308,9 @@ a.lnk:hover { text-decoration:underline; }
     <span class="scale">/10</span>
   </div>
   <span class="level-badge" id="comp-level">—</span>
+  <!-- hub-045: populated only while compositeState is PROVISIONAL; removed
+       automatically once it settles. No date, no manual step. -->
+  <div id="band-state-slot"></div>
   <div class="band-dir">
     <span class="dir-arrow" id="comp-arrow">—</span>
     <span class="dir-delta mono" id="comp-delta">/24h</span>
@@ -356,7 +373,8 @@ a.lnk:hover { text-decoration:underline; }
 </div>
 
 <div class="footer">
-  <span>Operational Risk Index · signals-derived, percentile vs 30-day baseline (rule op_risk_index v2) · OVIX = geophysical sensor overlay</span>
+  <!-- hub-045: rule version filled from the API's ruleVersion so the trace can't go stale. -->
+  <span id="foot-rule">Operational Risk Index · signals-derived, percentile vs 30-day baseline · OVIX = geophysical sensor overlay</span>
   <span id="foot-status">—</span>
 </div>
 
@@ -397,6 +415,15 @@ a.lnk:hover { text-decoration:underline; }
     'london','dublin','mexico-city','bogota','cairo','johannesburg','warsaw',
     'kuala-lumpur','jakarta','sao-paulo','san-jose','guatemala-city','lisbon'
   ];
+
+  // hub-045 — score state (api-065 / roc#124). RS is the shared helper; every use
+  // is null-guarded so the tape degrades to its prior behaviour if the file fails
+  // to load. State is read, never derived: `state`, `scoreBasis`,
+  // `baselineProgress`, `settlesAt` per domain; `compositeState`/`compositeLevel`/
+  // `compositeBasis` at the top level.
+  var RS = window.RocScoreState || null;
+  function stOf(d) { return RS ? RS.domainState(d) : { provisional: false }; }
+  function stSummary() { return RS ? RS.summarize(state.risk) : { provisional: false, mixed: false }; }
 
   // ---- color / label helpers (render-only; NEVER compute scores client-side) ----
   function levelOf(d) { return d.level || (d.score >= 7 ? 'HIGH' : d.score >= 4 ? 'ELEVATED' : 'NORMAL'); }
@@ -567,23 +594,49 @@ a.lnk:hover { text-decoration:underline; }
   function renderBand() {
     var d = state.risk; if (!d) return;
     var comp = (typeof d.composite === 'number') ? d.composite : 0;
-    var level = comp >= 7 ? 'HIGH' : comp >= 4 ? 'ELEVATED' : 'NORMAL';
+    // hub-045: prefer the server's compositeLevel — the band is the engine's call,
+    // not ours. Fall back to the local thresholds only if the field is absent.
+    var st = stSummary();
+    var level = st.compositeLevel || (comp >= 7 ? 'HIGH' : comp >= 4 ? 'ELEVATED' : 'NORMAL');
     var color = levelColor(level);
 
+    // Severity keeps its own colour; state is a separate, neutral axis. The value
+    // gets a dashed underline while provisional — never a recoloured band.
     var valEl = document.getElementById('comp-val');
     valEl.textContent = comp.toFixed(1); valEl.style.color = color;
+    valEl.className = 'val mono' + (st.provisional ? ' roc-st-prov-val' : '');
+    valEl.title = st.provisional && RS ? RS.explain(st) : '';
 
     var lb = document.getElementById('comp-level');
     lb.textContent = level; lb.style.color = color; lb.style.borderColor = color;
 
-    // HEADLINE composite trend (op-risk series) — 24h shape + delta
-    var cDelta = trendDelta(state.riskCompositeSeries);
-    var cArr = dirArrow(cDelta);
+    // Badge — created, updated and REMOVED purely from the live payload.
+    if (RS) {
+      RS.attachBadge(document.getElementById('band-state-slot'), st, {
+        key: 'band', compact: true, slotStyle: 'margin:0'
+      });
+    }
+
+    // HEADLINE composite trend (op-risk series) — 24h shape + delta.
+    // hub-045: a trend may NOT span a provisional/settled basis change, and the
+    // series carries no per-point state, so while the composite is provisional the
+    // trend is withheld with a stated reason rather than drawn across a boundary
+    // we cannot locate. Restores itself automatically once the state settles.
     var aEl = document.getElementById('comp-arrow');
-    aEl.textContent = cArr.ch; aEl.style.color = cArr.color;
     var dEl = document.getElementById('comp-delta');
-    dEl.textContent = fmtDelta(cDelta) + ' /24h'; dEl.style.color = cArr.color;
-    document.getElementById('comp-spark').innerHTML = sparkline(state.riskCompositeSeries, 140, 30, color);
+    if (RS && RS.trendBlocked(st)) {
+      aEl.textContent = '—'; aEl.style.color = 'var(--dim2)';
+      dEl.textContent = 'trend n/a'; dEl.style.color = 'var(--dim2)';
+      dEl.title = RS.TREND_REASON;
+      document.getElementById('comp-spark').innerHTML =
+        '<span class="roc-st-note" title="' + esc(RS.TREND_REASON) + '">basis change — no comparable history</span>';
+    } else {
+      var cDelta = trendDelta(state.riskCompositeSeries);
+      var cArr = dirArrow(cDelta);
+      aEl.textContent = cArr.ch; aEl.style.color = cArr.color;
+      dEl.textContent = fmtDelta(cDelta) + ' /24h'; dEl.style.color = cArr.color; dEl.title = '';
+      document.getElementById('comp-spark').innerHTML = sparkline(state.riskCompositeSeries, 140, 30, color);
+    }
 
     // OVIX overlay chip — muted geophysical sensor composite + its trend
     var chip = document.getElementById('ovix-chip');
@@ -606,6 +659,10 @@ a.lnk:hover { text-decoration:underline; }
     var hh = String(when.getHours()).padStart(2, '0'), mm = String(when.getMinutes()).padStart(2, '0');
     document.getElementById('updated').textContent = hh + ':' + mm;
     document.getElementById('foot-status').textContent = 'updated ' + hh + ':' + mm + ' local · ' + (d.source || RISK_SOURCE);
+    // hub-045: report the rule version the SERVER used, never a hardcoded one.
+    document.getElementById('foot-rule').textContent =
+      'Operational Risk Index · signals-derived, percentile vs 30-day baseline (rule ' + RISK_RULE + ' ' +
+      (d.ruleVersion || RISK_RULE_VERSION) + ') · provisional where the baseline is not yet usable · OVIX = geophysical sensor overlay';
   }
 
   // ============================================================
@@ -615,6 +672,13 @@ a.lnk:hover { text-decoration:underline; }
     var d = state.risk;
     var host = document.getElementById('rows');
     if (!d || !d.domains) { host.innerHTML = '<div style="padding:24px 18px;color:var(--red)">No Operational Risk Index data.</div>'; return; }
+
+    // hub-045: recompute state from the current payload on every render.
+    // Ranking is NOT suppressed — provisional scores are comparable to each other
+    // at one instant, so the ordering is legitimate. What we surface instead is the
+    // one comparison that is not: settled vs provisional side by side.
+    var st = stSummary();
+    renderBasisNote(st);
 
     var sorted = riskSort(d.domains);
     var changed = {};
@@ -634,12 +698,20 @@ a.lnk:hover { text-decoration:underline; }
       var metaBits = sigCount + ' signal' + (sigCount === 1 ? '' : 's');
       if (dom.topSource) metaBits += ' · ' + dom.topSource;
 
-      // HEADLINE trend cell — op-risk series (all 12, incl. the previously-dead-5)
-      var rPts = (state.riskSeries[dom.domain] || {}).points;
-      var rDelta = trendDelta(rPts);
-      var rArr = dirArrow(rDelta);
-      var trendCell = '<span class="spark">' + sparkline(rPts, 64, 22, color) + '</span>' +
-        '<span class="d" style="color:' + rArr.color + '">' + rArr.ch + ' ' + fmtDelta(rDelta) + '</span>';
+      // HEADLINE trend cell — op-risk series (all 12, incl. the previously-dead-5).
+      // hub-045: withheld while this domain is provisional (its history may cross a
+      // basis change and the series carries no per-point state to prove otherwise).
+      var ds = stOf(dom);
+      var trendCell;
+      if (RS && RS.trendBlocked(ds)) {
+        trendCell = '<span class="roc-st-note" title="' + esc(RS.TREND_REASON) + '">basis change</span>';
+      } else {
+        var rPts = (state.riskSeries[dom.domain] || {}).points;
+        var rDelta = trendDelta(rPts);
+        var rArr = dirArrow(rDelta);
+        trendCell = '<span class="spark">' + sparkline(rPts, 64, 22, color) + '</span>' +
+          '<span class="d" style="color:' + rArr.color + '">' + rArr.ch + ' ' + fmtDelta(rDelta) + '</span>';
+      }
 
       // OVIX overlay cell (sensor domains only)
       var ovCell;
@@ -657,8 +729,13 @@ a.lnk:hover { text-decoration:underline; }
       return '<div class="row' + sel + flash + '" data-domain="' + dom.domain + '">' +
         '<div class="cell-domain"><span class="name">' + dom.domain.replace(/_/g, ' ').replace(/-/g, ' ') + '</span>' +
           '<span class="meta" title="' + esc(metaBits) + '">' + esc(metaBits) + '</span></div>' +
-        '<div class="cell-score"><span class="s" style="color:' + color + '">' + fmtScore(dom.score) + '</span>' +
-          '<span class="lvl" style="color:' + color + ';border-color:' + color + '">' + level + '</span></div>' +
+        // hub-045: the level chip keeps its hazard colour (severity axis); the PROV
+        // chip beside it carries confidence. The score gets a dashed underline while
+        // provisional. Both vanish on their own once the domain settles.
+        '<div class="cell-score"><span class="s' + (ds.provisional ? ' roc-st-prov-val' : '') +
+            '" style="color:' + color + '">' + fmtScore(dom.score) + '</span>' +
+          '<span class="lvl" style="color:' + color + ';border-color:' + color + '">' + level + '</span>' +
+          (RS ? RS.chipHTML(ds) : '') + '</div>' +
         '<div class="cell-trend">' + trendCell + '</div>' +
         '<div class="cell-ovix">' + ovCell + '</div>' +
         '<div class="cell-driver" title="' + esc(driver) + '">' + esc(driver) + '</div>' +
@@ -679,6 +756,33 @@ a.lnk:hover { text-decoration:underline; }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  // ============================================================
+  //  hub-045 — BASIS NOTE. The ranking itself is fine: provisional scores are
+  //  comparable to one another at a single instant. The comparison that is NOT
+  //  valid is across the provisional/settled boundary — so when the tape holds
+  //  both kinds at once, say so explicitly above the rows. Created and removed
+  //  from the live payload; nothing dated, nothing manual.
+  // ============================================================
+  function renderBasisNote(st) {
+    var host = document.getElementById('rows');
+    var body = host && host.parentNode;
+    if (!body) return;
+    var el = body.querySelector('.basis-note');
+    if (!st || !st.mixed) { if (el && el.parentNode) el.parentNode.removeChild(el); return; } // self-clearing
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'basis-note';
+      body.insertBefore(el, host);
+    }
+    if (RS) RS.injectStyles();
+    var chip = RS ? RS.chipHTML({ provisional: true, progress: st.progress, settlesAt: st.settlesAt,
+      lastUpdated: st.lastUpdated, total: st.total, scoreBasis: 'provisional_absolute' }, 'MIXED BASIS') : '';
+    el.innerHTML = chip +
+      '<span>' + st.basis.provisional + ' of ' + st.total + ' domains are scored on a <b>provisional</b> basis, ' +
+      st.basis.settled + ' on a <b>settled</b> one. Provisional scores are comparable to each other, ' +
+      'but not to a settled score — read across the two with care.</span>';
+  }
 
   // ============================================================
   //  OPEN INCIDENTS strip (hub-037) — one consolidated feed across ALL domains.
@@ -809,14 +913,23 @@ a.lnk:hover { text-decoration:underline; }
     var html = '';
 
     // --- HEADLINE 24h trend (op-risk series) ---
-    var hPts = (state.riskSeries[key] || {}).points;
-    var hDelta = trendDelta(hPts);
-    var hArr = dirArrow(hDelta);
-    html += '<div class="sect"><div class="sect-title">24h Trend (op-risk)</div>' +
-      '<div style="display:flex;align-items:center;gap:12px">' +
-      sparkline(hPts, 200, 44, color) +
-      '<div><div class="mono" style="font-size:13px;color:' + hArr.color + '">' + hArr.ch + ' ' + fmtDelta(hDelta) + ' /24h</div>' +
-      '<div class="muted" style="font-style:normal">' + ((hPts && hPts.length > 1) ? (hPts.length + ' hourly points') : 'sparse — flat line is honest') + '</div></div></div></div>';
+    // hub-045: a provisional score is not comparable to its own history, and the
+    // series carries no per-point basis, so the trend is withheld (with the reason)
+    // rather than drawn across a boundary we cannot locate. Returns on its own.
+    var dst = stOf(dom);
+    if (RS && RS.trendBlocked(dst)) {
+      html += '<div class="sect"><div class="sect-title">24h Trend (op-risk)</div>' +
+        '<div class="muted" style="font-style:normal">' + esc(RS.TREND_REASON) + '</div></div>';
+    } else {
+      var hPts = (state.riskSeries[key] || {}).points;
+      var hDelta = trendDelta(hPts);
+      var hArr = dirArrow(hDelta);
+      html += '<div class="sect"><div class="sect-title">24h Trend (op-risk)</div>' +
+        '<div style="display:flex;align-items:center;gap:12px">' +
+        sparkline(hPts, 200, 44, color) +
+        '<div><div class="mono" style="font-size:13px;color:' + hArr.color + '">' + hArr.ch + ' ' + fmtDelta(hDelta) + ' /24h</div>' +
+        '<div class="muted" style="font-style:normal">' + ((hPts && hPts.length > 1) ? (hPts.length + ' hourly points') : 'sparse — flat line is honest') + '</div></div></div></div>';
+    }
 
     // --- WHY THIS SCORE (traceability centerpiece) ---
     // Deterministic index: a documented ENGINE decides the member-facing score
@@ -833,7 +946,6 @@ a.lnk:hover { text-decoration:underline; }
     var pctl = isNum(dom.percentile) ? 'p' + Math.round(dom.percentile * 100) : '—';
     var baseN = isNum(dom.baselineN) ? dom.baselineN : null;
     var guard = dom.guardApplied || 'none';
-    var calibrating = dom.calibrating === true || guard === 'calibrating';
 
     // Guard badge — when an absolute guard overrides the percentile, say so visibly.
     var guardBadge = '';
@@ -841,14 +953,24 @@ a.lnk:hover { text-decoration:underline; }
       guardBadge = '<div class="guard-badge" style="color:var(--red);border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.08)">CRISIS FLOOR — raw ' + raw + ' &ge; 12.0 held HIGH</div>';
     } else if (guard === 'quiet_cap') {
       guardBadge = '<div class="guard-badge" style="color:var(--green);border-color:rgba(16,185,129,0.45);background:rgba(16,185,129,0.08)">QUIET CAP — raw ' + raw + ' &lt; 4.0 capped at 6.9</div>';
-    } else if (calibrating) {
-      guardBadge = '<div class="guard-badge" style="color:var(--dim);border-color:var(--border2);background:rgba(148,163,184,0.06)">CALIBRATING — baseline ' + (baseN === null ? '&lt; 168' : baseN) + ' pts · v1 fallback</div>';
+    } else if (dst.provisional) {
+      // hub-045: state, not a guard — say WHY it is provisional, how far the
+      // baseline has come, and when it is expected to settle (or that it settles on
+      // data rather than on a clock, when settlesAt is null for a regime shift).
+      var settlesTxt = RS ? RS.fmtSettles(dst.settlesAt) : null;
+      guardBadge = '<div class="guard-badge" style="color:var(--dim);border-color:rgba(148,163,184,0.38);background:rgba(148,163,184,0.09);border-style:dashed">' +
+        'PROVISIONAL — ' + esc(dst.empty ? 'no observations in the current window'
+          : 'scored on an absolute basis; the 30-day baseline is not yet usable') +
+        (isNum(dst.progress) ? ' · baseline ' + Math.round(dst.progress * 100) + '% complete' : '') +
+        ' · ' + esc(settlesTxt ? 'expected to settle ~' + settlesTxt : 'settles when the data recovers, not on a schedule') +
+        ' · comparable to other provisional domains now, not to a settled score or to its own history</div>';
     }
 
     html += '<div class="sect"><div class="sect-title">Why this score</div>' +
       '<div class="trace">' +
         '<div class="trace-rule">' +
-          '<span class="trace-chip rule">rule ' + RISK_RULE + ' ' + RISK_RULE_VERSION + '</span>' +
+          // hub-045: prefer the ruleVersion the server reports over the mirrored constant.
+          '<span class="trace-chip rule">rule ' + RISK_RULE + ' ' + esc((state.risk && state.risk.ruleVersion) || RISK_RULE_VERSION) + '</span>' +
           '<span class="trace-chip engine">engine-decided · no LLM</span>' +
           '<span class="trace-chip">source ' + esc(dom.available === false ? 'unavailable' : ((state.risk && state.risk.source) || RISK_SOURCE)) + '</span>' +
         '</div>' +
@@ -856,15 +978,29 @@ a.lnk:hover { text-decoration:underline; }
         '<div class="trace-formula">score = <b>percentile</b> of raw activity (severity-weighted <b>signal density</b> × member-geo <b>exposure weight</b> × <b>time-decay</b>) vs this domain’s own trailing <b>30-day baseline</b>, banded to ' +
           '<span style="color:' + color + '">' + level + '</span>. ' +
           'HIGH 7–10 = worst decile of the trailing month (p90–p100) · ELEVATED 4–7 = busier than usual (p50–p90) · NORMAL 0–4 = at/below a typical month. ' +
-          'Guards: raw &lt; 4.0 caps display at 6.9 (quiet_cap) · raw &ge; 12.0 floors at 7.0 (crisis_floor) · baseline &lt; 168 pts = calibrating (v1 fallback).</div>' +
+          'Guards: raw &lt; 4.0 caps display at 6.9 (quiet_cap) · raw &ge; 12.0 floors at 7.0 (crisis_floor). ' +
+          'Where the 30-day baseline is not yet usable the engine scores on an absolute basis instead and marks the domain <b>PROVISIONAL</b> — ' +
+          'a provisional score is comparable to other provisional domains at the same instant, but not to a settled score nor to its own history.</div>' +
         '<div class="io-grid">' +
           '<div class="io"><span class="k">Raw activity (unclamped)</span><span class="v">' + raw + '</span></div>' +
           '<div class="io"><span class="k">Percentile</span><span class="v">' + pctl + (pctl !== '—' ? ' <small>vs 30d baseline</small>' : '') + '</span></div>' +
-          '<div class="io"><span class="k">Baseline size</span><span class="v">' + (baseN === null ? '—' : baseN + ' <small>hourly pts</small>') + '</span></div>' +
+          // hub-045 — the score-state contract, shown as checkable inputs.
+          '<div class="io"><span class="k">Score state</span><span class="v">' + esc(dst.state || '—') + '</span></div>' +
+          '<div class="io"><span class="k">Score basis</span><span class="v">' + esc(dst.scoreBasis || '—') + '</span></div>' +
+          '<div class="io"><span class="k">Baseline progress</span><span class="v">' +
+            (isNum(dst.progress) ? Math.round(dst.progress * 100) + '%' : (baseN === null ? '—' : baseN + ' <small>hourly pts</small>')) + '</span></div>' +
           '<div class="io"><span class="k">Contributing signals</span><span class="v">' + sigCount + '</span></div>' +
           '<div class="io"><span class="k">Effective (weighted)</span><span class="v">' + eff + '</span></div>' +
           '<div class="io"><span class="k">Member-geo weight</span><span class="v">' + gw + '</span></div>' +
           '<div class="io"><span class="k">Top exposed region</span><span class="v">' + esc(dom.geoRegion || 'global') + '</span></div>' +
+          // Traceability gate 2: WHEN it was computed (server clock, not the client's),
+          // and — while provisional — when it is expected to settle.
+          '<div class="io"><span class="k">Last computed</span><span class="v">' +
+            esc(RS ? RS.fmtUpdated(state.risk && state.risk.lastUpdated) : '—') + '</span></div>' +
+          (dst.provisional
+            ? '<div class="io"><span class="k">Settles</span><span class="v">' +
+                esc((RS && RS.fmtSettles(dst.settlesAt)) || 'when data recovers') + '</span></div>'
+            : '') +
         '</div>' +
       '</div>';
     if (sigCount === 0) {
