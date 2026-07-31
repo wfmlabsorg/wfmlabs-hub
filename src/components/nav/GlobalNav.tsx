@@ -3,26 +3,36 @@
 import React, { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { UserMenu } from './UserMenu'
+import { SURFACE_CHROME } from '@/lib/surface'
 
-const navLinks = [
-  { href: '/roc', label: 'ROC' },
-  { href: '/incidents', label: 'Incidents' },
-  { href: '/briefs', label: 'Briefs' },
-  { href: '/signals', label: 'Signals' },
-  { href: '/tools', label: 'Tools' },
-  { href: '/research', label: 'Research' },
-  { href: '/chat', label: 'Chat' },
-  { href: '/data-sources', label: 'APIs' },
-  { href: '/members', label: 'Members' },
-  { href: '/discussions', label: 'Discussions' },
-  { href: '/wiki', label: 'Docs' },
-  // /pricing removed 2026-07-15 (hub-032) — operating model being rethought; /pricing redirects to /.
-  // /debates retired 2026-06-23 (WFM-74) → redirects to /research. /articles suspended — reactivate when content strategy is ready.
-]
+// Community nav — the default, and the SINGLE definition of it. Lives in
+// `@/lib/surface` beside the travel-first set so the two can never drift.
+// /pricing removed 2026-07-15 (hub-032) — operating model being rethought; /pricing redirects to /.
+// /debates retired 2026-06-23 (WFM-74) → redirects to /research. /articles suspended — reactivate when content strategy is ready.
+const DEFAULT_NAV_LINKS = SURFACE_CHROME.community.navLinks
 
-export function GlobalNav() {
+/**
+ * Global navigation.
+ *
+ * PARAMETERISED, NOT FORKED (hub-047). travelrisk.wfmlabs.com renders this same
+ * component with a different link set and wordmark. Every prop defaults to the
+ * community value, so `<GlobalNav />` — which is what every community route
+ * still renders — is unchanged.
+ */
+export function GlobalNav({
+  links = DEFAULT_NAV_LINKS,
+  brand = SURFACE_CHROME.community.brand,
+  mark = SURFACE_CHROME.community.mark,
+  homeHref = SURFACE_CHROME.community.homeHref,
+}: {
+  links?: { href: string; label: string }[]
+  brand?: string
+  mark?: string
+  homeHref?: string
+} = {}) {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const navLinks = links
 
   return (
     <nav
@@ -48,7 +58,7 @@ export function GlobalNav() {
       >
         {/* Logo — HF-style: icon + wordmark */}
         <a
-          href="/"
+          href={homeHref}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -72,8 +82,8 @@ export function GlobalNav() {
             borderRadius: '6px',
             fontSize: '0.875rem',
             fontWeight: 800,
-          }}>W</span>
-          <span>WFM Labs</span>
+          }}>{mark}</span>
+          <span>{brand}</span>
         </a>
 
         {/* Desktop nav links */}
@@ -87,7 +97,9 @@ export function GlobalNav() {
           className="nav-desktop"
         >
           {navLinks.map((link) => {
-            const isActive = pathname === link.href || pathname.startsWith(link.href + '/')
+            // Compare against the path only — a link may carry a #hash anchor.
+            const base = link.href.split('#')[0]
+            const isActive = !!base && (pathname === base || pathname.startsWith(base + '/'))
             return (
               <a
                 key={link.href}
@@ -169,7 +181,9 @@ export function GlobalNav() {
           }}
         >
           {navLinks.map((link) => {
-            const isActive = pathname === link.href || pathname.startsWith(link.href + '/')
+            // Compare against the path only — a link may carry a #hash anchor.
+            const base = link.href.split('#')[0]
+            const isActive = !!base && (pathname === base || pathname.startsWith(base + '/'))
             return (
               <a
                 key={link.href}

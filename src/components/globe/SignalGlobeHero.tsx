@@ -49,7 +49,30 @@ interface FocusRequest {
   nonce: number
 }
 
-export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
+/**
+ * PARAMETERISED, NOT FORKED (hub-047). The travelrisk surface renders this same
+ * hero with travel-first copy and an opt-in ticker re-sort. Every prop defaults
+ * to the community value, so `<SignalGlobeHero mobile={…} />` — what the
+ * community landing still renders — is unchanged.
+ *
+ * `priorityCategories` REORDERS the ticker; it never filters. A surface that
+ * claims to monitor everything must not quietly hide a domain.
+ */
+export default function SignalGlobeHero({
+  mobile,
+  eyebrow = 'Live Signal Globe',
+  title = 'Real-time operational risk',
+  ctaHref = '/roc',
+  ctaLabel = 'Open full ROC ↗',
+  priorityCategories,
+}: {
+  mobile: boolean
+  eyebrow?: string
+  title?: string
+  ctaHref?: string
+  ctaLabel?: string
+  priorityCategories?: readonly string[]
+}) {
   const [signals, setSignals] = useState<GlobeSignal[]>([])
   const [incidents, setIncidents] = useState<GlobeIncident[]>([])
   const [focusedId, setFocusedId] = useState<number | null>(null)
@@ -158,7 +181,13 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   // Collapse geo-fan-out duplicates before they reach BOTH the ticker and the
   // globe: one real event = one row + one representative point (hub-014 Part 2.3).
   const dedupedSignals = dedupeSignalsByEvent(signals)
-  const tickerSignals = dedupedSignals.slice(0, TICKER_CAP)
+
+  // Opt-in priority re-sort (hub-047). Stable: rows keep newest-first order
+  // within a category band, and an unlisted category falls to the end rather
+  // than being dropped. Undefined prop → untouched community ordering.
+  const orderedSignals = prioritize(dedupedSignals, priorityCategories)
+
+  const tickerSignals = orderedSignals.slice(0, TICKER_CAP)
 
   // ── desktop: full-bleed Cesium hero + overlaid ticker ──
   if (!mobile) {
@@ -185,7 +214,14 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
           flyIntervalMs={TOUR_SPEED_FLY_INTERVAL[tourSpeed]}
         />
 
-        <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} />
+        <HeroOverlayHeader
+          incidentCount={incidents.length}
+          signalCount={dedupedSignals.length}
+          eyebrow={eyebrow}
+          title={title}
+          ctaHref={ctaHref}
+          ctaLabel={ctaLabel}
+        />
 
         <TourControl
           scope={tourScope}
@@ -239,7 +275,15 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <InlineGlobePlaceholder />
         </div>
-        <HeroOverlayHeader incidentCount={incidents.length} signalCount={dedupedSignals.length} compact />
+        <HeroOverlayHeader
+          incidentCount={incidents.length}
+          signalCount={dedupedSignals.length}
+          eyebrow={eyebrow}
+          title={title}
+          ctaHref={ctaHref}
+          ctaLabel={ctaLabel}
+          compact
+        />
         <a
           href="/roc/globe/globe.html"
           target="_blank"
@@ -278,15 +322,34 @@ export default function SignalGlobeHero({ mobile }: { mobile: boolean }) {
   )
 }
 
+/** Stable priority re-sort. Reorders only — an unlisted category falls to the
+ *  end, never out. Returns the input untouched when no priority is given. */
+function prioritize(rows: GlobeSignal[], priority?: readonly string[]): GlobeSignal[] {
+  if (!priority || priority.length === 0) return rows
+  const rank = new Map(priority.map((c, i) => [c.toLowerCase(), i]))
+  return rows
+    .map((s, i) => ({ s, i, r: rank.get((s.category || '').toLowerCase()) ?? Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.s)
+}
+
 // ── sub-components ──
 
 function HeroOverlayHeader({
   incidentCount,
   signalCount,
+  eyebrow,
+  title,
+  ctaHref,
+  ctaLabel,
   compact,
 }: {
   incidentCount: number
   signalCount: number
+  eyebrow: string
+  title: string
+  ctaHref: string
+  ctaLabel: string
   compact?: boolean
 }) {
   return (
@@ -320,11 +383,11 @@ function HeroOverlayHeader({
           }}
         >
           <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite' }} />
-          Live Signal Globe
+          {eyebrow}
         </div>
         {!compact && (
           <h1 style={{ margin: '0.35rem 0 0', fontSize: 'clamp(1.1rem, 2.4vw, 1.75rem)', fontWeight: 800, color: '#e2e8f0', lineHeight: 1.2 }}>
-            Real-time operational risk
+            {title}
           </h1>
         )}
         <div style={{ marginTop: '0.3rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -333,7 +396,7 @@ function HeroOverlayHeader({
         </div>
       </div>
       <a
-        href="/roc"
+        href={ctaHref}
         style={{
           pointerEvents: 'auto',
           flexShrink: 0,
@@ -347,7 +410,7 @@ function HeroOverlayHeader({
           textDecoration: 'none',
         }}
       >
-        Open full ROC ↗
+        {ctaLabel}
       </a>
     </div>
   )
