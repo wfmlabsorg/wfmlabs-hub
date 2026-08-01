@@ -157,20 +157,107 @@ function tally(rows: Record<string, unknown>[], key: string): Record<string, num
   return out
 }
 
+/**
+ * ── POLLING TALLIES (hub-049) ──────────────────────────────────────────────
+ *
+ * WHY THESE EXIST. hub-048 made an airport's STATE legible on the map. It did
+ * not make our POLLING of that airport legible: a reader could not tell, without
+ * clicking a marker, when we last looked at a field, nor whether a tier that
+ * claims a 15-minute cadence is actually being swept at one. "When did we last
+ * look" is the headline question on this surface, so the answer is published
+ * here — counted server-side, from the same rows the response carries, so a
+ * consumer quotes the pipeline instead of quoting itself.
+ *
+ * WHAT COUNTS AS "READ". A sweep row existing is NOT the same as a reading. The
+ * writer emits a row for every registry airport on every sweep, including ones
+ * it could not resolve — 109 of 272 today carry `obsStatus = 'unknown'`. So
+ * three distinct things are counted separately and never merged:
+ *
+ *   withReading  — swept, and the sweep came back with a usable status.
+ *   noReading    — swept, and it came back with nothing usable. We LOOKED and
+ *                  could not see. This is not the same as not looking, and it
+ *                  is not the same as fine.
+ *   unobserved   — no observation row at all. We did not look.
+ *
+ * This is a count of what was served, not a re-judgement of it. No status is
+ * inferred, none is defaulted, and `monitor_tier` is reported as the registry
+ * holds it — including a null tier, which lands in its own bucket rather than
+ * being quietly folded into tier 3.
+ */
+const USABLE_OBS_STATUS = new Set(['nominal', 'degraded', 'stopped', 'closed'])
+
+interface TierPolling {
+  count: number
+  withReading: number
+  noReading: number
+  unobserved: number
+  inLatestSweep: number
+  newest_observed_at: string | null
+  oldest_observed_at: string | null
+}
+
+function pollingByTier(
+  rows: Record<string, unknown>[],
+  latestSweepId: string | null,
+): Record<string, TierPolling> {
+  const out: Record<string, TierPolling> = {}
+  for (const r of rows) {
+    const tier = r.monitor_tier === null || r.monitor_tier === undefined ? 'null' : String(r.monitor_tier)
+    const t = (out[tier] ??= {
+      count: 0, withReading: 0, noReading: 0, unobserved: 0, inLatestSweep: 0,
+      newest_observed_at: null, oldest_observed_at: null,
+    })
+    t.count++
+
+    const observedAt = r.obsObservedAt as Date | null
+    if (!observedAt) {
+      t.unobserved++
+    } else {
+      const status = r.obsStatus === null || r.obsStatus === undefined ? '' : String(r.obsStatus).toLowerCase()
+      if (USABLE_OBS_STATUS.has(status)) t.withReading++
+      else t.noReading++
+
+      const iso = observedAt.toISOString()
+      if (t.newest_observed_at === null || iso > t.newest_observed_at) t.newest_observed_at = iso
+      if (t.oldest_observed_at === null || iso < t.oldest_observed_at) t.oldest_observed_at = iso
+    }
+
+    if (latestSweepId !== null && r.obsSweepId !== null && String(r.obsSweepId) === latestSweepId) {
+      t.inLatestSweep++
+    }
+  }
+  return out
+}
+
 export async function GET() {
   try {
     const pool = getPool()
     const result = await pool.query(AIRPORTS_SQL)
     const airports = result.rows
 
-    // Newest observation across the whole set — lets a consumer show how fresh
-    // the commercial-ops layer is as a whole, independently of any one
-    // airport's `obsObservedAt` (which may legitimately be older).
+    // Newest / oldest observation across the whole set — lets a consumer show
+    // how fresh the commercial-ops layer is as a whole, independently of any one
+    // airport's `obsObservedAt` (which may legitimately be older). The OLDEST is
+    // published alongside because a newest-only figure flatters us: one fresh
+    // field would make the whole plane look current.
     let newestObserved: Date | null = null
+    let oldestObserved: Date | null = null
+    let latestSweepId: string | null = null
+    const sweepIds = new Set<string>()
     for (const a of airports) {
       const t = a.obsObservedAt as Date | null
-      if (t && (newestObserved === null || t > newestObserved)) newestObserved = t
+      if (t) {
+        if (newestObserved === null || t > newestObserved) {
+          newestObserved = t
+          latestSweepId = a.obsSweepId === null || a.obsSweepId === undefined ? null : String(a.obsSweepId)
+        }
+        if (oldestObserved === null || t < oldestObserved) oldestObserved = t
+      }
+      if (a.obsSweepId !== null && a.obsSweepId !== undefined) sweepIds.add(String(a.obsSweepId))
     }
+
+    const byTier = pollingByTier(airports, latestSweepId)
+    const inLatestSweep = Object.values(byTier).reduce((n, t) => n + t.inLatestSweep, 0)
 
     return Response.json(
       {
@@ -178,7 +265,20 @@ export async function GET() {
         meta: {
           count: airports.length,
           newest_observed_at: newestObserved,
+          oldest_observed_at: oldestObserved,
           generatedAt: new Date().toISOString(),
+          // ── Polling shape (hub-049) ──────────────────────────────────────
+          // How recently, and how evenly, we actually looked. `distinctSweeps`
+          // + `inLatestSweep` together answer the question tier alone cannot:
+          // whether one sweep covered the whole registry or the tiers are
+          // genuinely being read on different clocks.
+          sweep: {
+            latest_sweep_id: latestSweepId,
+            distinct_sweeps: sweepIds.size,
+            in_latest_sweep: inLatestSweep,
+          },
+          monitor_tier: tally(airports, 'monitor_tier'),
+          polling_by_tier: byTier,
           // Observability / honesty breakdowns. These are counts of what was
           // returned, not a re-judgment of it — they make it checkable at a
           // glance that all three operational states and the `unknown` bucket

@@ -238,6 +238,12 @@ export default async function TravelRiskPage() {
         title="Operational risk, ranked by flight impact"
         ctaHref="/travelrisk#board"
         ctaLabel="See the risk board ↓"
+        // hub-049: this surface's globe is the AIRPORT globe (hub-048), not the
+        // region globe. The hero used to hardcode the community target, so the
+        // 272 airport anchors were unreachable from the page that owns them.
+        globeHref="/roc/globe/travel-globe.html"
+        globeLabel="🛫 Open the airport globe →"
+        globeCtaOnDesktop
         priorityCategories={TRAVELRISK_PRIORITY_CATEGORIES}
       />
 
