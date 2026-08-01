@@ -78,6 +78,46 @@
  reduce clutter, at any zoom, in any tier. Hiding a problem to tidy the map is
  the same lie in a different costume.
 
+ -----------------------------------------------------------------------------
+ hub-049 — POLLING IS LEGIBLE WITHOUT CLICKING
+ -----------------------------------------------------------------------------
+ hub-048 made an airport's STATE readable on the map. It did not make our
+ POLLING of that airport readable: the cadence and the freshness both lived in
+ the click panel, so at map level a Tier 1 field swept every 15 minutes looked
+ exactly like a Tier 3 field nobody has looked at since Tuesday.
+
+ Three additions, none of which touch the four-state model above:
+
+ 1. FRESHNESS ON THE MARKER. Age decays the NOMINAL disc only — 92% → 62% → 34%
+    fill — because "it was fine" is the one claim on this map with a clock on
+    it. It stays a FILLED TEAL DISC at every age, so the filled/hollow
+    distinction that carries the honesty rule is never blurred: a stale nominal
+    is a faded disc, an unchecked field is a slate ring, and those are different
+    shapes in different hues. A DEGRADED marker is never faded at any age — you
+    do not dim a problem because it is old.
+
+ 2. CADENCE IN WORDS, NOT A NUMBER. The legend says what each tier's cadence
+    actually is ("swept every 15 minutes", "only looked at when an event points
+    us there") instead of printing "T2" and leaving the reader to guess.
+
+ 3. WHAT THE LEGEND SAYS IS CHECKED AGAINST WHAT THE SWEEP DID. The tier
+    cadences above are DECLARED — a property of the registry, not a measurement.
+    So the page measures the served payload and prints the measurement beside
+    the claim. TODAY THEY DISAGREE: one sweep covers all 272 fields across all
+    three tiers at the same instant, so tier is currently a priority
+    classification and not an observed cadence. The page says so, in words,
+    derived on every refresh — it is self-clearing the moment the tiers really
+    do run on different clocks. Printing "Tier 3 · event-driven only" beside a
+    reading taken four minutes ago would be exactly the kind of unearned claim
+    this page exists to refuse.
+
+ A FOURTH THING WE NOW SAY OUT LOUD: being swept is not the same as being read.
+ The writer emits a row for every airport on every sweep, including ones it
+ could not resolve — 109 of 272 come back `obsStatus = 'unknown'`. Those are
+ "we looked and could not see", which is neither "we did not look" nor "it is
+ fine". They stay inside the UNKNOWN state (no fifth state is invented); the
+ census splits them out in words so the difference is visible.
+
  DENSITY — the known hazard (PR#10 / #11, centroid stacking)
  272 anchors smear if drawn all at once. Handled by zoom-dependent tier
  revelation (see TIER_ZOOM) plus a deterministic scatter for airports that
@@ -186,6 +226,37 @@
       display: inline-block; border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px;
       padding: 0 4px; font-size: 9px; color: #94a3b8; margin-right: 5px;
     }
+
+    /* ── hub-049: polling — cadence and freshness, at map level ───────────── */
+    /* Freshness swatches ARE the marker treatment: the same teal disc at the
+       same three alphas the globe draws, so the legend and the map cannot drift
+       apart in the reader's head. */
+    .sw-dot.fresh-0 { width: 8px; height: 8px; background: #18BC9C; opacity: 1; }
+    .sw-dot.fresh-1 { width: 8px; height: 8px; background: #18BC9C; opacity: 0.62; }
+    .sw-dot.fresh-2 { width: 8px; height: 8px; background: #18BC9C; opacity: 0.34; }
+
+    .tier-block { padding: 5px 0 3px; line-height: 1.45; }
+    .tier-block + .tier-block { border-top: 1px solid rgba(148, 163, 184, 0.09); }
+    .tier-say { color: #cbd5e1; }
+    .tier-did { color: #64748b; font-size: 9.5px; display: block; margin-top: 1px; }
+    .tier-n { color: #cbd5e1; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+    /* The "when did we last look" headline. Ted's whole purpose for this
+       platform is knowing first, so the sweep age is chrome-level information,
+       not a field in a panel. */
+    #tb-look {
+      display: flex; align-items: baseline; gap: 7px; white-space: nowrap;
+      padding: 1px 9px 1px 0; border-right: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    #tb-look .look-k {
+      color: #475569; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    #tb-look .look-v { font-size: 13px; font-weight: bold; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
+    #tb-look .look-abs { color: #64748b; font-size: 9.5px; }
+    .look-fresh { color: #18BC9C; }
+    .look-aging { color: #eab308; }
+    .look-stale { color: #ef4444; }
+    .look-none  { color: #94a3b8; }
 
     /* ── Right: the travel-first 12-domain board ─────────────────────────── */
     #boardpanel { top: 46px; right: 12px; width: 250px; max-height: calc(100vh - 64px); overflow-y: auto; }
@@ -313,6 +384,14 @@
 
   <div id="topbar">
     <span class="tb-brand">TRAVEL RISK GLOBE</span>
+    <!-- hub-049: "when did we last look" is the headline on this surface, so it
+         sits in the chrome, first, and re-renders on a 30 s clock of its own —
+         a freshness figure that itself goes stale would be self-defeating. -->
+    <span id="tb-look">
+      <span class="look-k">Last look</span>
+      <span class="look-v look-none" id="tb-look-v">—</span>
+      <span class="look-abs" id="tb-look-abs"></span>
+    </span>
     <span class="tb-sub" id="tb-census">loading airport plane…</span>
     <div id="tb-state-slot"></div>
     <span class="tb-spacer"></span>
@@ -352,7 +431,8 @@
       <div class="lg-row">
         <span class="lg-swatch"><i class="sw-ring unknown"></i></span>
         <span class="lg-txt"><b>UNKNOWN <span class="lg-count" id="ct-unknown">–</span></b>
-          <span>A feed exists; this reading is stale or absent. Hollow, never teal.</span></span>
+          <span>A feed exists; this reading is stale or absent. Hollow, never teal.
+            <b id="unk-split" style="display:block;color:#94a3b8;font-weight:400;"></b></span></span>
       </div>
       <div class="lg-row">
         <span class="lg-swatch"><i class="sw-ring nofeed"></i></span>
@@ -379,14 +459,38 @@
         The two axes are never collapsed into one colour.</div>
 
       <div class="lg-sep"></div>
-      <div class="lg-title">Monitor tier — confidence</div>
-      <div class="lg-row"><span class="lg-txt">
-        <span class="tier-pill">T1</span><span id="ct-t1">–</span> polled every 15&nbsp;min · always drawn<br>
-        <span class="tier-pill">T2</span><span id="ct-t2">–</span> revealed below 12,000&nbsp;km<br>
-        <span class="tier-pill">T3</span><span id="ct-t3">–</span> event-driven · revealed below 6,000&nbsp;km
-      </span></div>
-      <div class="lg-note">Tier 1 confidence is not Tier 3 confidence. Tier drives size and reveal
-        zoom — but a degraded or closed field is never hidden to tidy the map.</div>
+      <div class="lg-title">Freshness — when did we last look</div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-dot fresh-0"></i></span>
+        <span class="lg-txt"><b>FRESH <span class="lg-count" id="ct-fresh">–</span></b>
+          <span>Checked in the last 45&nbsp;min — three sweeps of the 15-minute clock.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-dot fresh-1"></i></span>
+        <span class="lg-txt"><b>AGING <span class="lg-count" id="ct-aging">–</span></b>
+          <span>45&nbsp;min to 6&nbsp;h old. Still a check; no longer a current one.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-dot fresh-2"></i></span>
+        <span class="lg-txt"><b>STALE <span class="lg-count" id="ct-stale">–</span></b>
+          <span>Older than 6&nbsp;h. Faded, and its label drops to slate.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-ring unknown"></i></span>
+        <span class="lg-txt"><b>NO CHECK TIME HELD <span class="lg-count" id="ct-noread">–</span></b>
+          <span>Neither a sweep nor an operational check carries a time for this field.
+            Already hollow — there is nothing to fade.</span></span>
+      </div>
+      <div class="lg-note">Age fades a NOMINAL disc only, because &ldquo;it was fine&rdquo; is the one
+        claim here with a clock on it. It stays a filled teal disc at every age — a faded disc is
+        never a hollow ring. A degraded field is never faded: you do not dim a problem for being old.</div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">Monitor tier — the cadence, in words</div>
+      <div id="tier-blocks"><span class="lg-txt"><span>loading…</span></span></div>
+      <div id="cadence-notice"></div>
+      <div class="lg-note">Tier drives marker size and the zoom a field appears at — but a degraded
+        or closed field is never hidden to tidy the map.</div>
 
       <div class="lg-sep"></div>
       <div class="lg-title">Feed coverage — measured, not assumed</div>
@@ -424,10 +528,12 @@
     </div>
   </div>
 
+  <!-- Tier steps carry the DECLARED cadence on hover (hub-049): a bare "TIER 2"
+       is a number a reader has to look up, which is why nobody did. -->
   <div id="zoombar">
-    <span class="zb-step on" id="zb-1"><i class="zb-led"></i>TIER 1 <b id="zb-1n">–</b></span>
-    <span class="zb-step" id="zb-2"><i class="zb-led"></i>TIER 2 <b id="zb-2n">–</b></span>
-    <span class="zb-step" id="zb-3"><i class="zb-led"></i>TIER 3 <b id="zb-3n">–</b></span>
+    <span class="zb-step on" id="zb-1" title="Tier 1 — declared: swept every 15 minutes"><i class="zb-led"></i>TIER 1 <b id="zb-1n">–</b></span>
+    <span class="zb-step" id="zb-2" title="Tier 2 — declared: swept on a low-cadence rotation"><i class="zb-led"></i>TIER 2 <b id="zb-2n">–</b></span>
+    <span class="zb-step" id="zb-3" title="Tier 3 — declared: only looked at when an event points us there"><i class="zb-led"></i>TIER 3 <b id="zb-3n">–</b></span>
     <span class="zb-hint" id="zb-hint">zoom in to reveal more</span>
   </div>
 
@@ -682,6 +788,87 @@ function degradedColor(a) {
 }
 
 /* ===========================================================================
+ * 1b. FRESHNESS — the second axis of "do we actually know this?"  (hub-049)
+ *
+ * opClass() answers "did we check, and what did we find". It says nothing about
+ * WHEN. A field checked four minutes ago and a field checked last Tuesday both
+ * come out NOMINAL, and until now they drew identically.
+ *
+ * Freshness is deliberately NOT a fifth state and NOT a re-classification. An
+ * old nominal reading is still a nominal reading — demoting it to UNKNOWN would
+ * be inventing a rule the pipeline does not hold, and hub-048's four-state model
+ * is the contract. So freshness DISCLOSES rather than reclassifies: it decays
+ * the alpha of the nominal disc and drops the label to slate, while the marker
+ * stays a filled teal disc that no reader can confuse with a hollow slate ring.
+ *
+ * Thresholds are anchored to the writer's real cadence: sweeps land every 15
+ * minutes (sweep ids are minute-bucketed, e.g. "2026-08-01T17:30Z"), so FRESH is
+ * three sweeps' grace and anything past a quarter-day is stale.
+ * ======================================================================== */
+var FRESH = { FRESH: 'fresh', AGING: 'aging', STALE: 'stale', NONE: 'none' };
+var FRESH_MS = { FRESH: 45 * 60 * 1000, AGING: 6 * 60 * 60 * 1000 };
+/* Observation statuses that constitute a READING. A sweep row exists for every
+ * airport on every sweep, including ones the writer could not resolve — those
+ * come back `unknown`. Swept is not read, and the two are never conflated. */
+var OBS_READABLE = ['nominal', 'degraded', 'stopped', 'closed'];
+
+/** The timestamp that LICENCED this marker's claim, whichever axis carried it.
+ *
+ *  opClass() reaches NOMINAL down two roads: an observation that came back
+ *  nominal WITH a time, or a controlling state saying "open" WITH a time. Both
+ *  require a clock, so both have an age, and freshness must read whichever one
+ *  actually did the work. Keying on obsObservedAt alone would draw a field whose
+ *  only check was an operational reading from last week at full strength —
+ *  faded-because-old is precisely the treatment such a field has earned. */
+function checkedAt(a) {
+  return a.obsObservedAt || a.operational_checked_at || null;
+}
+/** Age of that check, in ms — or null if we hold no check time at all. */
+function obsAgeMs(a) {
+  var t = toDate(checkedAt(a));
+  if (!t) return null;
+  var ms = Date.now() - t.getTime();
+  return ms < 0 ? 0 : ms;   // a clock-skewed future stamp is treated as "now", never as ancient
+}
+function freshClass(a) {
+  var ms = obsAgeMs(a);
+  if (ms == null) return FRESH.NONE;
+  if (ms <= FRESH_MS.FRESH) return FRESH.FRESH;
+  if (ms <= FRESH_MS.AGING) return FRESH.AGING;
+  return FRESH.STALE;
+}
+/** True when the sweep touched this field AND came back with something usable. */
+function hasReading(a) {
+  return !!a.obsObservedAt && OBS_READABLE.indexOf((str(a.obsStatus) || '').toLowerCase()) !== -1;
+}
+/** Fill alpha for a NOMINAL disc. Floored at 0.34 and always paired with a teal
+ *  outline, so the faintest fresh-lie a stale reading can tell is still visibly
+ *  a FILLED TEAL DISC and not the hollow slate ring that means "not checked". */
+function nominalAlpha(f) {
+  if (f === FRESH.AGING) return 0.62;
+  if (f === FRESH.STALE) return 0.34;
+  // NONE should be unreachable for a nominal marker — opClass() will not return
+  // NOMINAL without a timestamp. It is floored anyway rather than defaulted to
+  // full strength: if that invariant ever breaks, the failure should show as
+  // minimum confidence, not maximum.
+  if (f === FRESH.NONE) return 0.34;
+  return 0.92;
+}
+/** Plain-words age, for the chrome headline and the tooltip. */
+function freshWords(f) {
+  return f === FRESH.FRESH ? 'fresh' : f === FRESH.AGING ? 'aging' : f === FRESH.STALE ? 'stale' : 'no check time held';
+}
+
+/* ── DECLARED cadence per tier. This is what the REGISTRY intends, not what the
+ *    pipeline was measured doing. The distinction matters enough that the two
+ *    are printed side by side and reconciled in renderCadence() below. ─────── */
+var TIER_CADENCE = {
+  1: 'swept every 15 minutes',
+  2: 'swept on a low-cadence rotation',
+  3: 'only looked at when an event points us there'
+};
+
+/* ===========================================================================
  * 2. TRAVEL-FIRST DOMAIN ORDER
  *
  * DUPLICATED, KNOWINGLY, from src/lib/travelrisk/domains.ts (hub-047), because
@@ -829,7 +1016,16 @@ function coreSize(a) {
 }
 
 function buildAirportEntities() {
-  var counts = { degraded: 0, nominal: 0, unknown: 0, nofeed: 0, adv: 0, advWide: 0, advUnknown: 0, t1: 0, t2: 0, t3: 0 };
+  var counts = {
+    degraded: 0, nominal: 0, unknown: 0, nofeed: 0, adv: 0, advWide: 0, advUnknown: 0,
+    // hub-049 — the polling census. The old flat t1/t2/t3 counters are gone:
+    // `tier` below supersedes them, because a bare per-tier headcount was
+    // exactly the number that told a reader nothing. `read` / `swept` / `unswept` are three
+    // different facts and are counted as three: a sweep row is not a reading.
+    fresh: 0, aging: 0, stale: 0, noread: 0,
+    read: 0, sweptNoReading: 0, unswept: 0,
+    tier: {}
+  };
 
   airports.forEach(function (a, idx) {
     if (a._lat == null || a._lon == null) return;
@@ -838,7 +1034,23 @@ function buildAirportEntities() {
     var cls = a._op, adv = a._adv, size = coreSize(a);
 
     counts[cls]++;
-    counts['t' + a._tier]++;
+
+    // ── polling census (hub-049) ──
+    counts[a._fresh === FRESH.NONE ? 'noread' : a._fresh]++;
+    if (!a.obsObservedAt) counts.unswept++;
+    else if (a._hasReading) counts.read++;
+    else counts.sweptNoReading++;
+
+    var tb = counts.tier[a._tier] || (counts.tier[a._tier] = {
+      count: 0, read: 0, sweptNoReading: 0, unswept: 0, fresh: 0, newestMs: null
+    });
+    tb.count++;
+    if (!a.obsObservedAt) tb.unswept++;
+    else if (a._hasReading) tb.read++;
+    else tb.sweptNoReading++;
+    if (a._fresh === FRESH.FRESH) tb.fresh++;
+    var ageMs = obsAgeMs(a);
+    if (ageMs != null && (tb.newestMs === null || ageMs < tb.newestMs)) tb.newestMs = ageMs;
     if (adv === ADV.IN_FORCE) { counts.adv++; if (advIsWideArea(a)) counts.advWide++; }
     if (adv === ADV.UNKNOWN) counts.advUnknown++;
 
@@ -900,8 +1112,15 @@ function buildAirportEntities() {
       outline = Cesium.Color.fromCssColorString(degradedColor(a)).withAlpha(0.5);
       outlineW = 2;
     } else if (cls === OP.NOMINAL) {
-      fill = Cesium.Color.fromCssColorString(C_NOMINAL).withAlpha(0.9);
-      outline = Cesium.Color.fromCssColorString(C_NOMINAL).withAlpha(0.35);
+      // FRESHNESS LIVES HERE AND NOWHERE ELSE ON THE MARKER (hub-049).
+      // The fill fades with the age of the reading; the OUTLINE deliberately
+      // does not, and gets *stronger* as the fill weakens. That keeps the disc
+      // reading as a disc: the four-state model turns on filled-vs-hollow, and
+      // a stale nominal must never decay into something a reader could take for
+      // the slate ring that means "we did not check".
+      fill = Cesium.Color.fromCssColorString(C_NOMINAL).withAlpha(nominalAlpha(a._fresh));
+      outline = Cesium.Color.fromCssColorString(C_NOMINAL)
+        .withAlpha(a._fresh === FRESH.FRESH ? 0.35 : 0.75);
       outlineW = 1;
     } else if (cls === OP.UNKNOWN) {
       // HOLLOW. Transparent fill is the entire point — a ring is a different
@@ -931,8 +1150,13 @@ function buildAirportEntities() {
         // "there is nothing here", and it is never left to colour alone.
         text: (cls === OP.NOFEED ? '× ' : '') + (a.iata || a.icao || ''),
         font: (a._tier === 1 ? 'bold 11px ' : '10px ') + '"JetBrains Mono", monospace',
+        // A stale nominal's LABEL drops to the slate the page uses everywhere
+        // for the confidence axis — a second, redundant channel saying "this is
+        // old", so the reading does not rest on an alpha step alone. The state
+        // it claims is unchanged; only our confidence in its currency is.
         fillColor: Cesium.Color.fromCssColorString(
-          cls === OP.DEGRADED ? '#f8fafc' : (cls === OP.NOMINAL ? '#cbd5e1' : C_UNKNOWN)
+          cls === OP.DEGRADED ? '#f8fafc'
+            : (cls === OP.NOMINAL ? (a._fresh === FRESH.STALE ? C_UNKNOWN : '#cbd5e1') : C_UNKNOWN)
         ),
         outlineColor: Cesium.Color.BLACK,
         outlineWidth: 3,
@@ -1033,6 +1257,11 @@ function normaliseAirport(raw) {
   a._tier = (t === 1 || t === 2 || t === 3) ? t : 3;   // unknown tier is treated as the weakest
   a._op = opClass(a);
   a._adv = advClass(a);
+  // hub-049. Computed at build time, not on a per-frame callback: entities are
+  // rebuilt wholesale every 5 minutes anyway, and the narrowest bucket boundary
+  // is 45 minutes, so a frame-accurate age would buy nothing but GPU work.
+  a._fresh = freshClass(a);
+  a._hasReading = hasReading(a);
 
   a._depMedian = num(raw.obsDeparturesMedianDelayMin);
   a._arrMedian = num(raw.obsArrivalsMedianDelayMin);
@@ -1097,6 +1326,14 @@ function showUnavailable(title, bodyHtml) {
   document.getElementById('un-body').innerHTML = bodyHtml;
   el.classList.add('show');
   document.getElementById('tb-census').textContent = 'airport plane unavailable';
+  // The headline must go with it. A "last look" figure left standing beside an
+  // unreachable plane would keep asserting a freshness we can no longer vouch
+  // for — the failure mode this page exists to refuse, in the chrome.
+  lastLook = { newest: null, sweep: null };
+  var vEl = document.getElementById('tb-look-v');
+  var aEl = document.getElementById('tb-look-abs');
+  if (vEl) { vEl.textContent = 'unknown'; vEl.className = 'look-v look-none'; }
+  if (aEl) aEl.textContent = 'the airport plane could not be read';
 }
 
 /** The census. Every number here is counted from the payload we actually drew,
@@ -1118,9 +1355,11 @@ function renderCensus(c, scattered) {
       : (c.advWide > 0 ? c.advWide + ' of ' + c.adv + ' are wider than the airfield.' : '');
     wideNote.style.color = '#94a3b8';
   }
-  set('ct-t1', c.t1);
-  set('ct-t2', c.t2);
-  set('ct-t3', c.t3);
+  // ── hub-049: the polling census ──
+  set('ct-fresh', c.fresh);
+  set('ct-aging', c.aging);
+  set('ct-stale', c.stale);
+  set('ct-noread', c.noread);
 
   var meta = airportMeta || {};
   var total = num(meta.count) != null ? num(meta.count) : airports.length;
@@ -1128,11 +1367,30 @@ function renderCensus(c, scattered) {
   var newest = pick(meta, 'newest_observed_at', 'newestObservedAt');
   var gen = pick(meta, 'generatedAt', 'generated_at');
 
+  // Being swept is not being read. The UNKNOWN bucket contains both, and the
+  // difference is operationally large — "we looked and could not see" is a fact
+  // about the feed, "we never looked" is a fact about our coverage.
+  var unkEl = document.getElementById('unk-split');
+  if (unkEl) {
+    unkEl.textContent = c.sweptNoReading > 0 || c.unswept > 0
+      ? (c.sweptNoReading + ' were swept but returned no usable reading; ' +
+         c.unswept + ' hold no observation at all.')
+      : '';
+  }
+
   document.getElementById('tb-census').innerHTML =
     esc(total) + ' airports · <b style="color:#cbd5e1">' + esc(checked) + '</b> checked · ' +
-    '<b style="color:#94a3b8">' + esc(c.unknown + c.nofeed) + '</b> not checked' +
-    (newest ? ' · newest observation ' + esc(fmtChecked(newest) || newest) : '') +
+    '<b style="color:#94a3b8">' + esc(c.unknown + c.nofeed) + '</b> not checked · ' +
+    '<b style="color:#cbd5e1">' + esc(c.read) + '</b> read · ' +
+    '<b style="color:#94a3b8">' + esc(c.sweptNoReading) + '</b> swept, nothing usable · ' +
+    '<b style="color:#94a3b8">' + esc(c.unswept) + '</b> unswept' +
     (gen ? ' · served ' + esc(fmtAbs(gen) || gen) : '');
+
+  // The headline. Stored, then rendered on its own 30 s clock (see tickLastLook)
+  // so the age keeps counting between the 5-minute payload refreshes.
+  lastLook = { newest: newest, sweep: (meta.sweep && meta.sweep.latest_sweep_id) || null };
+  renderLastLook();
+  renderCadence(c, meta);
 
   // ── Coverage. The endpoint publishes a measured tally; it is preferred over
   //    a client-side recount so the legend quotes the pipeline rather than
@@ -1177,6 +1435,127 @@ function renderCensus(c, scattered) {
     '<span style="color:#64748b;font-style:italic">no tallies served</span>';
 
   renderAxisNotice(meta, total);
+}
+
+/* ── hub-049: "WHEN DID WE LAST LOOK" — the headline ────────────────────────
+ *
+ * Ted's purpose for this platform is knowing FIRST, so the age of the newest
+ * observation is chrome, at the front, in a size you read without meaning to.
+ * It is re-rendered every 30 s off the stored timestamp rather than only on the
+ * 5-minute payload refresh: a freshness figure that is itself stale would be a
+ * small joke at the reader's expense.
+ *
+ * `newest` is the freshest reading anywhere in the plane, which is the most
+ * flattering number available — so the legend beneath it always carries the
+ * per-tier and per-state breakdown, and this figure is never the only one shown.
+ */
+var lastLook = { newest: null, sweep: null };
+
+function renderLastLook() {
+  var vEl = document.getElementById('tb-look-v');
+  var aEl = document.getElementById('tb-look-abs');
+  if (!vEl || !aEl) return;
+
+  if (!lastLook.newest) {
+    vEl.textContent = 'never';
+    vEl.className = 'look-v look-none';
+    aEl.textContent = 'no observation is held for any field';
+    return;
+  }
+  var t = toDate(lastLook.newest);
+  var ms = t ? Date.now() - t.getTime() : null;
+  var cls = ms == null ? FRESH.NONE
+    : (ms <= FRESH_MS.FRESH ? FRESH.FRESH : ms <= FRESH_MS.AGING ? FRESH.AGING : FRESH.STALE);
+
+  vEl.textContent = fmtAgo(lastLook.newest) || 'time not held';
+  vEl.className = 'look-v look-' + cls;
+  aEl.textContent = (fmtAbs(lastLook.newest) || '') +
+    (lastLook.sweep ? '  ·  sweep ' + lastLook.sweep : '');
+}
+
+/** The tier legend — cadence in words, and the sweep that was actually observed.
+ *
+ *  TIER_CADENCE is DECLARED: it describes what the registry intends, and the
+ *  registry can be wrong or aspirational. So each tier prints its declared
+ *  cadence and, underneath, what the served payload measurably shows. Where the
+ *  two disagree the disagreement is stated in words rather than resolved
+ *  silently in favour of the claim.
+ *
+ *  Counts prefer meta.polling_by_tier — the endpoint's own server-side tally —
+ *  over a client recount, so the legend quotes the pipeline rather than quoting
+ *  itself. The client counts are the fallback, and the ages are always derived
+ *  from the served timestamps because an age must move with the clock. */
+function renderCadence(c, meta) {
+  var el = document.getElementById('tier-blocks');
+  if (!el) return;
+  var served = (meta && meta.polling_by_tier) || null;
+  var html = '';
+
+  [1, 2, 3].forEach(function (t) {
+    var s = served && served[String(t)];
+    var local = (c.tier && c.tier[t]) || null;
+    if (!s && !local) return;
+
+    var count = s ? num(s.count) : local.count;
+    var read = s ? num(s.withReading) : local.read;
+    var noRead = s ? num(s.noReading) : local.sweptNoReading;
+    var unswept = s ? num(s.unobserved) : local.unswept;
+    var newest = s ? s.newest_observed_at : null;
+    var ageTxt = newest ? fmtAgo(newest)
+      : (local && local.newestMs != null ? fmtAgo(new Date(Date.now() - local.newestMs).toISOString()) : null);
+
+    html +=
+      '<div class="tier-block">' +
+        '<span class="tier-pill">T' + t + '</span> ' +
+        '<span class="tier-n">' + esc(count) + '</span> fields · ' +
+        '<span class="tier-say">' + esc(TIER_CADENCE[t]) + '</span>' +
+        '<span class="tier-did">observed: ' + esc(read) + ' read · ' + esc(noRead) +
+          ' swept with nothing usable · ' + esc(unswept) + ' unswept' +
+          (ageTxt ? ' · newest ' + esc(ageTxt) : ' · no reading held') + '</span>' +
+      '</div>';
+  });
+
+  el.innerHTML = html || '<span class="lg-txt"><span>no tier data served</span></span>';
+  renderCadenceNotice(c, meta);
+}
+
+/** Declared cadence vs measured sweep. Derived on every refresh, so it clears
+ *  itself the moment the tiers genuinely run on different clocks — nothing here
+ *  is a hardcoded caveat with a date on it.
+ *
+ *  TODAY THIS FIRES: one sweep covers all 272 fields across all three tiers at
+ *  the same instant, which means monitor_tier is currently a PRIORITY
+ *  CLASSIFICATION and not an observed cadence. Leaving "Tier 3 · event-driven
+ *  only" standing unqualified beside a four-minute-old reading would be a claim
+ *  about our own operation that the data does not support — the same species of
+ *  error as drawing an unchecked airport calm, pointed at ourselves. */
+function renderCadenceNotice(c, meta) {
+  var el = document.getElementById('cadence-notice');
+  if (!el) return;
+  el.innerHTML = '';
+
+  var sweep = meta && meta.sweep;
+  var total = num(meta && meta.count) != null ? num(meta.count) : airports.length;
+  if (!sweep) return;
+
+  var distinct = num(sweep.distinct_sweeps);
+  var inLatest = num(sweep.in_latest_sweep);
+  // The tiers are only demonstrably on ONE clock when a single sweep accounts
+  // for the whole registry. Anything less and we say nothing — an inference
+  // from partial evidence is not worth the words.
+  if (distinct !== 1 || inLatest == null || total == null || inLatest < total) return;
+
+  el.innerHTML =
+    '<div style="border-left:2px solid ' + C_UNKNOWN + ';background:rgba(148,163,184,0.07);' +
+    'padding:7px 9px;margin:8px 0 2px;font-size:10px;line-height:1.55;color:#94a3b8;">' +
+    '<b style="color:#cbd5e1;display:block;letter-spacing:.06em;">DECLARED CADENCE, NOT AN OBSERVED ONE</b>' +
+    'The cadences above are what the registry declares. What the payload actually shows is a ' +
+    '<b>single sweep</b> (<code>' + esc(str(sweep.latest_sweep_id) || 'id not held') + '</code>) covering all ' +
+    esc(total) + ' fields across all three tiers at the same instant. So tier is today a ' +
+    '<b>priority classification</b>, not a measured polling rate, and a Tier 3 field is being read ' +
+    'just as recently as a Tier 1 one. This notice is derived on every refresh and disappears by ' +
+    'itself once the tiers genuinely run on different clocks.' +
+    '</div>';
 }
 
 /** An entire axis with no values is a coverage fact, and it is stated in words
@@ -1345,8 +1724,14 @@ if (viewer) {
 
     tooltip.querySelector('.tt-code').textContent =
       (a.iata ? a.iata + ' / ' : '') + (a.icao || '') + '  ·  T' + a._tier;
-    tooltip.querySelector('.tt-name').textContent =
-      (a.name || '') + (a.country ? ' — ' + a.country : '');
+    // hub-049: the tier's cadence in WORDS on hover. "T3" told a reader nothing;
+    // "only looked at when an event points us there" tells them what the marker
+    // is worth. Labelled `declared` because that is what it is — see the
+    // reconciliation note in the legend.
+    tooltip.querySelector('.tt-name').innerHTML =
+      esc((a.name || '') + (a.country ? ' — ' + a.country : '')) +
+      '<span style="display:block;color:#475569;">Tier ' + a._tier + ' · declared: ' +
+      esc(TIER_CADENCE[a._tier] || 'cadence not declared') + '</span>';
 
     var stEl = tooltip.querySelector('.tt-state');
     var whenEl = tooltip.querySelector('.tt-when');
@@ -1361,8 +1746,11 @@ if (viewer) {
       stEl.textContent = 'NOMINAL — checked, operating normally';
       stEl.style.color = C_NOMINAL;
       // The timestamp is the entire licence for showing this as fine, so it
-      // rides the tooltip and is never left to the detail panel alone.
-      whenEl.textContent = 'checked ' + (fmtChecked(a.obsObservedAt || a.operational_checked_at) || 'time not held');
+      // rides the tooltip and is never left to the detail panel alone. hub-049
+      // adds the age BAND in words next to it: the marker's fade already says
+      // "old", and the hover says how old without arithmetic.
+      whenEl.textContent = 'checked ' + (fmtChecked(a.obsObservedAt || a.operational_checked_at) || 'time not held') +
+        (a._fresh === FRESH.AGING || a._fresh === FRESH.STALE ? '  ·  ' + freshWords(a._fresh).toUpperCase() : '');
     } else if (a._op === OP.NOFEED) {
       stEl.textContent = 'NOT CHECKED — no feed exists';
       stEl.style.color = C_UNKNOWN;
@@ -1524,6 +1912,19 @@ function showTrace(a) {
     kv('status', held(a.obsStatus, 'no observation held')) +
     kv('status reason', held(a.obsStatusReason, 'no reason recorded')) +
     kv('observed at', held(fmtChecked(a.obsObservedAt), 'no observation held')) +
+    // hub-049 — the age band the marker is drawn from, named, so a reader can
+    // check the fade against the rule rather than trusting their eye for alpha.
+    kv('freshness', a._fresh === FRESH.NONE
+      ? '<span class="tr-v unknown">no check time held — neither the sweep nor the operational axis carries one</span>'
+      : '<span style="color:' + (a._fresh === FRESH.FRESH ? C_NOMINAL : C_UNKNOWN) + '">' +
+        esc(freshWords(a._fresh).toUpperCase()) + '</span> <span class="dim">— measured from ' +
+        (a.obsObservedAt ? 'the observation' : 'the operational check') +
+        ' · fresh &le; 45 min · aging &le; 6 h · stale beyond</span>') +
+    kv('reading', a._hasReading
+      ? 'usable — the sweep resolved this field'
+      : (a.obsObservedAt
+        ? '<span class="tr-v unknown">none — the sweep touched this field and returned nothing usable. That is not the same as not looking, and not the same as fine.</span>'
+        : '<span class="tr-v unknown">none — this field was not swept</span>')) +
     kv('source', held(a.obsSource, 'no source recorded')) +
     kv('sweep id', held(a.obsSweepId, 'not held'), 'dim') +
     kv('departures', cnt(a._depTotal) + (a._depQual != null ? ' <span class="dim">· ' + esc(a._depQual) + ' qualified</span>' : '')) +
@@ -1602,6 +2003,10 @@ if (viewer) {
   }, 5 * 60 * 1000);
   setInterval(fetchOpRisk, 10 * 60 * 1000);
   setInterval(fetchSignals, 5 * 60 * 1000);
+
+  // hub-049. The headline age advances on its own clock, between payload
+  // refreshes. Cheap — it re-reads one stored timestamp and writes two nodes.
+  setInterval(renderLastLook, 30 * 1000);
 }
 </script>
 </body>

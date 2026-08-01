@@ -57,6 +57,23 @@ interface FocusRequest {
  *
  * `priorityCategories` REORDERS the ticker; it never filters. A surface that
  * claims to monitor everything must not quietly hide a domain.
+ *
+ * ── hub-049: the globe CTA is a PROP now, not a constant ───────────────────
+ * `globeHref` / `globeLabel` used to be hardcoded to the community globe. This
+ * component renders on BOTH surfaces, so travelrisk.wfmlabs.com's "view the
+ * globe" button was sending visitors to /roc/globe/globe.html — the region
+ * globe, which has no airports on it. The airport globe existed and shipped
+ * (hub-048); it was simply unreachable from the surface that owns it.
+ *
+ * The defaults below are the community values verbatim, so
+ * `<SignalGlobeHero mobile={…} />` on community.wfmlabs.com resolves to exactly
+ * the link it has always resolved to.
+ *
+ * `globeCtaOnDesktop` exists because the pill was mobile-only: on desktop the
+ * hero's single CTA is `ctaHref`, and travelrisk points that at its own risk
+ * board. Without this the desktop visitor — which is how Ted reads it — still
+ * has no route to the airports. It defaults to `false`, so community's desktop
+ * hero gains nothing and loses nothing.
  */
 export default function SignalGlobeHero({
   mobile,
@@ -64,6 +81,9 @@ export default function SignalGlobeHero({
   title = 'Real-time operational risk',
   ctaHref = '/roc',
   ctaLabel = 'Open full ROC ↗',
+  globeHref = '/roc/globe/globe.html',
+  globeLabel = '🌍 View live globe →',
+  globeCtaOnDesktop = false,
   priorityCategories,
 }: {
   mobile: boolean
@@ -71,6 +91,9 @@ export default function SignalGlobeHero({
   title?: string
   ctaHref?: string
   ctaLabel?: string
+  globeHref?: string
+  globeLabel?: string
+  globeCtaOnDesktop?: boolean
   priorityCategories?: readonly string[]
 }) {
   const [signals, setSignals] = useState<GlobeSignal[]>([])
@@ -230,6 +253,10 @@ export default function SignalGlobeHero({
           onSpeed={handleSpeed}
         />
 
+        {/* Opt-in on desktop (hub-049). Community does not pass it, so its
+            desktop hero is byte-for-byte what it was. */}
+        {globeCtaOnDesktop && <GlobeCta href={globeHref} label={globeLabel} />}
+
         {/* ticker rail (right) */}
         <div
           style={{
@@ -284,28 +311,7 @@ export default function SignalGlobeHero({
           ctaLabel={ctaLabel}
           compact
         />
-        <a
-          href="/roc/globe/globe.html"
-          target="_blank"
-          rel="noopener"
-          style={{
-            position: 'absolute',
-            bottom: '0.75rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: '#22d3ee',
-            background: 'rgba(6,10,22,0.85)',
-            border: '1px solid rgba(34,211,238,0.3)',
-            borderRadius: '999px',
-            padding: '0.4rem 1rem',
-            textDecoration: 'none',
-            zIndex: 5,
-          }}
-        >
-          🌍 View live globe →
-        </a>
+        <GlobeCta href={globeHref} label={globeLabel} />
       </div>
       <div style={{ background: 'rgba(6,10,22,0.6)', borderTop: '1px solid var(--border)' }}>
         <TickerHeader />
@@ -413,6 +419,35 @@ function HeroOverlayHeader({
         {ctaLabel}
       </a>
     </div>
+  )
+}
+
+/** The "open the globe" pill. One definition, two surfaces, one target that is
+ *  now told to it rather than baked into it (hub-049). */
+function GlobeCta({ href, label }: { href: string; label: string }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener"
+      style={{
+        position: 'absolute',
+        bottom: '0.75rem',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        fontSize: '0.8rem',
+        fontWeight: 600,
+        color: '#22d3ee',
+        background: 'rgba(6,10,22,0.85)',
+        border: '1px solid rgba(34,211,238,0.3)',
+        borderRadius: '999px',
+        padding: '0.4rem 1rem',
+        textDecoration: 'none',
+        zIndex: 5,
+      }}
+    >
+      {label}
+    </a>
   )
 }
 
