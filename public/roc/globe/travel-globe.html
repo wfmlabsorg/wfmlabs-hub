@@ -1,0 +1,1608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Travel Risk Globe — airports as anchors</title>
+  <meta name="roc-version" content="1.0.0">
+  <meta name="roc-task" content="hub-048">
+  <script src="/roc/roc-config.js"></script>
+  <!-- hub-045: op-risk PROVISIONAL/SETTLED score-state (api-065 contract). REUSED, not reimplemented. -->
+  <script src="/roc/roc-score-state.js"></script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+<!--
+=============================================================================
+ TRAVEL RISK GLOBE (hub-048)  —  travelrisk.wfmlabs.com
+=============================================================================
+
+ WHAT THIS IS, AND WHAT IT IS NOT
+
+ This is a SIBLING of /roc/globe/globe.html, not a rewrite of it and not a fork
+ of it. globe.html is live, members use it, and it is untouched by this task.
+ The two share an idiom (Cesium 1.124, RocConfig, RocScoreState, the Mission
+ Control palette) and deliberately share nothing else.
+
+ THE INVERSION — the whole point of the task
+ globe.html anchors on REGIONS and signal geography: you drill macro → sub →
+ metro and signals are plotted where they happened. Here, AIRPORTS are the
+ primary objects. There are 272 of them, they never move, and everything else
+ on the map — signals, the 12-domain index — is context arranged around them.
+
+ THE HONESTY RULE (01-Source/TRAVELRISK-SITE-SPEC.md §3, and the ring spec it
+ carries over) — this is the heart of the page, not a detail of it:
+
+   An airport we did not check must NEVER render as an airport that is fine.
+
+ So there are THREE states and the map draws THREE distinct things:
+
+   1. DEGRADED  — checked, and there is a problem.  FILLED disc, hazard colour,
+                  pulsing halo. Visible at EVERY zoom regardless of tier.
+   2. NOMINAL   — checked, and it is fine.          FILLED disc, teal, small,
+                  no halo, and the CHECK TIME is carried on the marker's own
+                  tooltip and panel. A "fine" reading with no timestamp is not
+                  a checked reading, and is demoted to UNKNOWN below.
+   3. UNKNOWN   — we did not check, or no feed exists. HOLLOW RING, neutral
+                  slate, never teal, never filled. A ring is a different SHAPE,
+                  not merely a different colour, so the distinction survives
+                  colour-blindness and a bad monitor.
+
+ …with UNKNOWN split into two legible sub-cases, because they mean different
+ things operationally:
+   3a. unknown-but-covered  — a feed exists, this reading is stale/absent.
+   3b. no feed at all       — coverage_class = 'none'. 27 of 31 government
+       fields are in this bucket. Drawing them calm would be exactly the lie
+       the spec forbids. Rendered as a faint wide ring plus an '×' glyph.
+
+ THE TWO ORTHOGONAL AXES — kept orthogonal on purpose
+
+   operational_*  is a HARD FACT from the state that controls the airspace.
+   advisory_*     is a RISK JUDGEMENT about airspace the issuer does not control.
+
+ An airport can be `open` under `do_not_fly`, or `closed` in a calm country.
+ Collapsing them into one colour would destroy information, so:
+
+   · OPERATIONAL owns the MARKER ITSELF (filled/hollow, teal/amber/red/slate).
+   · ADVISORY owns a SEPARATE OUTER RING in a violet family that the operational
+     ramp never uses. It is a ring around the fact, never a recolouring of it.
+
+ And `advisory_scope: null` means the SCOPE is unknown — we may know a country
+ level without knowing it applies to this airfield. That is rendered as a
+ neutral ring and stated in words. It is never an airfield-specific all-clear.
+
+ TIER IS CONFIDENCE, AND IT IS LEGIBLE
+ Tier 1 (40, polled every 15 min) is not the same confidence as Tier 3 (162,
+ event-driven only). Tier drives marker size and drives the zoom at which an
+ airport appears — EXCEPT that a degraded or closed airport is never hidden to
+ reduce clutter, at any zoom, in any tier. Hiding a problem to tidy the map is
+ the same lie in a different costume.
+
+ DENSITY — the known hazard (PR#10 / #11, centroid stacking)
+ 272 anchors smear if drawn all at once. Handled by zoom-dependent tier
+ revelation (see TIER_ZOOM) plus a deterministic scatter for airports that
+ share coordinates. Airport coordinates are precise, so scatter is a rare
+ last resort here, not the load-bearing fix it had to be for region centroids.
+
+ DATA — consumed, never re-derived (01-Source/DATA-PLANE-CONTRACT.md)
+   GET /api/roc-airports                       same-origin Hub route (hub-044)
+   GET /api/ovix/op-risk?scope=global          ovix-api, the 12-domain index
+   GET /api/roc-globe?mins=150                 same-origin, signals as CONTEXT
+ No Neon from the browser. No endpoint added here. No score recomputed here.
+
+ THEME: Mission Control. NO ORANGE (#f97316) — hub-041 took four gate-rounds.
+=============================================================================
+-->
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060610; }
+    #cesiumContainer { width: 100%; height: 100%; }
+    .cesium-viewer-bottom { display: none !important; }
+    .cesium-widget-credits { display: none !important; }
+
+    body {
+      font-family: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+      color: #cbd5e1;
+    }
+
+    /* ── Palette (Mission Control) ─────────────────────────────────────────
+       teal   #18BC9C  operational NOMINAL / low
+       amber  #eab308  operational DEGRADED (moderate)
+       red    #ef4444  operational DEGRADED (severe) / closed
+       slate  #94a3b8  UNKNOWN — the confidence axis, always neutral
+       violet #a78bfa  ADVISORY — its own axis, never borrows the hazard ramp
+       cyan   #22d3ee  chrome / links
+       NO ORANGE ANYWHERE.                                                   */
+
+    a { color: #22d3ee; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Top bar ─────────────────────────────────────────────────────────── */
+    #topbar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 420;
+      background: rgba(6, 6, 16, 0.94);
+      border-bottom: 1px solid rgba(34, 211, 238, 0.22);
+      padding: 7px 14px;
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      font-size: 11px;
+    }
+    #topbar .tb-brand { color: #22d3ee; font-weight: bold; letter-spacing: 0.14em; font-size: 12px; white-space: nowrap; }
+    #topbar .tb-sub { color: #64748b; font-size: 10px; }
+    #topbar .tb-spacer { flex: 1 1 auto; }
+    #topbar .tb-links { display: flex; gap: 12px; font-size: 10px; white-space: nowrap; }
+    #tb-state-slot:empty { display: none; }
+    #tb-state-slot { flex: 0 1 auto; }
+
+    /* ── Generic panel chrome ────────────────────────────────────────────── */
+    .panel {
+      position: absolute; z-index: 300;
+      background: rgba(6, 6, 16, 0.92);
+      border: 1px solid rgba(34, 211, 238, 0.18);
+      border-radius: 4px;
+      font-size: 11px; color: #94a3b8;
+      user-select: none;
+    }
+    .panel .p-head {
+      color: #22d3ee; font-weight: bold; letter-spacing: 0.13em; font-size: 10px;
+      padding: 9px 12px 7px; border-bottom: 1px solid rgba(34, 211, 238, 0.14);
+      display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    }
+    .panel .p-body { padding: 9px 12px 11px; }
+    .p-toggle {
+      background: none; border: none; color: #475569; font-size: 11px;
+      cursor: pointer; font-family: inherit; padding: 0 2px; line-height: 1;
+    }
+    .p-toggle:hover { color: #22d3ee; }
+    .panel.collapsed .p-body { display: none; }
+
+    /* ── Left: the state legend + the census ─────────────────────────────── */
+    #statepanel { top: 46px; left: 12px; width: 268px; max-height: calc(100vh - 64px); overflow-y: auto; }
+    .lg-row { display: flex; align-items: flex-start; gap: 9px; padding: 5px 0; line-height: 1.45; }
+    .lg-swatch { flex: 0 0 22px; height: 16px; position: relative; margin-top: 1px; }
+    /* Swatches are the ACTUAL marker geometry, drawn in CSS, so the legend and
+       the globe cannot drift apart in the reader's head. */
+    .sw-dot, .sw-ring {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      border-radius: 50%; box-sizing: border-box;
+    }
+    .sw-dot.degraded { width: 11px; height: 11px; background: #ef4444; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.22); }
+    .sw-dot.degraded-mod { width: 10px; height: 10px; background: #eab308; box-shadow: 0 0 0 4px rgba(234, 179, 8, 0.20); }
+    .sw-dot.nominal { width: 8px; height: 8px; background: #18BC9C; }
+    .sw-ring.unknown { width: 12px; height: 12px; border: 2px solid #94a3b8; background: none; }
+    .sw-ring.nofeed { width: 14px; height: 14px; border: 1px solid rgba(148, 163, 184, 0.45); background: none; }
+    .lg-txt b { color: #cbd5e1; font-weight: 700; display: block; letter-spacing: 0.03em; }
+    .lg-txt span { color: #64748b; font-size: 10px; }
+    .lg-count { color: #cbd5e1; font-variant-numeric: tabular-nums; font-weight: 700; margin-left: 4px; }
+    .lg-sep { border-top: 1px solid rgba(148, 163, 184, 0.14); margin: 9px 0 6px; padding-top: 8px; }
+    .lg-title { color: #64748b; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 4px; }
+    .lg-note { color: #64748b; font-size: 9.5px; font-style: italic; line-height: 1.5; margin-top: 7px; }
+    /* Advisory swatches: a RING around the fact, in a hue the hazard ramp never uses. */
+    .sw-adv { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; box-sizing: border-box; }
+    .sw-adv.adv { width: 16px; height: 16px; border: 1.5px solid #a78bfa; }
+    .sw-adv.advq { width: 16px; height: 16px; border: 1.5px dashed rgba(148, 163, 184, 0.6); }
+    .sw-core { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 7px; height: 7px; border-radius: 50%; background: #18BC9C; }
+    .tier-pill {
+      display: inline-block; border: 1px solid rgba(148, 163, 184, 0.35); border-radius: 3px;
+      padding: 0 4px; font-size: 9px; color: #94a3b8; margin-right: 5px;
+    }
+
+    /* ── Right: the travel-first 12-domain board ─────────────────────────── */
+    #boardpanel { top: 46px; right: 12px; width: 250px; max-height: calc(100vh - 64px); overflow-y: auto; }
+    .bd-row {
+      display: flex; align-items: center; gap: 7px; padding: 3px 4px; margin: 0 -4px;
+      border-radius: 2px; line-height: 1.3;
+    }
+    .bd-row:hover { background: rgba(34, 211, 238, 0.08); }
+    .bd-rank { color: #475569; font-size: 9px; width: 13px; flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
+    .bd-name { flex: 1 1 auto; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bd-row.lead .bd-name { color: #22d3ee; font-weight: 700; }
+    .bd-val { font-weight: bold; font-variant-numeric: tabular-nums; min-width: 26px; text-align: right; flex: 0 0 auto; }
+    /* hub-045: a provisional VALUE keeps its hazard colour (severity axis) and is
+       marked with a dashed underline plus a neutral chip (confidence axis). */
+    .bd-val.prov { border-bottom: 1px dashed rgba(148, 163, 184, 0.38); }
+    .bd-composite { display: flex; justify-content: space-between; gap: 14px; padding: 5px 4px 1px; margin: 0 -4px; }
+    .bd-composite span:first-child { color: #22d3ee; font-weight: bold; letter-spacing: 0.06em; }
+    .bd-composite .bd-val { color: #22d3ee; font-size: 13px; }
+    #bd-state-slot:empty { display: none; }
+
+    /* ── Bottom: zoom / tier reveal indicator ────────────────────────────── */
+    #zoombar {
+      position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 300;
+      background: rgba(6, 6, 16, 0.9);
+      border: 1px solid rgba(34, 211, 238, 0.18);
+      border-radius: 4px; padding: 7px 14px;
+      font-size: 10px; color: #94a3b8; white-space: nowrap;
+      display: flex; align-items: center; gap: 14px;
+    }
+    #zoombar .zb-step { display: flex; align-items: center; gap: 5px; color: #475569; }
+    #zoombar .zb-step.on { color: #cbd5e1; }
+    #zoombar .zb-step.on .zb-led { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.6); }
+    #zoombar .zb-led { width: 6px; height: 6px; border-radius: 50%; background: #334155; flex: 0 0 auto; }
+    #zoombar .zb-hint { color: #64748b; font-style: italic; }
+
+    /* ── Tooltip ─────────────────────────────────────────────────────────── */
+    #tooltip {
+      position: absolute; display: none; z-index: 500;
+      background: rgba(6, 6, 16, 0.96);
+      border: 1px solid rgba(34, 211, 238, 0.3);
+      border-radius: 4px; padding: 8px 11px;
+      font-size: 11px; color: #cbd5e1; pointer-events: none; max-width: 300px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+    }
+    #tooltip .tt-code { color: #22d3ee; font-weight: bold; letter-spacing: 0.06em; }
+    #tooltip .tt-name { color: #94a3b8; font-size: 10px; margin: 1px 0 5px; }
+    #tooltip .tt-state { font-weight: bold; font-size: 10.5px; letter-spacing: 0.05em; }
+    #tooltip .tt-line { color: #64748b; font-size: 10px; margin-top: 2px; line-height: 1.4; }
+
+    /* ── The trace panel — Traceability Standard gate 2 ──────────────────── */
+    #trace {
+      position: absolute; z-index: 600; top: 46px; right: 12px; width: 340px;
+      max-height: calc(100vh - 64px); overflow-y: auto; display: none;
+      background: rgba(6, 6, 16, 0.975);
+      border: 1px solid rgba(34, 211, 238, 0.4);
+      border-radius: 5px;
+      box-shadow: 0 8px 34px rgba(0, 0, 0, 0.75);
+      font-size: 11px;
+    }
+    #trace.open { display: block; }
+    .tr-head { padding: 11px 13px 9px; border-bottom: 1px solid rgba(34, 211, 238, 0.16); position: relative; }
+    .tr-code { color: #22d3ee; font-weight: bold; font-size: 15px; letter-spacing: 0.07em; }
+    .tr-name { color: #cbd5e1; font-size: 11px; margin-top: 2px; line-height: 1.4; }
+    .tr-meta { color: #64748b; font-size: 9.5px; margin-top: 5px; letter-spacing: 0.03em; }
+    .tr-close {
+      position: absolute; top: 8px; right: 10px; background: none; border: none;
+      color: #475569; font-size: 15px; cursor: pointer; font-family: inherit; line-height: 1;
+    }
+    .tr-close:hover { color: #cbd5e1; }
+    .tr-body { padding: 4px 13px 14px; }
+    .tr-sec { margin-top: 11px; }
+    .tr-sec-h {
+      color: #64748b; font-size: 9px; letter-spacing: 0.17em; text-transform: uppercase;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12); padding-bottom: 3px; margin-bottom: 6px;
+      display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    }
+    .tr-sec-h em { font-style: normal; color: #475569; letter-spacing: 0.02em; text-transform: none; font-size: 9px; }
+    .tr-verdict { font-weight: bold; font-size: 12px; letter-spacing: 0.05em; margin-bottom: 3px; }
+    .tr-kv { display: flex; gap: 8px; padding: 2px 0; line-height: 1.45; align-items: baseline; }
+    .tr-k { color: #475569; flex: 0 0 96px; font-size: 10px; }
+    .tr-v { color: #cbd5e1; flex: 1 1 auto; font-size: 10.5px; word-break: break-word; }
+    .tr-v.dim { color: #64748b; }
+    .tr-v.unknown { color: #94a3b8; font-style: italic; }
+    .tr-why {
+      color: #94a3b8; font-size: 10px; line-height: 1.5; font-style: italic;
+      border-left: 2px solid rgba(148, 163, 184, 0.3); padding-left: 8px; margin: 6px 0 2px;
+    }
+    .tr-badge {
+      display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px;
+      font-weight: 700; letter-spacing: 0.06em; border: 1px solid;
+    }
+
+    /* ── Data-unavailable banner. An empty globe must never read as "no
+         airports have problems" — the same honesty rule, one level up. ───── */
+    #unavail {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 700; display: none; max-width: 460px;
+      background: rgba(6, 6, 16, 0.97);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      border-left: 3px solid #94a3b8;
+      border-radius: 5px; padding: 16px 20px; font-size: 12px; line-height: 1.6;
+      box-shadow: 0 8px 34px rgba(0, 0, 0, 0.75);
+    }
+    #unavail.show { display: block; }
+    #unavail h3 { color: #cbd5e1; font-size: 13px; letter-spacing: 0.05em; margin-bottom: 7px; }
+    #unavail p { color: #94a3b8; font-size: 11px; }
+    #unavail code { color: #22d3ee; font-size: 10.5px; }
+
+    #loading {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 250; color: #475569; font-size: 11px; letter-spacing: 0.14em;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      #zoombar .zb-step.on .zb-led { box-shadow: none; }
+    }
+    @media (max-width: 900px) {
+      #statepanel, #boardpanel { display: none; }
+      #trace { width: calc(100vw - 24px); right: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="cesiumContainer"></div>
+
+  <div id="topbar">
+    <span class="tb-brand">TRAVEL RISK GLOBE</span>
+    <span class="tb-sub" id="tb-census">loading airport plane…</span>
+    <div id="tb-state-slot"></div>
+    <span class="tb-spacer"></span>
+    <span class="tb-links">
+      <a href="/travelrisk">Risk board</a>
+      <a href="/roc/globe/globe.html">Region globe</a>
+      <a href="/incidents">Incidents</a>
+    </span>
+  </div>
+
+  <div id="loading">INITIALISING…</div>
+
+  <!-- LEFT — the state legend and the census. Both are computed from the live
+       payload, never hardcoded, so the legend can never claim a distribution
+       the map is not drawing. -->
+  <div class="panel" id="statepanel">
+    <div class="p-head">
+      <span>AIRPORT STATE</span>
+      <button class="p-toggle" onclick="togglePanel('statepanel')" title="Collapse">&#9650;</button>
+    </div>
+    <div class="p-body">
+      <!-- Raised when an entire axis is unpopulated across the whole payload.
+           An axis with no values is a fact about our coverage, and the reader
+           gets told rather than left to infer it from empty panels. -->
+      <div id="axis-notice"></div>
+      <div class="lg-title">Airfield state — what the markers claim</div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-dot degraded"></i></span>
+        <span class="lg-txt"><b>DEGRADED <span class="lg-count" id="ct-degraded">–</span></b>
+          <span>Checked, and there is a problem. Always visible, every zoom, every tier.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-dot nominal"></i></span>
+        <span class="lg-txt"><b>NOMINAL <span class="lg-count" id="ct-nominal">–</span></b>
+          <span>Checked, and it is fine — with the check time on the marker.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-ring unknown"></i></span>
+        <span class="lg-txt"><b>UNKNOWN <span class="lg-count" id="ct-unknown">–</span></b>
+          <span>A feed exists; this reading is stale or absent. Hollow, never teal.</span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-ring nofeed"></i></span>
+        <span class="lg-txt"><b>NO FEED AT ALL <span class="lg-count" id="ct-nofeed">–</span></b>
+          <span>No commercial feed exists for this field. Marked &times;.</span></span>
+      </div>
+      <div class="lg-note">An airport we did not check is never drawn as an airport that is fine.</div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">Advisory — a separate axis</div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-adv adv"></i><i class="sw-core"></i></span>
+        <span class="lg-txt"><b>ADVISORY IN FORCE <span class="lg-count" id="ct-advisory">–</span></b>
+          <span>A risk judgement by an issuer that does not control the airspace. A ring
+            <em>around</em> the fact — it never recolours it. <b id="adv-wide-note"></b></span></span>
+      </div>
+      <div class="lg-row">
+        <span class="lg-swatch"><i class="sw-adv advq"></i><i class="sw-core"></i></span>
+        <span class="lg-txt"><b>SCOPE UNKNOWN <span class="lg-count" id="ct-advunknown">–</span></b>
+          <span>Level or scope not established. Never an airfield-specific all-clear —
+            and the common case, so a missing violet ring means nothing on its own.</span></span>
+      </div>
+      <div class="lg-note">An airport can be open under do-not-fly, or closed in a calm country.
+        The two axes are never collapsed into one colour.</div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">Monitor tier — confidence</div>
+      <div class="lg-row"><span class="lg-txt">
+        <span class="tier-pill">T1</span><span id="ct-t1">–</span> polled every 15&nbsp;min · always drawn<br>
+        <span class="tier-pill">T2</span><span id="ct-t2">–</span> revealed below 12,000&nbsp;km<br>
+        <span class="tier-pill">T3</span><span id="ct-t3">–</span> event-driven · revealed below 6,000&nbsp;km
+      </span></div>
+      <div class="lg-note">Tier 1 confidence is not Tier 3 confidence. Tier drives size and reveal
+        zoom — but a degraded or closed field is never hidden to tidy the map.</div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">Feed coverage — measured, not assumed</div>
+      <div class="lg-row"><span class="lg-txt" id="cov-line"><span>loading…</span></span></div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">As served — raw tallies from /api/roc-airports</div>
+      <div class="lg-row"><span class="lg-txt" id="tally-line"><span>loading…</span></span></div>
+
+      <div class="lg-sep"></div>
+      <div class="lg-title">Context layer</div>
+      <div class="lg-row"><span class="lg-txt">
+        <label style="cursor:pointer; color:#94a3b8;">
+          <input type="checkbox" id="sig-toggle" checked style="vertical-align:-1px; accent-color:#22d3ee;">
+          Recent signals <span id="ct-signals" style="color:#64748b;"></span>
+        </label>
+        <span style="display:block;">Dim, subordinate. Airports are the anchors here.</span>
+      </span></div>
+    </div>
+  </div>
+
+  <!-- RIGHT — the 12 canonical domains in TRAVEL-FIRST order. Presentation only:
+       nothing here rescores, renames, or drops a domain. -->
+  <div class="panel" id="boardpanel">
+    <div class="p-head">
+      <span>FLIGHT-IMPACT INDEX</span>
+      <button class="p-toggle" onclick="togglePanel('boardpanel')" title="Collapse">&#9650;</button>
+    </div>
+    <div class="p-body">
+      <div id="bd-state-slot"></div>
+      <div id="bd-rows"></div>
+      <div class="lg-sep"></div>
+      <div class="bd-composite"><span>COMPOSITE</span><span class="bd-val" id="bd-composite">--</span></div>
+      <div class="lg-note" id="bd-trace">source: ovix-api /api/ovix/op-risk?scope=global</div>
+    </div>
+  </div>
+
+  <div id="zoombar">
+    <span class="zb-step on" id="zb-1"><i class="zb-led"></i>TIER 1 <b id="zb-1n">–</b></span>
+    <span class="zb-step" id="zb-2"><i class="zb-led"></i>TIER 2 <b id="zb-2n">–</b></span>
+    <span class="zb-step" id="zb-3"><i class="zb-led"></i>TIER 3 <b id="zb-3n">–</b></span>
+    <span class="zb-hint" id="zb-hint">zoom in to reveal more</span>
+  </div>
+
+  <div id="tooltip">
+    <div class="tt-code"></div>
+    <div class="tt-name"></div>
+    <div class="tt-state"></div>
+    <div class="tt-line tt-when"></div>
+    <div class="tt-line tt-adv"></div>
+    <div class="tt-line" style="color:#475569;margin-top:5px;">click for the full trace</div>
+  </div>
+
+  <!-- Traceability Standard gate 2: which source set this state, under which
+       rule id + version, and when it was last checked. -->
+  <div id="trace">
+    <div class="tr-head">
+      <button class="tr-close" onclick="closeTrace()" title="Close">&times;</button>
+      <div class="tr-code" id="tr-code">—</div>
+      <div class="tr-name" id="tr-name"></div>
+      <div class="tr-meta" id="tr-meta"></div>
+    </div>
+    <div class="tr-body" id="tr-body"></div>
+  </div>
+
+  <div id="unavail">
+    <h3 id="un-title">The airport plane could not be reached</h3>
+    <p id="un-body"></p>
+  </div>
+
+<script>
+/* ===========================================================================
+ * 0. Small utilities — same idiom as globe.html, deliberately duplicated
+ *    rather than shared, because these files must be able to diverge without
+ *    one breaking the other.
+ * ======================================================================== */
+function esc(s) { var d = document.createElement('div'); d.textContent = (s == null ? '' : String(s)); return d.innerHTML; }
+function safeUrl(u) {
+  if (!u) return null;
+  var s = String(u);
+  return (s.indexOf('https://') === 0 || s.indexOf('http://') === 0) ? s : null;
+}
+function num(v) { var n = typeof v === 'number' ? v : parseFloat(v); return isFinite(n) ? n : null; }
+function str(v) { return (v == null || v === '') ? null : String(v); }
+/** First present key among several — the payload is a contract, but a contract
+ *  with two spellings in circulation is still worth reading defensively. */
+function pick(o) {
+  for (var i = 1; i < arguments.length; i++) {
+    var k = arguments[i];
+    if (o && o[k] !== undefined && o[k] !== null && o[k] !== '') return o[k];
+  }
+  return null;
+}
+
+var RS = window.RocScoreState || null;
+if (RS) RS.injectStyles();
+
+/* The degraded pulse draws the eye to a problem. Readers who have asked for
+ * reduced motion get a steady, equally visible ring instead — the signal is
+ * never removed to honour the preference, only its animation. */
+var PULSE_OK = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+function toDate(v) {
+  if (!v) return null;
+  var iso = String(v).trim().replace(' ', 'T').replace(/\+00$/, 'Z');
+  var t = new Date(iso);
+  return isNaN(t.getTime()) ? null : t;
+}
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** Absolute UTC — the check time is load-bearing, so it is never only relative. */
+function fmtAbs(v) {
+  var t = toDate(v);
+  if (!t) return null;
+  return t.getUTCDate() + ' ' + MONTHS[t.getUTCMonth()] + ' ' +
+    String(t.getUTCHours()).padStart(2, '0') + ':' + String(t.getUTCMinutes()).padStart(2, '0') + ' UTC';
+}
+function fmtAgo(v) {
+  var t = toDate(v);
+  if (!t) return null;
+  var mins = Math.round((Date.now() - t.getTime()) / 60000);
+  if (mins < 0) return 'in the future';
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  var h = Math.floor(mins / 60);
+  if (h < 48) return h + ' h ago';
+  return Math.floor(h / 24) + ' d ago';
+}
+/** "14:02 UTC · 23 min ago" — or an explicit statement that we have no time.
+ *  A reading with no timestamp is not a check, and never pretends to be one. */
+function fmtChecked(v) {
+  var a = fmtAbs(v);
+  if (!a) return null;
+  var r = fmtAgo(v);
+  return r ? (a + ' · ' + r) : a;
+}
+function titleCase(s) {
+  if (!s) return '';
+  return String(s).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+}
+
+/* ===========================================================================
+ * 1. THE STATE MODEL — the honesty rule, expressed once, in code
+ *
+ * Everything the map draws about an airport's operational condition comes from
+ * opClass(). It has exactly four outcomes and no fallthrough to "fine".
+ * ======================================================================== */
+var OP = { DEGRADED: 'degraded', NOMINAL: 'nominal', UNKNOWN: 'unknown', NOFEED: 'nofeed' };
+
+/* Operational states that are, by themselves, a problem — regardless of what
+ * any commercial feed says. These come from the state that controls the
+ * airspace, so they outrank an observation. */
+var OPERATIONAL_BAD = ['closed', 'restricted', 'suspended', 'partial', 'limited', 'degraded', 'stopped'];
+var OPERATIONAL_OK  = ['open', 'normal', 'operational', 'nominal'];
+/* Observation statuses per the contract: nominal | degraded | stopped | closed | unknown */
+var OBS_BAD = ['degraded', 'stopped', 'closed'];
+
+function opClass(a) {
+  var opState = (str(a.operational_state) || '').toLowerCase();
+  var obs = (str(a.obsStatus) || '').toLowerCase();
+  var cov = (str(a.coverage_class) || '').toLowerCase();
+
+  // 1. The hard fact wins. A controlling state saying "closed" is not softened
+  //    by a commercial feed that has not noticed yet.
+  if (OPERATIONAL_BAD.indexOf(opState) !== -1) return OP.DEGRADED;
+  // 2. A feed that observed a problem.
+  if (OBS_BAD.indexOf(obs) !== -1) return OP.DEGRADED;
+
+  // 3. NOMINAL requires BOTH a fine reading AND a time it was taken. This is
+  //    the line the honesty rule actually turns on: an untimestamped "fine" is
+  //    indistinguishable from never having looked, so it is treated as never
+  //    having looked.
+  if (obs === 'nominal' && a.obsObservedAt) return OP.NOMINAL;
+  if (OPERATIONAL_OK.indexOf(opState) !== -1 && a.operational_checked_at) return OP.NOMINAL;
+
+  // 4. Everything else is unknown. Split so the reader can tell "stale" from
+  //    "there is nothing to be stale" — 27 of 31 government fields are the latter.
+  if (cov === 'none') return OP.NOFEED;
+  return OP.UNKNOWN;
+}
+
+/** Why the classifier landed where it did — rendered verbatim in the trace
+ *  panel, so the rule is checkable by a reader and not just by its author. */
+function opClassWhy(a, cls) {
+  var opState = (str(a.operational_state) || '').toLowerCase();
+  var obs = (str(a.obsStatus) || '').toLowerCase();
+  if (cls === OP.DEGRADED) {
+    if (OPERATIONAL_BAD.indexOf(opState) !== -1)
+      return 'DEGRADED because the controlling state reports operational_state = "' + opState +
+             '". A state-declared condition outranks any commercial observation.';
+    return 'DEGRADED because the observation feed reports status = "' + obs + '".';
+  }
+  if (cls === OP.NOMINAL) {
+    if (obs === 'nominal' && a.obsObservedAt)
+      return 'NOMINAL because the feed observed this field and found it normal, and we hold the ' +
+             'time of that observation. A fine reading without a timestamp would NOT qualify.';
+    return 'NOMINAL because the controlling state reports operational_state = "' + opState +
+           '" and we hold the time it was checked.';
+  }
+  if (cls === OP.NOFEED)
+    return 'UNKNOWN — coverage_class = "none". No commercial feed exists for this field at all, ' +
+           'so there is nothing here to be stale. It is drawn hollow. Drawing it calm would be a ' +
+           'claim we have not earned.';
+  return 'UNKNOWN — a feed exists for this field, but we do not hold a current qualifying reading' +
+         (a.operational_unknown_reason ? ' (' + a.operational_unknown_reason + ')' : '') +
+         '. It is drawn hollow, never teal.';
+}
+
+/* ── The ADVISORY axis, kept strictly separate from the above ───────────────
+ * advisory_level is a risk judgement by an issuer that does NOT control the
+ * airspace. advisory_scope: null means we do not know what the level applies
+ * to — which is emphatically not an airfield-specific all-clear.
+ *
+ * LIVE SHAPE (confirmed by FOREMAN against hub-044's endpoint): 42 fields carry
+ * a level — caution 35 · avoid 5 · do_not_fly 2 — and EVERY ONE of them is at
+ * `country` scope. The other 230 have a null scope. So today there is not a
+ * single airfield-specific advisory on the map, and the rendering must not
+ * imply otherwise: a country-level judgement is labelled as one, everywhere. */
+var ADV = { NONE: 'none', IN_FORCE: 'in_force', UNKNOWN: 'unknown' };
+var ADVISORY_CLEAR = ['none', 'normal', 'normal_precautions', 'level_1', '1', 'no_advisory', 'clear'];
+/* Scopes that would make a level a statement about THIS airfield. Nothing in
+ * the live data matches these yet — every level is `country`. */
+var ADVISORY_FIELD_SCOPES = ['airport', 'airfield', 'aerodrome', 'icao', 'facility'];
+
+function advClass(a) {
+  var lvl = (str(a.advisory_level) || '').toLowerCase();
+  var scope = str(a.advisory_scope);
+  if (!lvl) return ADV.UNKNOWN;                        // no level held → unknown, not clear
+  if (!scope) return ADV.UNKNOWN;                      // level held, but we do not know what it covers
+  if (ADVISORY_CLEAR.indexOf(lvl) !== -1) return ADV.NONE;
+  return ADV.IN_FORCE;
+}
+/** True when a level, even an in-force one, is a statement about a wider area
+ *  than this airfield. Drives the "country-level" qualifier that rides every
+ *  advisory reading on this surface. */
+function advIsWideArea(a) {
+  var scope = (str(a.advisory_scope) || '').toLowerCase();
+  return !!scope && ADVISORY_FIELD_SCOPES.indexOf(scope) === -1;
+}
+/** 0..1 intensity for an in-force advisory — drives ring weight only. It never
+ *  touches the operational colour ramp. */
+function advIntensity(a) {
+  var lvl = (str(a.advisory_level) || '').toLowerCase();
+  if (lvl.indexOf('do_not') === 0 || lvl.indexOf('do not') === 0 || lvl === 'level_4' || lvl === '4') return 1.0;
+  if (lvl.indexOf('avoid') !== -1 || lvl.indexOf('reconsider') !== -1 || lvl === 'level_3' || lvl === '3') return 0.72;
+  if (lvl.indexOf('caution') !== -1 || lvl === 'level_2' || lvl === '2') return 0.48;
+  return 0.6;
+}
+function advWhy(a, cls) {
+  var scope = str(a.advisory_scope);
+  if (cls === ADV.UNKNOWN) {
+    if (!str(a.advisory_level))
+      return 'No advisory level is held for this field' +
+             (a.advisory_unknown_reason ? ' (' + a.advisory_unknown_reason + ')' : '') +
+             '. That is unknown, not clear.';
+    return 'An advisory level is held, but advisory_scope is null — we do not know whether it ' +
+           'applies to this airfield or to a wider area. This is NOT an airfield-specific all-clear.';
+  }
+  if (cls === ADV.NONE)
+    return 'An issuer has assessed this scope (' + scope + ') and has no elevated advisory in force. ' +
+           'This is a risk judgement, not a statement about whether the airport is operating.';
+  if (advIsWideArea(a))
+    return 'An advisory is in force at ' + scope + ' scope — it applies to the ' + scope + ', NOT to ' +
+           'this airfield specifically. The issuer does not control this airspace, and this says ' +
+           'nothing about whether the airport is operating.';
+  return 'An advisory is in force over scope "' + scope + '". The issuer does not control this ' +
+         'airspace — this is a judgement about risk, not a hard operational fact.';
+}
+
+/* ── Colour. Operational owns the hazard ramp; advisory owns violet; unknown
+ *    is always the neutral slate that RocScoreState already uses for the
+ *    confidence axis. NO ORANGE. ─────────────────────────────────────────── */
+var C_NOMINAL  = '#18BC9C';
+var C_MOD      = '#eab308';
+var C_SEVERE   = '#ef4444';
+var C_UNKNOWN  = '#94a3b8';
+var C_NOFEED   = 'rgba(148,163,184,0.5)';
+var C_ADVISORY = '#a78bfa';
+var C_ADV_UNK  = 'rgba(148,163,184,0.55)';
+
+/** Degraded severity ramp. Reads `severity_band` first (a named, versioned
+ *  classification) and falls back to the numeric `severity` — never invents one. */
+function degradedColor(a) {
+  var band = (str(a.severity_band) || '').toLowerCase();
+  if (band) {
+    if (band.indexOf('sev') === 0 || band.indexOf('crit') === 0 || band.indexOf('high') === 0 || band.indexOf('major') === 0) return C_SEVERE;
+    if (band.indexOf('mod') === 0 || band.indexOf('med') === 0 || band.indexOf('elev') === 0) return C_MOD;
+    if (band.indexOf('low') === 0 || band.indexOf('min') === 0) return C_MOD;
+  }
+  var s = num(a.severity);
+  if (s != null) return s >= 7 ? C_SEVERE : C_MOD;
+  var opState = (str(a.operational_state) || '').toLowerCase();
+  return (opState === 'closed' || opState === 'suspended') ? C_SEVERE : C_MOD;
+}
+
+/* ===========================================================================
+ * 2. TRAVEL-FIRST DOMAIN ORDER
+ *
+ * DUPLICATED, KNOWINGLY, from src/lib/travelrisk/domains.ts (hub-047), because
+ * this is a static page with no build step and cannot import TypeScript. The
+ * TS module remains canonical: if the two ever disagree, that file wins.
+ * Presentation only — nothing here rescores or drops a domain.
+ * ======================================================================== */
+var TRAVEL_DOMAIN_ORDER = [
+  { domain: 'travel',         label: 'Travel',         why: 'The direct signal — ground stops, carrier IROPS, GDS outages, rail.' },
+  { domain: 'weather',        label: 'Weather',        why: 'The single largest cause of delay and cancellation worldwide.' },
+  { domain: 'infrastructure', label: 'Infrastructure', why: 'ATC system outages, airport power, telecom, cloud and booking dependencies.' },
+  { domain: 'labor',          label: 'Labor',          why: 'ATC, airline and ground-handler strikes — routinely closes European airspace.' },
+  { domain: 'geopolitical',   label: 'Geopolitical',   why: 'Airspace closures, overflight bans, conflict-zone reroutes.' },
+  { domain: 'cyber',          label: 'Cyber',          why: 'Airline IT and GDS compromise — the AA-class event.' },
+  { domain: 'seismic',        label: 'Seismic',        why: 'Volcanic ash is a first-order aviation hazard; quakes close airports.' },
+  { domain: 'disaster',       label: 'Disaster',       why: 'Airport closure, mass evacuation, terminal damage.' },
+  { domain: 'health',         label: 'Health',         why: 'Entry rules, screening, quarantine — border friction.' },
+  { domain: 'environmental',  label: 'Environmental',  why: 'Smoke, ash dispersion and air quality affecting operations.' },
+  { domain: 'supply_chain',   label: 'Supply Chain',   why: 'Jet fuel, parts, catering.' },
+  { domain: 'financial',      label: 'Financial',      why: 'Carrier solvency, fuel cost.' }
+];
+/** Op-risk composite ramp — identical to globe.html's cssColor. NO ORANGE. */
+function scoreColor(s) {
+  if (s == null) return C_UNKNOWN;
+  if (s < 4.0) return C_NOMINAL;
+  if (s < 7.0) return C_MOD;
+  return C_SEVERE;
+}
+
+/* ===========================================================================
+ * 3. ZOOM / TIER REVELATION
+ *
+ * The density fix. 272 anchors drawn at once is a smear (PR#10 / #11 taught us
+ * this with region centroids). monitor_tier is the natural clustering key:
+ * Tier 1 is the always-on skeleton, Tier 2 and 3 reveal as the camera closes.
+ *
+ * Altitudes are camera height in metres, matching globe.html's ZOOM_THRESHOLDS
+ * idiom so the two globes feel like the same instrument.
+ * ======================================================================== */
+var TIER_ZOOM = {
+  1: Infinity,     // 40 airports  — always drawn, at every altitude
+  2: 12000000,     // 70 airports  — revealed below 12,000 km
+  3: 6000000       // 162 airports — revealed below 6,000 km
+};
+var LABEL_ALT = 2200000;   // IATA codes appear below 2,200 km
+var TIER_SIZE = { 1: 1.0, 2: 0.82, 3: 0.68 };  // tier is legible as size, too
+
+/* ===========================================================================
+ * 4. VIEWER
+ * ======================================================================== */
+var viewer, airports = [], airportByUid = {}, signalEntities = [], airportMeta = null;
+var opRiskPayload = null, lastAlt = null, currentTierLevel = 1;
+
+try {
+  var OVIX_API = (window.RocConfig && window.RocConfig.apiBase) || 'https://ovix-api.tedlango.workers.dev';
+
+  viewer = new Cesium.Viewer('cesiumContainer', {
+    baseLayer: false,
+    animation: false, timeline: false, homeButton: false,
+    fullscreenButton: false, navigationHelpButton: false,
+    sceneModePicker: false, baseLayerPicker: false,
+    geocoder: false, infoBox: false, selectionIndicator: false
+  });
+  viewer.scene.skyAtmosphere.brightnessShift = -0.3;
+  viewer.scene.skyAtmosphere.saturationShift = -0.2;
+  viewer.scene.fog.enabled = false;
+
+  // Opens over the North Atlantic: the densest long-haul corridor on the planet
+  // and therefore the frame in which a travel surface should introduce itself.
+  var HOME = { lon: -25, lat: 38, height: 17000000 };
+  viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.height) });
+
+  document.getElementById('loading').style.display = 'none';
+
+  // Imagery is a nicety; the airport plane is the product. So this is isolated
+  // in its own try/catch — a missing RocConfig must cost us the basemap, never
+  // the markers. (globe.html calls this unguarded; that is a latent fault there,
+  // not a pattern worth copying.)
+  try {
+    window.RocConfig.get().then(function (cfg) {
+      if (cfg.cesiumToken) {
+        Cesium.Ion.defaultAccessToken = cfg.cesiumToken;
+        Cesium.IonImageryProvider.fromAssetId(3).then(function (p) {
+          viewer.imageryLayers.addImageryProvider(p);
+        }).catch(function () {});
+      }
+    }).catch(function () {});
+  } catch (cfgErr) {
+    console.warn('[travel-globe] basemap config unavailable; markers unaffected', cfgErr);
+  }
+} catch (e) {
+  document.getElementById('loading').textContent = 'GLOBE FAILED TO INITIALISE';
+  console.error('[travel-globe] viewer init failed', e);
+}
+
+/* ===========================================================================
+ * 5. AIRPORT LAYER — the primary objects
+ *
+ * Every airport gets a CORE entity (the operational axis). It additionally gets
+ * an ADVISORY RING entity when advisory has something to say (including when
+ * what it has to say is "unknown"), and a pulsing HALO when degraded.
+ *
+ * Entities are created ONCE and revealed/hidden by `.show` on zoom — the same
+ * cheap idiom globe.html uses — rather than being torn down and rebuilt.
+ * ======================================================================== */
+
+/** Deterministic scatter for co-located airports.
+ *
+ *  Airport coordinates are precise, so unlike the region-centroid case that
+ *  forced PR#10/#11 this is a rare correction, not the main density mechanism.
+ *  It fires only for fields that share a position to ~1 km. The offset is
+ *  derived from the ICAO string, so it is stable across refreshes — a marker
+ *  that jumps between loads is its own kind of dishonesty. */
+function applyScatter(list) {
+  var buckets = {}, scattered = 0;
+  list.forEach(function (a) {
+    if (a._lat == null || a._lon == null) return;
+    var k = a._lat.toFixed(2) + ',' + a._lon.toFixed(2);
+    (buckets[k] = buckets[k] || []).push(a);
+  });
+  Object.keys(buckets).forEach(function (k) {
+    var group = buckets[k];
+    if (group.length < 2) return;
+    group.forEach(function (a, i) {
+      if (i === 0) { a._scatter = false; return; }
+      var h = 0, s = a.icao || a.iata || String(i);
+      for (var c = 0; c < s.length; c++) h = (h * 31 + s.charCodeAt(c)) % 3600;
+      var ang = (h / 3600) * Math.PI * 2;
+      var r = 0.055 + (i % 3) * 0.022;                       // ≈ 6–11 km
+      a._lat += Math.sin(ang) * r;
+      a._lon += Math.cos(ang) * r / Math.max(0.25, Math.cos(a._lat * Math.PI / 180));
+      a._scatter = true;
+      scattered++;
+    });
+  });
+  return scattered;
+}
+
+function coreSize(a) {
+  var base = a._op === OP.DEGRADED ? 13 : (a._op === OP.NOMINAL ? 8 : 10);
+  var w = num(a.business_travel_weight);
+  // Exposure nudges size a little; it never changes the STATE the marker shows.
+  if (w != null && w > 0) base += Math.min(3, Math.max(0, (w - 1) * 1.6));
+  return Math.round(base * (TIER_SIZE[a._tier] || 0.68));
+}
+
+function buildAirportEntities() {
+  var counts = { degraded: 0, nominal: 0, unknown: 0, nofeed: 0, adv: 0, advWide: 0, advUnknown: 0, t1: 0, t2: 0, t3: 0 };
+
+  airports.forEach(function (a, idx) {
+    if (a._lat == null || a._lon == null) return;
+    a._uid = 'ap' + idx;   // identity for hit-testing: icao can be absent, index never is
+    var pos = Cesium.Cartesian3.fromDegrees(a._lon, a._lat);
+    var cls = a._op, adv = a._adv, size = coreSize(a);
+
+    counts[cls]++;
+    counts['t' + a._tier]++;
+    if (adv === ADV.IN_FORCE) { counts.adv++; if (advIsWideArea(a)) counts.advWide++; }
+    if (adv === ADV.UNKNOWN) counts.advUnknown++;
+
+    // ── ADVISORY RING (drawn first so it sits behind the fact) ──
+    // A ring AROUND the marker, in a hue the operational ramp never uses.
+    // Drawn for IN_FORCE and for UNKNOWN. Never drawn for a checked NONE —
+    // that absence is explained in words in the trace panel, where it can be
+    // qualified, rather than as an ambiguous mark on the map.
+    // The unknown ring is the MAJORITY case (230 of 272 live), so it is drawn
+    // deliberately light: heavy enough that a reader can see "we don't know"
+    // is everywhere, light enough that it never competes with the 42 real
+    // advisories. Weight, not colour alone, separates them.
+    if (adv === ADV.IN_FORCE || adv === ADV.UNKNOWN) {
+      var inForce = adv === ADV.IN_FORCE;
+      var ring = viewer.entities.add({
+        position: pos,
+        show: false,
+        point: {
+          pixelSize: size + (inForce ? 10 + Math.round(6 * advIntensity(a)) : 7),
+          color: Cesium.Color.TRANSPARENT,
+          outlineColor: Cesium.Color.fromCssColorString(inForce ? C_ADVISORY : C_ADV_UNK)
+            .withAlpha(inForce ? (0.45 + 0.5 * advIntensity(a)) : 0.28),
+          outlineWidth: inForce ? 2 : 1,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.15, 2e7, 0.55)
+        },
+        properties: { travelRole: 'advisory-ring', uid: a._uid }
+      });
+      a._ring = ring;
+    }
+
+    // ── DEGRADED HALO — pulsing, so a problem reads at a glance ──
+    if (cls === OP.DEGRADED) {
+      var hc = Cesium.Color.fromCssColorString(degradedColor(a));
+      a._halo = viewer.entities.add({
+        position: pos,
+        show: false,
+        point: {
+          pixelSize: size + 14,
+          color: Cesium.Color.TRANSPARENT,
+          outlineColor: PULSE_OK
+            ? new Cesium.CallbackProperty(function () {
+                var t = (Date.now() % 2200) / 2200;
+                return hc.withAlpha(0.14 + 0.3 * (0.5 + 0.5 * Math.cos(t * Math.PI * 2)));
+              }, false)
+            : hc.withAlpha(0.34),
+          outlineWidth: 3,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 2e7, 0.6)
+        },
+        properties: { travelRole: 'halo', uid: a._uid }
+      });
+    }
+
+    // ── CORE — the operational axis. Filled = checked. Hollow = not checked. ──
+    var fill, outline, outlineW;
+    if (cls === OP.DEGRADED) {
+      fill = Cesium.Color.fromCssColorString(degradedColor(a)).withAlpha(0.95);
+      outline = Cesium.Color.fromCssColorString(degradedColor(a)).withAlpha(0.5);
+      outlineW = 2;
+    } else if (cls === OP.NOMINAL) {
+      fill = Cesium.Color.fromCssColorString(C_NOMINAL).withAlpha(0.9);
+      outline = Cesium.Color.fromCssColorString(C_NOMINAL).withAlpha(0.35);
+      outlineW = 1;
+    } else if (cls === OP.UNKNOWN) {
+      // HOLLOW. Transparent fill is the entire point — a ring is a different
+      // shape from a disc, and shape survives what colour does not.
+      fill = Cesium.Color.TRANSPARENT;
+      outline = Cesium.Color.fromCssColorString(C_UNKNOWN).withAlpha(0.85);
+      outlineW = 2;
+    } else { // NOFEED — hollow, wider, fainter, and glyphed below
+      fill = Cesium.Color.TRANSPARENT;
+      outline = Cesium.Color.fromCssColorString(C_UNKNOWN).withAlpha(0.42);
+      outlineW = 1;
+    }
+
+    var core = viewer.entities.add({
+      position: pos,
+      show: false,
+      point: {
+        pixelSize: size,
+        color: fill,
+        outlineColor: outline,
+        outlineWidth: outlineW,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new Cesium.NearFarScalar(5e5, 1.15, 2e7, 0.55)
+      },
+      label: {
+        // NOFEED carries an '×' at all label zooms — the strongest reading of
+        // "there is nothing here", and it is never left to colour alone.
+        text: (cls === OP.NOFEED ? '× ' : '') + (a.iata || a.icao || ''),
+        font: (a._tier === 1 ? 'bold 11px ' : '10px ') + '"JetBrains Mono", monospace',
+        fillColor: Cesium.Color.fromCssColorString(
+          cls === OP.DEGRADED ? '#f8fafc' : (cls === OP.NOMINAL ? '#cbd5e1' : C_UNKNOWN)
+        ),
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -(size + 9)),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        show: false
+      },
+      properties: { travelRole: 'airport', uid: a._uid }
+    });
+    a._core = core;
+    airportByUid[a._uid] = a;
+  });
+
+  return counts;
+}
+
+/** Reveal rule. Tier decides the altitude at which a field appears — EXCEPT
+ *  that a degraded field is drawn at every altitude. A map that hides a
+ *  problem to look tidy is telling the same lie the honesty rule forbids. */
+function airportVisibleAt(a, alt) {
+  if (a._op === OP.DEGRADED) return true;
+  return alt <= (TIER_ZOOM[a._tier] || 0);
+}
+
+function applyZoomVisibility() {
+  if (!viewer) return;
+  var carto = viewer.camera.positionCartographic;
+  var alt = carto ? carto.height : HOME.height;
+  if (lastAlt !== null && Math.abs(alt - lastAlt) < alt * 0.02) return;  // hysteresis
+  lastAlt = alt;
+
+  var showLabels = alt <= LABEL_ALT;
+  var shown = { 1: 0, 2: 0, 3: 0 }, forced = 0;
+
+  airports.forEach(function (a) {
+    if (!a._core) return;
+    var vis = airportVisibleAt(a, alt);
+    a._core.show = vis;
+    if (a._ring) a._ring.show = vis;
+    if (a._halo) a._halo.show = vis;
+    // A degraded field is always labelled: if we are drawing it out of tier we
+    // owe the reader its identity, not an anonymous dot.
+    a._core.label.show = vis && (showLabels || a._op === OP.DEGRADED);
+    if (vis) {
+      shown[a._tier]++;
+      if (alt > (TIER_ZOOM[a._tier] || 0)) forced++;
+    }
+  });
+
+  currentTierLevel = alt > TIER_ZOOM[2] ? 1 : (alt > TIER_ZOOM[3] ? 2 : 3);
+  updateZoomBar(shown, forced, alt);
+}
+
+function updateZoomBar(shown, forced, alt) {
+  for (var t = 1; t <= 3; t++) {
+    var el = document.getElementById('zb-' + t);
+    if (el) el.className = 'zb-step' + (t <= currentTierLevel ? ' on' : '');
+    var n = document.getElementById('zb-' + t + 'n');
+    if (n) n.textContent = shown[t] || 0;
+  }
+  var hint = document.getElementById('zb-hint');
+  if (!hint) return;
+  var km = Math.round(alt / 1000);
+  if (currentTierLevel === 1) hint.textContent = 'alt ' + km.toLocaleString() + ' km · zoom in for Tier 2';
+  else if (currentTierLevel === 2) hint.textContent = 'alt ' + km.toLocaleString() + ' km · zoom in for Tier 3';
+  else hint.textContent = 'alt ' + km.toLocaleString() + ' km · all ' + airports.length + ' shown';
+  if (forced > 0) hint.textContent += ' · ' + forced + ' degraded shown out of tier';
+}
+
+/* ===========================================================================
+ * 6. FETCH THE AIRPORT PLANE
+ *
+ * Contract (specified by FOREMAN, built by hub-044):
+ *   GET /api/roc-airports → { airports: [...272...], meta: {...} }
+ * Every registry airport, always — including the ones we could not check.
+ * That completeness IS the honesty guarantee: a short list would silently
+ * delete the unknowns, which is the failure this whole page exists to prevent.
+ * ======================================================================== */
+/* Delay / cancellation reading.
+ *
+ * hub-044 confirmed that `obsLifecycle`, `obsAvgDelayMin` and `obsMaxDelayMin`
+ * are NULL across all 30,464 observation rows — the writer populates the
+ * median / index / cancelled family instead. Those three columns are kept in
+ * the view rather than silently dropped, which is right, but they are RESERVED,
+ * not available, and nothing on this page may be built on them. The fields
+ * below are the populated ones.
+ *
+ * Absent is rendered as absent, never as zero: "no departures were cancelled"
+ * and "we hold no cancellation figure" are different claims, and collapsing
+ * them is the same class of error as drawing an unchecked airport calm. */
+function normaliseAirport(raw) {
+  var a = {};
+  for (var k in raw) if (Object.prototype.hasOwnProperty.call(raw, k)) a[k] = raw[k];
+  a._lat = num(pick(raw, 'lat', 'latitude'));
+  a._lon = num(pick(raw, 'lon', 'lng', 'longitude'));
+  var t = num(raw.monitor_tier);
+  a._tier = (t === 1 || t === 2 || t === 3) ? t : 3;   // unknown tier is treated as the weakest
+  a._op = opClass(a);
+  a._adv = advClass(a);
+
+  a._depMedian = num(raw.obsDeparturesMedianDelayMin);
+  a._arrMedian = num(raw.obsArrivalsMedianDelayMin);
+  a._depIndex  = num(raw.obsDeparturesDelayIndex);
+  a._arrIndex  = num(raw.obsArrivalsDelayIndex);
+  a._depCancel = num(raw.obsDeparturesCancelled);
+  a._arrCancel = num(raw.obsArrivalsCancelled);
+  a._depTotal  = num(raw.obsDeparturesTotal);
+  a._arrTotal  = num(raw.obsArrivalsTotal);
+  a._depQual   = num(raw.obsDeparturesQualified);
+  a._arrQual   = num(raw.obsArrivalsQualified);
+  return a;
+}
+
+/** One human sentence describing what the feed actually measured — built only
+ *  from populated fields, and silent when we hold nothing rather than
+ *  reporting a comforting zero. */
+function delaySentence(a) {
+  var bits = [];
+  var med = a._depMedian != null ? a._depMedian : a._arrMedian;
+  if (med != null) bits.push('median delay ' + Math.round(med) + ' min');
+  var cancels = (a._depCancel != null || a._arrCancel != null)
+    ? (a._depCancel || 0) + (a._arrCancel || 0) : null;
+  if (cancels != null) bits.push(cancels + ' cancelled');
+  var idx = a._depIndex != null ? a._depIndex : a._arrIndex;
+  if (idx != null) bits.push('delay index ' + (Math.round(idx * 100) / 100));
+  return bits.length ? bits.join(' · ') : null;
+}
+
+function fetchAirports() {
+  return fetch('/api/roc-airports', { signal: AbortSignal.timeout(20000) })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      var list = d && (d.airports || d.rows || d.data) || (Array.isArray(d) ? d : []);
+      if (!Array.isArray(list) || !list.length) throw new Error('empty airport payload');
+      airportMeta = (d && d.meta) || {};
+      airports = list.map(normaliseAirport);
+      var scattered = applyScatter(airports);
+      var counts = buildAirportEntities();
+      renderCensus(counts, scattered);
+      lastAlt = null;
+      applyZoomVisibility();
+      console.log('[travel-globe] ' + airports.length + ' airports plotted (' + scattered + ' scattered)');
+    })
+    .catch(function (e) {
+      showUnavailable(
+        'The airport plane could not be reached',
+        'This globe anchors on airports, and it will not invent them. <code>GET /api/roc-airports</code> ' +
+        'returned: ' + esc(e.message) + '. Nothing is drawn — an empty globe here means we could not ' +
+        'read the plane, and must never be read as “no airport has a problem”.'
+      );
+      console.error('[travel-globe] airport fetch failed', e);
+    });
+}
+
+function showUnavailable(title, bodyHtml) {
+  var el = document.getElementById('unavail');
+  document.getElementById('un-title').textContent = title;
+  document.getElementById('un-body').innerHTML = bodyHtml;
+  el.classList.add('show');
+  document.getElementById('tb-census').textContent = 'airport plane unavailable';
+}
+
+/** The census. Every number here is counted from the payload we actually drew,
+ *  so the legend cannot claim a distribution the map is not showing. */
+function renderCensus(c, scattered) {
+  function set(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+  set('ct-degraded', c.degraded);
+  set('ct-nominal', c.nominal);
+  set('ct-unknown', c.unknown);
+  set('ct-nofeed', c.nofeed);
+  set('ct-advisory', c.adv);
+  set('ct-advunknown', c.advUnknown);
+  // Today every in-force advisory is country-scope. If that ever stops being
+  // true this note stops claiming it — it is derived, never asserted.
+  var wideNote = document.getElementById('adv-wide-note');
+  if (wideNote) {
+    wideNote.textContent = (c.adv > 0 && c.advWide === c.adv)
+      ? 'All ' + c.adv + ' are country-scope \u2014 none is airfield-specific.'
+      : (c.advWide > 0 ? c.advWide + ' of ' + c.adv + ' are wider than the airfield.' : '');
+    wideNote.style.color = '#94a3b8';
+  }
+  set('ct-t1', c.t1);
+  set('ct-t2', c.t2);
+  set('ct-t3', c.t3);
+
+  var meta = airportMeta || {};
+  var total = num(meta.count) != null ? num(meta.count) : airports.length;
+  var checked = c.degraded + c.nominal;
+  var newest = pick(meta, 'newest_observed_at', 'newestObservedAt');
+  var gen = pick(meta, 'generatedAt', 'generated_at');
+
+  document.getElementById('tb-census').innerHTML =
+    esc(total) + ' airports · <b style="color:#cbd5e1">' + esc(checked) + '</b> checked · ' +
+    '<b style="color:#94a3b8">' + esc(c.unknown + c.nofeed) + '</b> not checked' +
+    (newest ? ' · newest observation ' + esc(fmtChecked(newest) || newest) : '') +
+    (gen ? ' · served ' + esc(fmtAbs(gen) || gen) : '');
+
+  // ── Coverage. The endpoint publishes a measured tally; it is preferred over
+  //    a client-side recount so the legend quotes the pipeline rather than
+  //    quoting itself. Falls back to counting only if the tally is absent. ──
+  var covTally = meta.coverage_class;
+  if (!covTally || typeof covTally !== 'object') {
+    covTally = {};
+    airports.forEach(function (a) {
+      var k = (str(a.coverage_class) || 'none').toLowerCase();
+      covTally[k] = (covTally[k] || 0) + 1;
+    });
+  }
+  function covN(k) { return num(covTally[k]) || 0; }
+  document.getElementById('cov-line').innerHTML =
+    '<span style="color:#cbd5e1">' + covN('live') + '</span> live · ' +
+    '<span style="color:#cbd5e1">' + covN('schedule_only') + '</span> schedule-only · ' +
+    '<span style="color:#cbd5e1">' + covN('delays_only') + '</span> delays-only · ' +
+    '<span style="color:#94a3b8">' + covN('none') + '</span> none' +
+    (scattered ? '<span style="display:block;color:#475569;font-size:9px;margin-top:3px;">' +
+      scattered + ' co-located field' + (scattered === 1 ? '' : 's') + ' nudged apart to stay clickable</span>' : '');
+
+  // ── The raw tallies, restated verbatim. This is the reader's check on every
+  //    derived number above it: if the legend and the tally disagree, the
+  //    tally is right and the page has a bug. ──
+  function tallyLine(label, obj, warnKey) {
+    if (!obj || typeof obj !== 'object') return '';
+    var keys = Object.keys(obj);
+    if (!keys.length) return '';
+    var parts = keys.map(function (k) {
+      var warn = (k === warnKey || k === 'unknown' || k === 'none' || k === 'null');
+      return '<span style="color:' + (warn ? '#94a3b8' : '#cbd5e1') + '">' +
+        esc(obj[k]) + '</span> ' + esc(k.replace(/_/g, ' '));
+    });
+    return '<span style="display:block;margin-bottom:3px;"><span style="color:#475569">' +
+      esc(label) + '</span> ' + parts.join(' · ') + '</span>';
+  }
+  document.getElementById('tally-line').innerHTML =
+    (tallyLine('operational_state', meta.operational_state) +
+     tallyLine('obs_status', meta.obs_status) +
+     tallyLine('advisory_level', meta.advisory_level) +
+     tallyLine('advisory_scope', meta.advisory_scope)) ||
+    '<span style="color:#64748b;font-style:italic">no tallies served</span>';
+
+  renderAxisNotice(meta, total);
+}
+
+/** An entire axis with no values is a coverage fact, and it is stated in words
+ *  at the top of the legend — not left for a reader to infer from empty panels.
+ *
+ *  This fires today: `operational_state` is `unknown` for all 272 fields because
+ *  the FAA NOTAM source needs credentials that are not registered yet. It is
+ *  self-clearing: the notice is derived from the payload on every refresh and
+ *  disappears on its own the moment real operational values arrive. */
+function renderAxisNotice(meta, total) {
+  var el = document.getElementById('axis-notice');
+  if (!el) return;
+  var t = meta.operational_state;
+  var allUnknown = t && typeof t === 'object' && num(t.unknown) != null && num(t.unknown) >= total;
+  if (!allUnknown) { el.innerHTML = ''; return; }
+  el.innerHTML =
+    '<div style="border-left:2px solid ' + C_UNKNOWN + ';background:rgba(148,163,184,0.07);' +
+    'padding:7px 9px;margin:0 0 10px;font-size:10px;line-height:1.55;color:#94a3b8;">' +
+    '<b style="color:#cbd5e1;display:block;letter-spacing:.06em;">OPERATIONAL AXIS UNPOPULATED</b>' +
+    'The controlling-state feed reports <code>unknown</code> for all ' + esc(total) + ' fields — ' +
+    'the NOTAM source is not yet credentialed. Everything the markers claim about airfield ' +
+    'condition today comes from the <b>observation feed</b>, and the operational half of every ' +
+    'trace reads “not checked”. That is the true state, not a rendering fault.' +
+    '</div>';
+}
+
+/* ===========================================================================
+ * 7. THE 12-DOMAIN BOARD — travel-first order, PROVISIONAL surfaced
+ *
+ * hub-045's RocScoreState is REUSED wholesale: the state vocabulary, the
+ * neutral palette, the self-clearing badge. Nothing about provisional/settled
+ * is re-derived here. Every domain is PROVISIONAL until ~2026-08-06, and this
+ * page says so rather than showing twelve confident-looking bands.
+ * ======================================================================== */
+function fetchOpRisk() {
+  return fetch(OVIX_API + '/api/ovix/op-risk?scope=global', { signal: AbortSignal.timeout(20000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) { opRiskPayload = d; renderBoard(d); })
+    .catch(function (e) {
+      document.getElementById('bd-rows').innerHTML =
+        '<div style="color:#94a3b8;font-style:italic;line-height:1.5;padding:4px 0;">' +
+        'The operational-risk index could not be reached (' + esc(e.message) + '). ' +
+        'No score is shown rather than a stale one.</div>';
+      console.error('[travel-globe] op-risk fetch failed', e);
+    });
+}
+
+function renderBoard(d) {
+  var summary = RS ? RS.summarize(d) : { provisional: false };
+  var byDomain = {};
+  (d.domains || []).forEach(function (x) { byDomain[(x.domain || '').toLowerCase()] = x; });
+
+  var html = '';
+  TRAVEL_DOMAIN_ORDER.forEach(function (meta, i) {
+    var entry = byDomain[meta.domain];
+    var st = (RS && entry) ? RS.domainState(entry) : { provisional: false };
+    var score = entry && typeof entry.score === 'number' ? entry.score : null;
+    var val = score == null ? '--' : score.toFixed(1);
+    var chip = (RS && st.provisional) ? RS.chipHTML(st, 'PROV') : '';
+    html += '<div class="bd-row' + (i === 0 ? ' lead' : '') + '" title="' +
+      esc(meta.label + ' — rank ' + (i + 1) + ' by flight impact' +
+        (entry && entry.topEvent ? '\n' + entry.topEvent : '')) + '">' +
+      '<span class="bd-rank">' + (i + 1) + '</span>' +
+      '<span class="bd-name">' + esc(meta.label) + '</span>' +
+      chip +
+      '<span class="bd-val' + (st.provisional ? ' prov' : '') + '" style="color:' + scoreColor(score) + '">' +
+      esc(val) + '</span></div>';
+  });
+  document.getElementById('bd-rows').innerHTML = html;
+
+  var comp = typeof d.composite === 'number' ? d.composite : null;
+  var cEl = document.getElementById('bd-composite');
+  cEl.textContent = comp == null ? '--' : comp.toFixed(1);
+  cEl.className = 'bd-val' + (summary.provisional ? ' prov' : '');
+
+  // Self-clearing by construction — when the index settles this badge removes
+  // itself with no date, no cached flag and no manual step.
+  if (RS) RS.attachBadge(document.getElementById('bd-state-slot'), summary, { compact: false, block: true, slotStyle: 'margin:0 0 8px' });
+
+  document.getElementById('bd-trace').innerHTML =
+    'source: ovix-api /api/ovix/op-risk?scope=global' +
+    (summary.ruleVersion ? '<br>rule: op_risk_index ' + esc(summary.ruleVersion) : '') +
+    (summary.lastUpdated && RS ? '<br>computed ' + esc(RS.fmtUpdated(summary.lastUpdated)) : '');
+
+  // The same badge rides the top bar, so the provisional basis is visible even
+  // with the board panel collapsed.
+  if (RS) RS.attachBadge(document.getElementById('tb-state-slot'), summary, { compact: true, slotStyle: 'margin:0' });
+}
+
+/* ===========================================================================
+ * 8. SIGNALS — context, and only context
+ *
+ * Deliberately subordinate: 4 px, low alpha, no labels, behind everything.
+ * On the community globe signals are the subject. Here they are the weather
+ * around the subject, and they are drawn so a reader can never mistake one
+ * for an airport.
+ * ======================================================================== */
+var SIGNAL_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+function clearSignals() {
+  signalEntities.forEach(function (e) { viewer.entities.remove(e); });
+  signalEntities = [];
+}
+
+function fetchSignals() {
+  if (!document.getElementById('sig-toggle').checked) return Promise.resolve();
+  return fetch('/api/roc-globe?mins=150', { signal: AbortSignal.timeout(15000) })
+    .then(function (r) { return r.ok ? r.json() : { signals: [] }; })
+    .then(function (d) {
+      clearSignals();
+      var plotted = 0;
+      (d.signals || []).forEach(function (s) {
+        var lat = num(s.lat), lon = num(s.lon);
+        if (lat == null || lon == null) return;
+        var created = new Date(s.created_at).getTime();
+        if (isNaN(created) || Date.now() - created > SIGNAL_MAX_AGE_MS) return;
+        plotted++;
+        var base = Cesium.Color.fromCssColorString(s.promoted ? '#eab308' : '#38bdf8');
+        signalEntities.push(viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          point: {
+            pixelSize: s.promoted ? 6 : 4,
+            color: new Cesium.CallbackProperty(function () {
+              var frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS;
+              return base.withAlpha(Math.max(0, Math.min(0.4, frac * 0.4)));
+            }, false),
+            outlineWidth: 0,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, 0.45)
+          },
+          properties: { travelRole: 'signal', sigTitle: s.title || 'Signal', sigCategory: s.category || '' }
+        }));
+      });
+      var el = document.getElementById('ct-signals');
+      if (el) el.textContent = '(' + plotted + ' in last 2 h)';
+    })
+    .catch(function () {});
+}
+
+document.getElementById('sig-toggle').addEventListener('change', function () {
+  if (this.checked) fetchSignals();
+  else { clearSignals(); var el = document.getElementById('ct-signals'); if (el) el.textContent = '(hidden)'; }
+});
+
+/* ===========================================================================
+ * 9. HOVER + CLICK
+ * ======================================================================== */
+var tooltip = document.getElementById('tooltip');
+
+function airportFromPick(picked) {
+  if (!picked || !picked.id || !picked.id.properties) return null;
+  var p = picked.id.properties;
+  var role = p.travelRole ? p.travelRole.getValue() : null;
+  if (role !== 'airport' && role !== 'advisory-ring' && role !== 'halo') return null;
+  var uid = p.uid ? p.uid.getValue() : null;
+  return uid ? airportByUid[uid] : null;
+}
+
+if (viewer) {
+  var hoverHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  hoverHandler.setInputAction(function (move) {
+    var picks = viewer.scene.drillPick(move.endPosition, 4, 10, 10);
+    var a = null;
+    for (var i = 0; i < picks.length && !a; i++) a = airportFromPick(picks[i]);
+    if (!a) { tooltip.style.display = 'none'; return; }
+
+    tooltip.querySelector('.tt-code').textContent =
+      (a.iata ? a.iata + ' / ' : '') + (a.icao || '') + '  ·  T' + a._tier;
+    tooltip.querySelector('.tt-name').textContent =
+      (a.name || '') + (a.country ? ' — ' + a.country : '');
+
+    var stEl = tooltip.querySelector('.tt-state');
+    var whenEl = tooltip.querySelector('.tt-when');
+    if (a._op === OP.DEGRADED) {
+      stEl.textContent = 'DEGRADED — ' +
+        (str(a.operational_reason) || str(a.obsStatusReason) || str(a.obsStatus) || 'problem reported');
+      stEl.style.color = degradedColor(a);
+      var d = delaySentence(a);
+      whenEl.textContent = (d ? d + '  ·  ' : '') + 'checked ' +
+        (fmtChecked(a.operational_checked_at || a.obsObservedAt || a.last_checked_at) || 'time not held');
+    } else if (a._op === OP.NOMINAL) {
+      stEl.textContent = 'NOMINAL — checked, operating normally';
+      stEl.style.color = C_NOMINAL;
+      // The timestamp is the entire licence for showing this as fine, so it
+      // rides the tooltip and is never left to the detail panel alone.
+      whenEl.textContent = 'checked ' + (fmtChecked(a.obsObservedAt || a.operational_checked_at) || 'time not held');
+    } else if (a._op === OP.NOFEED) {
+      stEl.textContent = 'NOT CHECKED — no feed exists';
+      stEl.style.color = C_UNKNOWN;
+      whenEl.textContent = 'coverage: none. This field is not monitored by any commercial feed.';
+    } else {
+      stEl.textContent = 'NOT CHECKED — state unknown';
+      stEl.style.color = C_UNKNOWN;
+      whenEl.textContent = str(a.operational_unknown_reason) ||
+        ('last checked ' + (fmtChecked(a.last_checked_at) || 'time not held'));
+    }
+
+    var advEl = tooltip.querySelector('.tt-adv');
+    if (a._adv === ADV.IN_FORCE) {
+      // The scope qualifier is not optional: every live advisory is at country
+      // scope, and a country judgement must never read as an airfield verdict.
+      advEl.innerHTML = '<span style="color:' + C_ADVISORY + '">advisory: ' +
+        esc(titleCase(a.advisory_level)) + '</span> — ' + esc(a.advisory_scope) + ' scope' +
+        (advIsWideArea(a) ? ', <span style="color:#94a3b8">not airfield-specific</span>' : '');
+    } else if (a._adv === ADV.UNKNOWN) {
+      advEl.innerHTML = '<span style="color:#94a3b8">advisory: unknown' +
+        (str(a.advisory_level) ? ' scope' : ' level') + ' — not an all-clear</span>';
+    } else {
+      advEl.innerHTML = '<span style="color:#64748b">advisory: none in force (checked)</span>';
+    }
+
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(move.endPosition.x + 15, window.innerWidth - 320) + 'px';
+    tooltip.style.top = Math.min(move.endPosition.y + 12, window.innerHeight - 150) + 'px';
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+  var clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  clickHandler.setInputAction(function (click) {
+    var picks = viewer.scene.drillPick(click.position, 5, 10, 10);
+    var a = null;
+    for (var i = 0; i < picks.length && !a; i++) a = airportFromPick(picks[i]);
+    if (a) showTrace(a); else closeTrace();
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  viewer.camera.changed.addEventListener(applyZoomVisibility);
+  viewer.camera.percentageChanged = 0.12;
+}
+
+/* ===========================================================================
+ * 10. THE TRACE PANEL — Traceability Standard gate 2
+ *
+ * Which source set this state, under which rule id and version, and when it was
+ * last checked. Rendered for BOTH axes independently, plus the observation that
+ * fed it and the coverage that bounds it. Nothing here is inferred: a field we
+ * do not hold is printed as "not held", never as a blank or a zero.
+ * ======================================================================== */
+var traceEl = document.getElementById('trace');
+function closeTrace() { traceEl.classList.remove('open'); }
+window.closeTrace = closeTrace;
+
+function kv(k, v, cls) {
+  return '<div class="tr-kv"><span class="tr-k">' + esc(k) + '</span>' +
+    '<span class="tr-v ' + (cls || '') + '">' + v + '</span></div>';
+}
+/** A value we hold, or an explicit statement that we do not. Never a blank. */
+function held(v, missing) {
+  var s = str(v);
+  return s ? esc(s) : '<span class="tr-v unknown">' + esc(missing || 'not held') + '</span>';
+}
+function srcLine(source, ref) {
+  var s = str(source), u = safeUrl(ref);
+  if (!s && !u) return '<span class="tr-v unknown">no source recorded</span>';
+  var out = s ? esc(s) : 'source not named';
+  if (u) out += ' · <a href="' + esc(u) + '" target="_blank" rel="noopener">open&nbsp;↗</a>';
+  else if (str(ref)) out += ' · <span class="dim">' + esc(ref) + '</span>';
+  return out;
+}
+function showTrace(a) {
+  document.getElementById('tr-code').textContent =
+    (a.iata ? a.iata : '—') + (a.icao ? '  ·  ' + a.icao : '');
+  document.getElementById('tr-name').textContent =
+    (a.name || 'Unnamed field') + (a.country ? ' — ' + a.country : '');
+
+  var w = num(a.business_travel_weight);
+  document.getElementById('tr-meta').innerHTML =
+    'Tier ' + a._tier + ' · ' + esc(titleCase(a.category) || 'category not held') +
+    (w != null ? ' · business-travel weight ' + w : '') +
+    ' · ' + (a._lat != null ? a._lat.toFixed(3) + '°, ' + a._lon.toFixed(3) + '°' : 'position not held') +
+    (a._scatter ? ' <span style="color:#475569">(nudged from a shared position for clickability)</span>' : '');
+
+  var h = '';
+
+  // ── THE VERDICT — what the marker on the map is claiming, and which input
+  //    carried it. Separated from the raw axes below so a reader can always see
+  //    that the marker is DERIVED, and from what. ──
+  var opColor = a._op === OP.DEGRADED ? degradedColor(a) : (a._op === OP.NOMINAL ? C_NOMINAL : C_UNKNOWN);
+  var opVerdict = a._op === OP.DEGRADED ? 'DEGRADED'
+    : (a._op === OP.NOMINAL ? 'NOMINAL — CHECKED' : (a._op === OP.NOFEED ? 'NOT CHECKED — NO FEED' : 'NOT CHECKED'));
+  h += '<div class="tr-sec">' +
+    '<div class="tr-sec-h"><span>Airfield state</span><em>what this marker claims</em></div>' +
+    '<div class="tr-verdict" style="color:' + opColor + '">' + esc(opVerdict) + '</div>' +
+    '<div class="tr-why">' + esc(opClassWhy(a, a._op)) + '</div>' +
+    '</div>';
+
+  // ── AXIS 1: OPERATIONAL — the hard fact, from the controlling state ──
+  //    Today this is `unknown` for all 272 fields: the NOTAM source needs
+  //    credentials that are not registered. It is shown as its own block, empty
+  //    and labelled, rather than folded away — an axis with no values is a fact
+  //    about our coverage and the reader is entitled to it.
+  var opStateKnown = (str(a.operational_state) || '').toLowerCase() !== 'unknown' && !!str(a.operational_state);
+  h += '<div class="tr-sec">' +
+    '<div class="tr-sec-h"><span>Operational axis</span><em>hard fact · controlling state</em></div>' +
+    (opStateKnown ? '' : '<div class="tr-why">This axis carries no value for this field. It is the ' +
+      'state that controls the airspace speaking — nothing else can substitute for it, so an absent ' +
+      'operational reading is left absent rather than filled in from the observation feed.</div>') +
+    kv('state', held(a.operational_state)) +
+    kv('reason', held(a.operational_reason, 'no reason recorded')) +
+    kv('source', srcLine(a.operational_source, a.operational_source_ref)) +
+    kv('last checked', held(fmtChecked(a.operational_checked_at), 'never checked')) +
+    (str(a.effective_from) ? kv('effective from', held(fmtAbs(a.effective_from) || a.effective_from)) : '') +
+    (str(a.effective_to) ? kv('effective to', held(fmtAbs(a.effective_to) || a.effective_to)) : '') +
+    kv('unknown because', held(a.operational_unknown_reason, 'no reason recorded')) +
+    '</div>';
+
+  // ── AXIS 2: ADVISORY — a judgement, not a fact. Never merged with axis 1. ──
+  var advColor = a._adv === ADV.IN_FORCE ? C_ADVISORY : (a._adv === ADV.NONE ? '#64748b' : C_UNKNOWN);
+  var wide = advIsWideArea(a);
+  var advVerdict = a._adv === ADV.IN_FORCE
+    ? ((wide ? titleCase(a.advisory_scope).toUpperCase() + '-LEVEL — ' : 'IN FORCE — ') +
+       (titleCase(a.advisory_level) || 'level held'))
+    : (a._adv === ADV.NONE ? 'NONE IN FORCE — CHECKED' : 'UNKNOWN');
+  h += '<div class="tr-sec">' +
+    '<div class="tr-sec-h"><span>Advisory axis</span><em>risk judgement · issuer does not control this airspace</em></div>' +
+    '<div class="tr-verdict" style="color:' + advColor + '">' + esc(advVerdict) + '</div>' +
+    '<div class="tr-why">' + esc(advWhy(a, a._adv)) + '</div>' +
+    kv('level', held(a.advisory_level)) +
+    // scope is called out explicitly because a null scope is the trap: it is
+    // unknown coverage, and must never read as an airfield-specific all-clear.
+    kv('scope', str(a.advisory_scope)
+      ? (esc(a.advisory_scope) + (wide ? ' <span class="tr-v unknown">— wider than this airfield</span>' : ''))
+      : '<span class="tr-v unknown">unknown — this reading is not airfield-specific</span>') +
+    kv('reason', held(a.advisory_reason, 'no reason recorded')) +
+    kv('source', srcLine(a.advisory_source, a.advisory_source_ref)) +
+    kv('last checked', held(fmtChecked(a.advisory_checked_at), 'never checked')) +
+    kv('unknown because', held(a.advisory_unknown_reason, 'no reason recorded')) +
+    '</div>';
+
+  // ── The observation that carried the verdict ──
+  var covClass = (str(a.coverage_class) || 'none').toLowerCase();
+  var covWords = {
+    live: 'A live feed covers this field — status, delays and cancellations.',
+    schedule_only: 'Schedule data only. Delay and cancellation figures are NOT available for this field.',
+    delays_only: 'Delay data only. No schedule or full status feed.',
+    none: 'No commercial feed covers this field at all. Anything we show about it comes from the airspace ring or is unknown.'
+  }[covClass] || 'Coverage class not recognised — treated as unmonitored.';
+
+  function cnt(v, of) {
+    if (v == null) return '<span class="tr-v unknown">not held</span>';
+    return esc(v) + (of != null ? ' <span class="dim">of ' + esc(of) + '</span>' : '');
+  }
+  function mins(v) { return v == null ? '<span class="tr-v unknown">not held</span>' : esc(Math.round(v) + ' min'); }
+
+  h += '<div class="tr-sec">' +
+    '<div class="tr-sec-h"><span>Observation</span><em>15-minute sweep</em></div>' +
+    kv('status', held(a.obsStatus, 'no observation held')) +
+    kv('status reason', held(a.obsStatusReason, 'no reason recorded')) +
+    kv('observed at', held(fmtChecked(a.obsObservedAt), 'no observation held')) +
+    kv('source', held(a.obsSource, 'no source recorded')) +
+    kv('sweep id', held(a.obsSweepId, 'not held'), 'dim') +
+    kv('departures', cnt(a._depTotal) + (a._depQual != null ? ' <span class="dim">· ' + esc(a._depQual) + ' qualified</span>' : '')) +
+    kv('dep. cancelled', cnt(a._depCancel, a._depTotal)) +
+    kv('dep. median delay', mins(a._depMedian)) +
+    kv('dep. delay index', a._depIndex == null ? '<span class="tr-v unknown">not held</span>' : esc(Math.round(a._depIndex * 100) / 100)) +
+    kv('arrivals', cnt(a._arrTotal) + (a._arrQual != null ? ' <span class="dim">· ' + esc(a._arrQual) + ' qualified</span>' : '')) +
+    kv('arr. cancelled', cnt(a._arrCancel, a._arrTotal)) +
+    kv('arr. median delay', mins(a._arrMedian)) +
+    kv('arr. delay index', a._arrIndex == null ? '<span class="tr-v unknown">not held</span>' : esc(Math.round(a._arrIndex * 100) / 100)) +
+    kv('coverage', '<span style="color:' + (covClass === 'live' ? '#cbd5e1' : C_UNKNOWN) + '">' +
+      esc(covClass.replace(/_/g, ' ')) + '</span>') +
+    '<div class="tr-why">' + esc(covWords) + '</div>' +
+    '<div class="tr-why" style="border-color:rgba(148,163,184,0.18)">Reserved, not available: ' +
+    '<code>obsLifecycle</code>, <code>obsAvgDelayMin</code> and <code>obsMaxDelayMin</code> are null ' +
+    'for every observation row the pipeline has written. They are not shown, and nothing on this ' +
+    'page is derived from them.</div>' +
+    '</div>';
+
+  // ── The rules that graded it — named and versioned, per the Traceability
+  //    Standard (gate 4/5). Two DIFFERENT rules touch this row and they are
+  //    listed separately: the airspace-ring severity rule, and the observation
+  //    grading rule that produced obsStatus. ──
+  h += '<div class="tr-sec">' +
+    '<div class="tr-sec-h"><span>Rules &amp; grading</span><em>named + versioned</em></div>' +
+    kv('ring rule', held(a.rule_id, 'no rule recorded') +
+      (str(a.rule_version) ? ' <span class="dim">' + esc(a.rule_version) + '</span>' : '')) +
+    kv('observation rule', held(a.obsRuleId, 'no rule recorded') +
+      (str(a.obsRuleVersion) ? ' <span class="dim">' + esc(a.obsRuleVersion) + '</span>' : '')) +
+    kv('severity', a.severity != null ? esc(a.severity) : '<span class="tr-v unknown">not held</span>') +
+    kv('severity band', held(a.severity_band)) +
+    kv('ring source', held(a.ring_source)) +
+    kv('monitor tier', 'Tier ' + a._tier + ' — ' +
+      (a._tier === 1 ? 'polled every 15 min' : a._tier === 2 ? 'regular sweep' : 'event-driven only')) +
+    kv('gps interference', a.gps_interference == null
+      ? '<span class="tr-v unknown">not held</span>'
+      : (a.gps_interference ? '<span style="color:' + C_MOD + '">reported</span>' : 'none reported')) +
+    kv('row last checked', held(fmtChecked(a.last_checked_at), 'not held')) +
+    '</div>';
+
+  h += '<div class="tr-sec"><div class="tr-why" style="border-color:rgba(34,211,238,0.3)">' +
+    'Served by the Hub route <b>/api/roc-airports</b>, which publishes every registry airport on ' +
+    'every request — including the ones we could not check. Nothing on this panel is computed in ' +
+    'the browser.</div></div>';
+
+  document.getElementById('tr-body').innerHTML = h;
+  traceEl.classList.add('open');
+}
+
+/* ===========================================================================
+ * 11. CHROME + BOOT
+ * ======================================================================== */
+window.togglePanel = function (id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('collapsed');
+  var btn = el.querySelector('.p-toggle');
+  if (btn) btn.innerHTML = el.classList.contains('collapsed') ? '&#9660;' : '&#9650;';
+};
+
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTrace(); });
+
+if (viewer) {
+  fetchAirports();
+  fetchOpRisk();
+  fetchSignals();
+
+  // Airports re-read on the observation cadence; the index and signals on their own.
+  setInterval(function () {
+    // Rebuilding entities wholesale is the honest refresh: state can change in
+    // both directions, and a marker must never keep a stale shape.
+    viewer.entities.removeAll();
+    airportByUid = {};
+    signalEntities = [];
+    fetchAirports().then(function () { return fetchSignals(); });
+  }, 5 * 60 * 1000);
+  setInterval(fetchOpRisk, 10 * 60 * 1000);
+  setInterval(fetchSignals, 5 * 60 * 1000);
+}
+</script>
+</body>
+</html>
