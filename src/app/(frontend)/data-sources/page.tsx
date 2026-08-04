@@ -5,8 +5,8 @@ export const dynamic = 'force-dynamic'
 
 const domainGradients: Record<string, string> = {
   weather: 'linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%)',
-  seismic: 'linear-gradient(135deg, #ef4444 0%, #f97316 100%)',
-  disaster: 'linear-gradient(135deg, #f97316 0%, #f59e0b 100%)',
+  seismic: 'linear-gradient(135deg, #f43f5e 0%, #fb7185 100%)',
+  disaster: 'linear-gradient(135deg, #ef4444 0%, #f87171 100%)',
   infrastructure: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
   cyber: 'linear-gradient(135deg, #22c55e 0%, #10b981 100%)',
   health: 'linear-gradient(135deg, #ec4899 0%, #f43f5e 100%)',

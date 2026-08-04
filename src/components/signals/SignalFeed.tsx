@@ -18,7 +18,7 @@ interface Signal {
 
 const severityColors: Record<string, string> = {
   extreme: '#e74c3c',
-  severe: '#f39c12',
+  severe: '#eab308',
   moderate: '#3498db',
   info: '#27ae60',
 }

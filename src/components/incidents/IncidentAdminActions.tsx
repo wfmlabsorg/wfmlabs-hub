@@ -194,7 +194,7 @@ export function IncidentAdminActions({ slug, sevLevel, status }: Props) {
             onClick={() => {
               if (window.confirm('Reopen this incident?')) run('reopen')
             }}
-            style={{ ...btnBase, borderColor: '#f9731644', color: '#f97316' }}
+            style={{ ...btnBase, borderColor: '#e879f944', color: '#e879f9' }}
           >
             {busy === 'reopen' ? 'Reopening…' : '↺ Reopen'}
           </button>

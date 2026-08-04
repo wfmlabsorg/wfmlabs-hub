@@ -584,8 +584,8 @@ a:hover {
 /* === OVIX Domain Gradients === */
 
 .ovix-gradient-weather { background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%); }
-.ovix-gradient-seismic { background: linear-gradient(135deg, #ef4444 0%, #f97316 100%); }
-.ovix-gradient-disaster { background: linear-gradient(135deg, #f97316 0%, #f59e0b 100%); }
+.ovix-gradient-seismic { background: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%); }
+.ovix-gradient-disaster { background: linear-gradient(135deg, #ef4444 0%, #f87171 100%); }
 .ovix-gradient-infrastructure { background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%); }
 .ovix-gradient-cyber { background: linear-gradient(135deg, #22c55e 0%, #10b981 100%); }
 .ovix-gradient-health { background: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%); }
@@ -601,8 +601,8 @@ a:hover {
 }
 
 .ovix-domain-dot-weather { background: #3b82f6; }
-.ovix-domain-dot-seismic { background: #ef4444; }
-.ovix-domain-dot-disaster { background: #f97316; }
+.ovix-domain-dot-seismic { background: #f43f5e; }
+.ovix-domain-dot-disaster { background: #ef4444; }
 .ovix-domain-dot-infrastructure { background: #8b5cf6; }
 .ovix-domain-dot-cyber { background: #22c55e; }
 .ovix-domain-dot-health { background: #ec4899; }

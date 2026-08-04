@@ -9,8 +9,8 @@ export const metadata: Metadata = {
 
 const ovixDomains = [
   { name: 'weather', color: '#3b82f6' },
-  { name: 'seismic', color: '#ef4444' },
-  { name: 'disaster', color: '#f97316' },
+  { name: 'seismic', color: '#f43f5e' },
+  { name: 'disaster', color: '#ef4444' },
   { name: 'infrastructure', color: '#8b5cf6' },
   { name: 'cyber', color: '#22c55e' },
   { name: 'health', color: '#ec4899' },

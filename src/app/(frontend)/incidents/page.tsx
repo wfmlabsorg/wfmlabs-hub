@@ -46,15 +46,15 @@ interface Incident {
 
 const sevConfig: Record<string, { label: string; color: string; bg: string; borderColor: string; pulse?: boolean }> = {
   SEV1: { label: 'SEV1', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', borderColor: '#ef4444', pulse: true },
-  SEV2: { label: 'SEV2', color: '#f97316', bg: 'rgba(249,115,22,0.1)', borderColor: '#f97316' },
+  SEV2: { label: 'SEV2', color: '#f87171', bg: 'rgba(248,113,113,0.1)', borderColor: '#f87171' },
   SEV3: { label: 'SEV3', color: '#eab308', bg: 'transparent', borderColor: '#eab308' },
   SEV4: { label: 'SEV4', color: '#64748b', bg: 'transparent', borderColor: '#475569' },
 }
 
 const domainColors: Record<string, { bg: string; fg: string; border: string }> = {
   weather: { bg: 'rgba(59,130,246,0.08)', fg: '#60a5fa', border: '#3b82f6' },
-  seismic: { bg: 'rgba(239,68,68,0.08)', fg: '#f87171', border: '#ef4444' },
-  disaster: { bg: 'rgba(249,115,22,0.08)', fg: '#fb923c', border: '#f97316' },
+  seismic: { bg: 'rgba(244,63,94,0.08)', fg: '#fb7185', border: '#f43f5e' },
+  disaster: { bg: 'rgba(239,68,68,0.08)', fg: '#f87171', border: '#ef4444' },
   cyber: { bg: 'rgba(34,197,94,0.08)', fg: '#4ade80', border: '#22c55e' },
   health: { bg: 'rgba(236,72,153,0.08)', fg: '#f472b6', border: '#ec4899' },
   infrastructure: { bg: 'rgba(139,92,246,0.08)', fg: '#a78bfa', border: '#8b5cf6' },
@@ -77,7 +77,7 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; p
   'de-escalated': { label: 'DE-ESCALATED', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
   resolving: { label: 'RESOLVING', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
   closed: { label: 'CLOSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
-  reopened: { label: 'REOPENED', color: '#f97316', bg: 'rgba(249,115,22,0.1)', pulse: true },
+  reopened: { label: 'REOPENED', color: '#e879f9', bg: 'rgba(232,121,249,0.1)', pulse: true },
 }
 
 const domainList = [

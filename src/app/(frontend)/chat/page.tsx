@@ -9,8 +9,8 @@ export const dynamic = 'force-dynamic'
 
 const domainColors: Record<string, string> = {
   weather: '#3b82f6',
-  seismic: '#ef4444',
-  disaster: '#f97316',
+  seismic: '#f43f5e',
+  disaster: '#ef4444',
   infrastructure: '#8b5cf6',
   cyber: '#22c55e',
   health: '#ec4899',
