@@ -39,6 +39,11 @@ const PUBLIC_PREFIXES = [
   '/_next/',
   '/favicon',
   '/admin',
+  // hub-051 item 4: the twelve per-domain risk maps live at
+  // /travelrisk/risk/{slug}. PUBLIC_PATHS matches TRAVELRISK_LANDING_PATH
+  // EXACTLY, not its children, so without this prefix every one of the twelve
+  // would bounce to /login. Public exactly as the landing is.
+  `${TRAVELRISK_LANDING_PATH}/`,
 ]
 
 export function middleware(request: NextRequest) {

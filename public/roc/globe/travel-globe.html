@@ -128,7 +128,44 @@
    GET /api/roc-airports                       same-origin Hub route (hub-044)
    GET /api/ovix/op-risk?scope=global          ovix-api, the 12-domain index
    GET /api/roc-globe?mins=150                 same-origin, signals as CONTEXT
+   GET /api/incidents?section=active&limit=100 same-origin, declared incidents
  No Neon from the browser. No endpoint added here. No score recomputed here.
+
+ -----------------------------------------------------------------------------
+ hub-051 — THREE LAYERS, AND THE END OF THE WALL OF YELLOW
+ -----------------------------------------------------------------------------
+ (1) THREE LAYERS. This globe plotted airports and nothing else; the community
+     globe plotted incidents and signals and no airports. Ted wants one
+     instrument. Incidents are PORTED from globe.html rather than reinvented —
+     same endpoint, same SEV ramp, same pulse, same halo — because that code is
+     battle-tested against real geography. Airports stay the PRINCIPAL anchor
+     (TRAVELRISK-SITE-SPEC §3): incidents and signals are context on top of
+     them, each independently toggleable, and the visual grammar keeps them
+     apart — an airport is a disc or a ring with a label, an incident is a
+     pulsing haloed point, a signal is a 4 px dot with no outline and no label.
+
+ (2) PROMOTED SIGNALS ARE NO LONGER DRAWN. globe.html's rule, ported verbatim:
+     a signal already adopted into an open incident is skipped, and the incident
+     layer renders it. That kills a double-plot AND retires a use of amber.
+
+ (3) THE PRESENTATION FILTER. Urban-transit / marine / road producers are not
+     drawn on this surface (see src/lib/travelrisk/presentation.ts). The count
+     withheld is printed in the legend — a surface that silently drops rows is
+     indistinguishable from a surface with no data.
+
+ (4) THE WALL OF YELLOW — see riskAxes.ts for the full diagnosis. Two causes,
+     one hex. The domain board coloured 9 of 12 domains amber because
+     `score < 4.0 ? green : amber` cuts a hard cliff through a live spread of
+     3.7–4.6; and `degradedColor()` fell through to amber for every degraded
+     airport because `severity_band` and `severity` are NULL on all 272 rows.
+     Fixed by giving each axis its own channel: the index board draws magnitude
+     as a BAR in one hue and prints its level as a word, and the hazard ramp is
+     reserved for a thing we CHECKED and found impaired. Nothing is hidden.
+
+ (5) SCENE MODE. `sceneModePicker` is now TRUE on this globe only. A 3D globe
+     hides roughly half of 272 anchors behind the earth at any instant; 2D shows
+     every one at once. Ted asked, so Ted gets the switch. globe.html is
+     untouched.
 
  THEME: Mission Control. NO ORANGE (#f97316) — hub-041 took four gate-rounds.
 =============================================================================
@@ -253,25 +290,64 @@
     }
     #tb-look .look-v { font-size: 13px; font-weight: bold; letter-spacing: 0.03em; font-variant-numeric: tabular-nums; }
     #tb-look .look-abs { color: #64748b; font-size: 9.5px; }
-    .look-fresh { color: #18BC9C; }
-    .look-aging { color: #eab308; }
-    .look-stale { color: #ef4444; }
-    .look-none  { color: #94a3b8; }
+    /* hub-051 §7 — FRESHNESS IS THE CONFIDENCE AXIS, SO IT IS SLATE.
+       This block used to read `.look-aging { color:#eab308 }` and
+       `.look-stale { color:#ef4444 }` — the hazard ramp, applied to a fact
+       about OUR OWN polling. That contradicted this file's own palette note
+       twenty lines up ("slate #94a3b8 — the confidence axis, always neutral")
+       and it put a sixth distinct meaning on amber. A sweep going stale is not
+       a hazard in the world; it is a hole in what we know.
+       Age is now carried on the slate ramp plus a NON-COLOUR channel (a dashed
+       underline, and the band word spelled out beside it), so a stale reading
+       is more legible than it was, not less — it simply stops impersonating an
+       airport with a problem. */
+    .look-fresh { color: #cbd5e1; }
+    .look-aging { color: #94a3b8; }
+    .look-stale { color: #94a3b8; text-decoration: underline dashed rgba(148,163,184,0.7); text-underline-offset: 3px; }
+    .look-none  { color: #94a3b8; font-style: italic; }
+    #tb-look .look-band {
+      color: #475569; font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    }
 
     /* ── Right: the travel-first 12-domain board ─────────────────────────── */
-    #boardpanel { top: 46px; right: 12px; width: 250px; max-height: calc(100vh - 64px); overflow-y: auto; }
+    #boardpanel { top: 46px; right: 12px; width: 272px; max-height: calc(100vh - 64px); overflow-y: auto; }
     .bd-row {
-      display: flex; align-items: center; gap: 7px; padding: 3px 4px; margin: 0 -4px;
-      border-radius: 2px; line-height: 1.3;
+      display: flex; align-items: center; gap: 6px; padding: 3px 4px; margin: 0 -4px;
+      border-radius: 2px; line-height: 1.3; text-decoration: none;
     }
+    a.bd-row { color: inherit; }
+    a.bd-row:hover { text-decoration: none; }
     .bd-row:hover { background: rgba(34, 211, 238, 0.08); }
     .bd-rank { color: #475569; font-size: 9px; width: 13px; flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
-    .bd-name { flex: 1 1 auto; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bd-name { flex: 1 1 auto; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 52px; }
     .bd-row.lead .bd-name { color: #22d3ee; font-weight: 700; }
-    .bd-val { font-weight: bold; font-variant-numeric: tabular-nums; min-width: 26px; text-align: right; flex: 0 0 auto; }
-    /* hub-045: a provisional VALUE keeps its hazard colour (severity axis) and is
-       marked with a dashed underline plus a neutral chip (confidence axis). */
+    /* hub-051 §7 — MAGNITUDE IS A BAR, NOT A COLOUR BAND.
+       One hue for the whole board. Length carries the number, which the eye
+       reads accurately; a colour band carried a threshold, which the eye read
+       as an alarm. The hazard ramp is reserved for checked impairment. */
+    .bd-track {
+      flex: 0 0 42px; height: 5px; border-radius: 3px; overflow: hidden;
+      background: rgba(148, 163, 184, 0.16);
+    }
+    .bd-track.empty {
+      background-image: repeating-linear-gradient(45deg, rgba(148,163,184,0.32) 0 2px, transparent 2px 4px);
+    }
+    .bd-fill { display: block; height: 100%; background: #22d3ee; opacity: 0.85; }
+    .bd-val { font-weight: bold; font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; flex: 0 0 auto; color: #cbd5e1; }
+    .bd-val.none { color: #94a3b8; font-weight: 400; font-style: italic; }
+    /* hub-045: a provisional VALUE is marked with a dashed underline plus a
+       neutral chip. hub-051 removes its hazard colour — see .bd-fill above. */
     .bd-val.prov { border-bottom: 1px dashed rgba(148, 163, 184, 0.38); }
+    /* The published level word, kept verbatim. Demoted from a colour flood to a
+       label — nothing is withheld, it simply stops shouting. */
+    .bd-lvl {
+      flex: 0 0 auto; width: 54px; text-align: right; color: #475569;
+      font-size: 8.5px; letter-spacing: 0.07em;
+    }
+    #bd-spread {
+      display: none; border-left: 2px solid #94a3b8; background: rgba(148, 163, 184, 0.07);
+      padding: 7px 9px; margin: 8px 0 2px; font-size: 10px; line-height: 1.55; color: #94a3b8;
+    }
     .bd-composite { display: flex; justify-content: space-between; gap: 14px; padding: 5px 4px 1px; margin: 0 -4px; }
     .bd-composite span:first-child { color: #22d3ee; font-weight: bold; letter-spacing: 0.06em; }
     .bd-composite .bd-val { color: #22d3ee; font-size: 13px; }
@@ -370,11 +446,65 @@
       z-index: 250; color: #475569; font-size: 11px; letter-spacing: 0.14em;
     }
 
+    /* ── hub-051 §7: "WHAT IS ACTUALLY WRONG RIGHT NOW" ───────────────────
+       The direct answer to Ted's question. If there are ten checked-and-bad
+       fields on the planet, the page names all ten rather than making a reader
+       hunt ten amber dots among 272 markers. Click flies the camera to one.
+       This is the ONLY place on the globe chrome allowed to use the hazard
+       ramp, because it is the only place reporting a checked impairment. */
+    #wrongpanel { top: 46px; left: 292px; width: 262px; max-height: calc(100vh - 64px); overflow-y: auto; }
+    #wrongpanel .p-head { color: #ef4444; border-bottom-color: rgba(239, 68, 68, 0.22); }
+    .wr-item {
+      display: block; width: 100%; text-align: left; cursor: pointer;
+      background: rgba(234, 179, 8, 0.05); border: none;
+      border-left: 3px solid #eab308; border-radius: 2px;
+      padding: 5px 8px; margin-bottom: 4px; font-family: inherit; font-size: 11px;
+      color: #cbd5e1; line-height: 1.4;
+    }
+    .wr-item:hover { background: rgba(234, 179, 8, 0.14); }
+    .wr-item.severe { border-left-color: #ef4444; background: rgba(239, 68, 68, 0.06); }
+    .wr-item.severe:hover { background: rgba(239, 68, 68, 0.15); }
+    .wr-code { font-weight: bold; letter-spacing: 0.05em; color: #eab308; }
+    .wr-item.severe .wr-code { color: #ef4444; }
+    .wr-where { color: #94a3b8; font-size: 10px; }
+    .wr-why { display: block; color: #64748b; font-size: 9.5px; margin-top: 1px; }
+    .wr-none { color: #64748b; font-style: italic; font-size: 10px; line-height: 1.55; }
+
+    /* ── hub-051 §1: the three-layer switch ──────────────────────────────── */
+    .ly-row { display: flex; align-items: flex-start; gap: 7px; padding: 4px 0; line-height: 1.4; }
+    .ly-row label { cursor: pointer; color: #cbd5e1; display: flex; gap: 7px; align-items: baseline; }
+    .ly-row input { accent-color: #22d3ee; vertical-align: -1px; flex: 0 0 auto; }
+    .ly-n { color: #64748b; font-variant-numeric: tabular-nums; }
+    .ly-sub { display: block; color: #64748b; font-size: 9.5px; }
+
+    /* ── hub-051 §1: EMBED MODE ──────────────────────────────────────────
+       The landing hero frames this page. In that frame the Hub's own nav sits
+       directly above, so the globe's top bar would be a second navigation
+       three pixels below the first. `?embed=1` drops the topbar links and
+       tightens the panels; nothing about the DATA or the markers changes. */
+    body.embed #topbar .tb-links { display: none; }
+    body.embed #topbar { padding: 5px 12px; }
+    body.embed #statepanel, body.embed #wrongpanel, body.embed #boardpanel { top: 40px; max-height: calc(100vh - 54px); }
+    body.embed #trace { top: 40px; }
+    #embed-out {
+      display: none; position: absolute; bottom: 12px; right: 12px; z-index: 420;
+      background: rgba(6, 6, 16, 0.9); border: 1px solid rgba(34, 211, 238, 0.3);
+      border-radius: 4px; padding: 6px 11px; font-size: 10px; letter-spacing: 0.06em;
+    }
+    body.embed #embed-out { display: block; }
+
     @media (prefers-reduced-motion: reduce) {
       #zoombar .zb-step.on .zb-led { box-shadow: none; }
     }
+    /* Below 1180px the "what is wrong" panel would overlap the legend. It is
+       the more important of the two on this surface, so the LEGEND yields —
+       and it yields by moving, not by hiding a problem. */
+    @media (max-width: 1180px) {
+      #statepanel { display: none; }
+      #wrongpanel { left: 12px; }
+    }
     @media (max-width: 900px) {
-      #statepanel, #boardpanel { display: none; }
+      #statepanel, #boardpanel, #wrongpanel { display: none; }
       #trace { width: calc(100vw - 24px); right: 12px; }
     }
   </style>
@@ -390,6 +520,9 @@
     <span id="tb-look">
       <span class="look-k">Last look</span>
       <span class="look-v look-none" id="tb-look-v">—</span>
+      <!-- hub-051: the age BAND in words. The colour used to carry this on the
+           hazard ramp; now the word carries it and the colour stays slate. -->
+      <span class="look-band" id="tb-look-band"></span>
       <span class="look-abs" id="tb-look-abs"></span>
     </span>
     <span class="tb-sub" id="tb-census">loading airport plane…</span>
@@ -501,16 +634,59 @@
       <div class="lg-row"><span class="lg-txt" id="tally-line"><span>loading…</span></span></div>
 
       <div class="lg-sep"></div>
-      <div class="lg-title">Context layer</div>
-      <div class="lg-row"><span class="lg-txt">
-        <label style="cursor:pointer; color:#94a3b8;">
-          <input type="checkbox" id="sig-toggle" checked style="vertical-align:-1px; accent-color:#22d3ee;">
-          Recent signals <span id="ct-signals" style="color:#64748b;"></span>
+      <!-- hub-051 item 1/5: THREE LAYERS, independently toggleable. Airports
+           remain the PRINCIPAL anchor (TRAVELRISK-SITE-SPEC §3); incidents and
+           signals are context layered on top of them and are drawn so that
+           neither can be mistaken for an airfield. -->
+      <div class="lg-title">Layers</div>
+      <div class="ly-row">
+        <label>
+          <input type="checkbox" id="ap-toggle" checked>
+          <span>Airports <span class="ly-n" id="ct-layer-airports"></span>
+            <span class="ly-sub">The anchors. Four states, tier-revealed by zoom.</span></span>
         </label>
-        <span style="display:block;">Dim, subordinate. Airports are the anchors here.</span>
-      </span></div>
+      </div>
+      <div class="ly-row">
+        <label>
+          <input type="checkbox" id="inc-toggle" checked>
+          <span>Incidents <span class="ly-n" id="ct-incidents"></span>
+            <span class="ly-sub">Declared by Watchkeeper. Pulsing ring, sized by severity.</span></span>
+        </label>
+      </div>
+      <div class="ly-row">
+        <label>
+          <input type="checkbox" id="sig-toggle" checked>
+          <span>Signals <span class="ly-n" id="ct-signals"></span>
+            <span class="ly-sub">The raw stream, last 2&nbsp;h. Dim and subordinate — 4&nbsp;px, no label,
+              never a hazard hue.</span></span>
+        </label>
+      </div>
+      <div class="lg-note" id="ly-filter-note"></div>
     </div>
   </div>
+
+  <!-- hub-051 §7 — THE DIRECT ANSWER TO "WHERE IS REAL RISK RIGHT NOW".
+       Everything we checked and found impaired, named and exhaustive. If this
+       panel is empty it says so in words: an empty list here is a read of the
+       observation store, not an absence of monitoring. -->
+  <div class="panel" id="wrongpanel">
+    <div class="p-head">
+      <span>WHAT IS WRONG NOW</span>
+      <button class="p-toggle" onclick="togglePanel('wrongpanel')" title="Collapse">&#9650;</button>
+    </div>
+    <div class="p-body">
+      <div class="lg-title">Checked, and impaired</div>
+      <div id="wr-airports"><span class="wr-none">reading the sweep…</span></div>
+      <div class="lg-sep"></div>
+      <div class="lg-title">Declared incidents</div>
+      <div id="wr-incidents"><span class="wr-none">reading incidents…</span></div>
+      <div class="lg-note">These are the only things on this globe drawn in red or amber. Every other
+        marker is either a checked-and-fine field (teal), something we have not checked (hollow slate),
+        or context (dim). If nothing is listed here, nothing we checked is currently impaired.</div>
+    </div>
+  </div>
+
+  <a id="embed-out" href="/roc/globe/travel-globe.html" target="_blank" rel="noopener">Open full screen &#8599;</a>
 
   <!-- RIGHT — the 12 canonical domains in TRAVEL-FIRST order. Presentation only:
        nothing here rescores, renames, or drops a domain. -->
@@ -522,6 +698,12 @@
     <div class="p-body">
       <div id="bd-state-slot"></div>
       <div id="bd-rows"></div>
+      <!-- hub-051 §7: what the numbers actually spread across. Derived on every
+           refresh; disappears by itself once the domains genuinely separate. -->
+      <div id="bd-spread"></div>
+      <div class="lg-note" style="margin-top:6px;">Each row opens that domain&rsquo;s risk map.
+        Length is the score; the word is the published level. Red and amber are reserved on this
+        surface for fields we checked and found impaired.</div>
       <div class="lg-sep"></div>
       <div class="bd-composite"><span>COMPOSITE</span><span class="bd-val" id="bd-composite">--</span></div>
       <div class="lg-note" id="bd-trace">source: ovix-api /api/ovix/op-risk?scope=global</div>
@@ -589,6 +771,29 @@ function pick(o) {
 
 var RS = window.RocScoreState || null;
 if (RS) RS.injectStyles();
+
+/* ── hub-051 §7: DEPTH TESTING IS ON. A marker behind the earth is hidden. ──
+ *
+ * Every marker on this page used to carry
+ * `disableDepthTestDistance: Number.POSITIVE_INFINITY` — inherited from
+ * globe.html, where it is a deliberate choice that keeps the whole signal
+ * population visible at once. On an AIRPORT map it is a lie about geography.
+ *
+ * MEASURED, in 3D, with the camera over the North Atlantic: PVG, PEK, BKK, CGK
+ * and DMK — all on the far side of the planet — were drawn on top of the
+ * Atlantic-facing hemisphere, so Beijing rendered as though it sat over the
+ * mid-ocean. A reader could not tell a front-side airport from a back-side one,
+ * which means they could not read a position off this map at all. Ted asked for
+ * "points I can view on the globe itself to show TRUE risk"; a marker in the
+ * wrong place is the opposite of that, and it is a subtler failure than the wall
+ * of yellow precisely because it looks fine.
+ *
+ * Cesium's default (0) enables depth testing, which occludes far-side markers
+ * correctly. It costs nothing in SCENE2D or COLUMBUS_VIEW — a flat map has no
+ * back face — so this is a 3D correction that leaves the other two modes
+ * untouched. globe.html is NOT changed: its layers are region-scale signal
+ * geography where see-through is defensible, and it is not this task's file. */
+var DEPTH_TEST = 0;
 
 /* The degraded pulse draws the eye to a problem. Readers who have asked for
  * reduced motion get a steady, equally visible ring instead — the signal is
@@ -773,18 +978,74 @@ var C_ADVISORY = '#a78bfa';
 var C_ADV_UNK  = 'rgba(148,163,184,0.55)';
 
 /** Degraded severity ramp. Reads `severity_band` first (a named, versioned
- *  classification) and falls back to the numeric `severity` — never invents one. */
-function degradedColor(a) {
+ *  classification), then the numeric `severity`, then the two CATEGORICAL
+ *  classifications the pipeline actually publishes — never invents one.
+ *
+ *  ── hub-051 §7: THIS FUNCTION WAS HALF OF THE WALL OF YELLOW ─────────────
+ *  It had three outcomes and could only ever reach one. `severity_band` and
+ *  `severity` are NULL on all 272 rows — they belong to the airspace-ring
+ *  source, which is not credentialed — and `operational_state` is `unknown` on
+ *  all 272 for the same reason. So every branch fell through to the terminal
+ *  `return C_MOD`, and all ten degraded airports drew the same amber. LHR
+ *  breaching on median delay was indistinguishable from a closed airfield.
+ *
+ *  THE FIX IS NOT TO INVENT A SCORE. Grading LHR from `obsDeparturesMedianDelayMin`
+ *  in the browser would be a client-side re-derivation, which the data-plane
+ *  contract forbids and which would make this page the author of a severity the
+ *  pipeline never published. Instead the ramp now also reads `obsStatus`, which
+ *  IS a published, rule-graded categorical value (`obsRuleId` / `obsRuleVersion`
+ *  name the rule): the contract's own vocabulary distinguishes `degraded` from
+ *  `stopped` and `closed`, and stopped/closed are categorically worse than
+ *  degraded by the pipeline's own definition, not by our arithmetic.
+ *
+ *  TODAY ALL TEN ARE `degraded`, SO ALL TEN STAY AMBER. That is the honest
+ *  outcome and the map is not made to look more dramatic than the data. What
+ *  changes is that the ramp is now LIVE — the first field that stops or closes
+ *  will read red instead of joining an undifferentiated amber crowd — and that
+ *  amber, on this surface, now has exactly one meaning. `degradedBand()` names
+ *  the grade in words so the trace panel can state it rather than leaving the
+ *  reader to infer a severity from a hue. */
+function degradedBand(a) {
   var band = (str(a.severity_band) || '').toLowerCase();
   if (band) {
-    if (band.indexOf('sev') === 0 || band.indexOf('crit') === 0 || band.indexOf('high') === 0 || band.indexOf('major') === 0) return C_SEVERE;
-    if (band.indexOf('mod') === 0 || band.indexOf('med') === 0 || band.indexOf('elev') === 0) return C_MOD;
-    if (band.indexOf('low') === 0 || band.indexOf('min') === 0) return C_MOD;
+    if (band.indexOf('sev') === 0 || band.indexOf('crit') === 0 || band.indexOf('high') === 0 || band.indexOf('major') === 0)
+      return { level: 'severe', why: 'severity_band = "' + band + '"' };
+    if (band.indexOf('mod') === 0 || band.indexOf('med') === 0 || band.indexOf('elev') === 0 ||
+        band.indexOf('low') === 0 || band.indexOf('min') === 0)
+      return { level: 'moderate', why: 'severity_band = "' + band + '"' };
   }
   var s = num(a.severity);
-  if (s != null) return s >= 7 ? C_SEVERE : C_MOD;
+  if (s != null)
+    return { level: s >= 7 ? 'severe' : 'moderate', why: 'severity = ' + s + (s >= 7 ? ' (≥ 7)' : ' (< 7)') };
+
+  // The controlling state, when it speaks at all.
   var opState = (str(a.operational_state) || '').toLowerCase();
-  return (opState === 'closed' || opState === 'suspended') ? C_SEVERE : C_MOD;
+  if (opState === 'closed' || opState === 'suspended')
+    return { level: 'severe', why: 'the controlling state reports operational_state = "' + opState + '"' };
+  if (OPERATIONAL_BAD.indexOf(opState) !== -1)
+    return { level: 'moderate', why: 'the controlling state reports operational_state = "' + opState + '"' };
+
+  // The observation feed's own graded category — the only axis populated today.
+  var obs = (str(a.obsStatus) || '').toLowerCase();
+  if (obs === 'stopped' || obs === 'closed')
+    return { level: 'severe', why: 'the observation feed graded this field "' + obs + '", which the contract ranks above "degraded"' };
+  if (obs === 'degraded')
+    return {
+      level: 'moderate',
+      why: 'the observation feed graded this field "degraded"' + gradedOnRule(a) +
+        '. No severity_band and no numeric severity is published for ANY airport row, so this is the ' +
+        'finest grade available and it is not refined further in the browser.'
+    };
+
+  return { level: 'moderate', why: 'a problem is reported but no grading field is published for this field' };
+}
+/** The pipeline's own named reason, quoted rather than reinterpreted. */
+function gradedOnRule(a) {
+  var r = str(a.obsStatusReason);
+  return r ? ' on the rule "' + r + '"' : '';
+}
+function degradedColor(a) {
+  return degradedBand(a).level === 'severe' ? C_SEVERE : C_MOD;
 }
 
 /* ===========================================================================
@@ -890,12 +1151,59 @@ var TRAVEL_DOMAIN_ORDER = [
   { domain: 'supply_chain',   label: 'Supply Chain',   why: 'Jet fuel, parts, catering.' },
   { domain: 'financial',      label: 'Financial',      why: 'Carrier solvency, fuel cost.' }
 ];
-/** Op-risk composite ramp — identical to globe.html's cssColor. NO ORANGE. */
-function scoreColor(s) {
-  if (s == null) return C_UNKNOWN;
-  if (s < 4.0) return C_NOMINAL;
-  if (s < 7.0) return C_MOD;
-  return C_SEVERE;
+/* ── hub-051 §7: THE INDEX BOARD STOPS USING THE HAZARD RAMP ───────────────
+ *
+ * This is the other half of the wall of yellow, and the larger half.
+ *
+ * `scoreColor()` used to be `s < 4.0 ? teal : s < 7.0 ? amber : red` — the same
+ * three hues the airport markers use for a CHECKED, MEASURED impairment. Live,
+ * the twelve global domain scores span 3.7 → 4.6. A hard colour cliff at 4.0
+ * through a 0.9-point spread paints nine domains amber and three teal, and
+ * makes a tenth of a provisional point look like a change in the state of the
+ * world while the entire 4.0 → 6.9 interval looks like nothing at all. The
+ * colour was reporting the threshold, not the planet.
+ *
+ * Worse, it was borrowing the alarm hues for something that has not earned
+ * them: op-risk is PROVISIONAL for all twelve domains (baseline ~70% complete,
+ * `provisional_absolute` basis), it is derived from news-event volume rather
+ * than from an observation of any airport, and it is a RANKING instrument. A
+ * ranking painted in alarm colours next to ten genuinely degraded airfields
+ * makes the airfields disappear.
+ *
+ * So magnitude moves to a BAR — position and length, which the eye reads
+ * accurately — in ONE hue, and the published `level` word is printed verbatim
+ * beside it so nothing is withheld. 3.9 and 4.0 now draw as near-identical
+ * bars, which is true, instead of teal-versus-amber, which was not.
+ *
+ * INDEX_MAX mirrors riskAxes.ts. If the published scale ever changes, both
+ * change; neither invents one.
+ */
+var INDEX_HUE = '#22d3ee';
+var INDEX_MAX = 10;
+/** Bar width as a percentage, or null when there is no reading to draw. An
+ *  absent score gets a hatched empty track and the word "no reading" — never a
+ *  zero-length bar, which reads as calm. */
+function indexBarPct(s) {
+  if (s == null) return null;
+  return Math.max(0, Math.min(100, (s / INDEX_MAX) * 100));
+}
+/** Describe the RANGE of the published scores. This computes nothing new about
+ *  any domain — it reports the min, max and level tally of numbers ovix-api
+ *  already published — and it exists because the single most useful thing a
+ *  reader can be told about today's board is that all twelve sit inside a
+ *  0.9-point band, which colour actively concealed. Self-clearing: the notice
+ *  disappears on its own once the domains genuinely separate. */
+function describeSpread(entries) {
+  var scores = [], byLevel = {};
+  entries.forEach(function (e) {
+    if (!e || e.available === false || typeof e.score !== 'number' || !isFinite(e.score)) return;
+    scores.push(e.score);
+    var lv = String(e.level || 'UNKNOWN').toUpperCase();
+    byLevel[lv] = (byLevel[lv] || 0) + 1;
+  });
+  if (!scores.length) return null;
+  var min = Math.min.apply(null, scores), max = Math.max.apply(null, scores);
+  return { min: min, max: max, span: max - min, n: scores.length, byLevel: byLevel, tight: (max - min) < 2 };
 }
 
 /* ===========================================================================
@@ -925,13 +1233,56 @@ var opRiskPayload = null, lastAlt = null, currentTierLevel = 1;
 try {
   var OVIX_API = (window.RocConfig && window.RocConfig.apiBase) || 'https://ovix-api.tedlango.workers.dev';
 
+  /* hub-051 item 6 — SCENE MODE IS A CHOICE ON THIS GLOBE.
+   *
+   * Ted asked whether Cesium has another view. It does, and on THIS surface the
+   * answer matters more than it does on the community globe: a 3D sphere hides
+   * roughly half of 272 airport anchors behind the earth at any instant, and the
+   * question this page exists to answer — "where are my problems right now" — is
+   * badly served by an instrument that can only show you half the world.
+   *
+   * `sceneModePicker: true` puts SCENE3D / COLUMBUS_VIEW / SCENE2D in the reader's
+   * hands. The DEFAULT is SCENE2D, with reasoning:
+   *   · nothing is occluded. Degraded fields are drawn at EVERY zoom and every
+   *     tier by the honesty rule, so on a flat map the entire impaired set is on
+   *     screen at once and countable at a glance; on a sphere half of it is
+   *     behind the earth until you rotate, and a reader who does not rotate is
+   *     silently shown a subset;
+   *   · the degraded set is globally scattered — measured live: LHR, DEN, LAX,
+   *     SEA, SFO, ATH, MXP, DMK, CGK, PEK, across five continents — which is
+   *     exactly the pattern a globe hides and a flat map reveals;
+   *   · airports are point features with no vertical extent, so 3D buys no
+   *     information here, unlike the terrain and atmosphere work the community
+   *     globe does;
+   *   · a flat map has no back face, which removes the reason the marker layers
+   *     disable depth testing at all.
+   * COLUMBUS_VIEW is the good middle if a reader wants the tilt back, and 3D is
+   * one click away for anyone who prefers it. The choice persists per reader.
+   *
+   * `mapProjection` is WebMercator — Cesium's default and the projection every
+   * reader already has in their hands from every other map they use. The
+   * latitude distortion is real but this map carries no area encoding for it to
+   * corrupt: every mark is a point at a coordinate.
+   *
+   * globe.html keeps `sceneModePicker: false`. Not touched.
+   */
+  var SCENE_MODES = { '3d': Cesium.SceneMode.SCENE3D, 'columbus': Cesium.SceneMode.COLUMBUS_VIEW, '2d': Cesium.SceneMode.SCENE2D };
+  var savedMode = null, urlMode = null;
+  try { savedMode = localStorage.getItem('travelglobe.sceneMode'); } catch (e) {}
+  // `?scene=2d|3d|columbus` overrides the saved preference, so a particular view
+  // is a shareable link — "look at this in 2D" is a URL, not an instruction.
+  try { urlMode = new URLSearchParams(window.location.search).get('scene'); } catch (e) {}
+  var startMode = SCENE_MODES[urlMode] || SCENE_MODES[savedMode] || Cesium.SceneMode.SCENE2D;
+
   viewer = new Cesium.Viewer('cesiumContainer', {
     baseLayer: false,
     animation: false, timeline: false, homeButton: false,
     fullscreenButton: false, navigationHelpButton: false,
-    sceneModePicker: false, baseLayerPicker: false,
+    sceneModePicker: true, baseLayerPicker: false,
+    sceneMode: startMode,
     geocoder: false, infoBox: false, selectionIndicator: false
   });
+
   viewer.scene.skyAtmosphere.brightnessShift = -0.3;
   viewer.scene.skyAtmosphere.saturationShift = -0.2;
   viewer.scene.fog.enabled = false;
@@ -939,7 +1290,50 @@ try {
   // Opens over the North Atlantic: the densest long-haul corridor on the planet
   // and therefore the frame in which a travel surface should introduce itself.
   var HOME = { lon: -25, lat: 38, height: 17000000 };
-  viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.height) });
+
+  /* hub-051: the home view depends on the scene mode, and it has to.
+   *
+   * The whole argument for defaulting to 2D is that nothing is hidden — but a
+   * flat map framed on the Atlantic at 17,000 km simply crops Asia off the
+   * right-hand edge, which hides exactly as much as the far side of a sphere
+   * does, just less honestly. Measured before this fix: PVG, PEK, BKK, CGK and
+   * DMK were all off-canvas in 2D at the inherited home position.
+   *
+   * So the flat modes open on a WORLD RECTANGLE — every scored longitude on
+   * screen at once, the polar caps trimmed because no airport in the registry
+   * sits beyond them. 3D keeps the Atlantic framing, where it is the right
+   * choice. */
+  var WORLD = Cesium.Rectangle.fromDegrees(-180, -62, 180, 76);
+  function homeView() {
+    if (viewer.scene.mode === Cesium.SceneMode.SCENE3D) {
+      viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(HOME.lon, HOME.lat, HOME.height) });
+    } else {
+      viewer.camera.setView({ destination: WORLD });
+    }
+  }
+  homeView();
+
+  // Remember the reader's choice, and reframe on every morph. An instrument
+  // that resets its view on each load is one nobody configures twice.
+  // Registered AFTER homeView exists, so the handler can never fire against an
+  // undefined reference.
+  try {
+    viewer.scene.morphComplete.addEventListener(function () {
+      var m = viewer.scene.mode;
+      var key = m === Cesium.SceneMode.SCENE3D ? '3d'
+        : m === Cesium.SceneMode.COLUMBUS_VIEW ? 'columbus'
+        : m === Cesium.SceneMode.SCENE2D ? '2d' : null;
+      if (key) { try { localStorage.setItem('travelglobe.sceneMode', key); } catch (e) {} }
+      // A flat map inherits the sphere's framing and crops Asia off the edge
+      // otherwise — which hides as much as a far side does, less honestly.
+      homeView();
+      // Tier revelation is altitude-driven and the altitude scale differs
+      // between modes, so force a recompute rather than let hysteresis hold a
+      // stale visibility set across the morph.
+      lastAlt = null;
+      applyZoomVisibility();
+    });
+  } catch (e) { console.warn('[travel-globe] scene-mode persistence unavailable', e); }
 
   document.getElementById('loading').style.display = 'none';
 
@@ -1074,7 +1468,7 @@ function buildAirportEntities() {
           outlineColor: Cesium.Color.fromCssColorString(inForce ? C_ADVISORY : C_ADV_UNK)
             .withAlpha(inForce ? (0.45 + 0.5 * advIntensity(a)) : 0.28),
           outlineWidth: inForce ? 2 : 1,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: DEPTH_TEST,
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1.15, 2e7, 0.55)
         },
         properties: { travelRole: 'advisory-ring', uid: a._uid }
@@ -1098,7 +1492,7 @@ function buildAirportEntities() {
               }, false)
             : hc.withAlpha(0.34),
           outlineWidth: 3,
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          disableDepthTestDistance: DEPTH_TEST,
           scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 2e7, 0.6)
         },
         properties: { travelRole: 'halo', uid: a._uid }
@@ -1142,7 +1536,7 @@ function buildAirportEntities() {
         color: fill,
         outlineColor: outline,
         outlineWidth: outlineW,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: DEPTH_TEST,
         scaleByDistance: new Cesium.NearFarScalar(5e5, 1.15, 2e7, 0.55)
       },
       label: {
@@ -1162,7 +1556,7 @@ function buildAirportEntities() {
         outlineWidth: 3,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         pixelOffset: new Cesium.Cartesian2(0, -(size + 9)),
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: DEPTH_TEST,
         show: false
       },
       properties: { travelRole: 'airport', uid: a._uid }
@@ -1194,7 +1588,10 @@ function applyZoomVisibility() {
 
   airports.forEach(function (a) {
     if (!a._core) return;
-    var vis = airportVisibleAt(a, alt);
+    // hub-051: the layer switch is a MASTER GATE on top of tier revelation, not
+    // a competing rule — tier revelation stays the single authority on which
+    // airports are drawn when the layer is on.
+    var vis = layerOn.airports && airportVisibleAt(a, alt);
     a._core.show = vis;
     if (a._ring) a._ring.show = vis;
     if (a._halo) a._halo.show = vis;
@@ -1305,6 +1702,8 @@ function fetchAirports() {
       var scattered = applyScatter(airports);
       var counts = buildAirportEntities();
       renderCensus(counts, scattered);
+      renderWrongAirports();   // hub-051 §7 — name every impaired field, exhaustively
+      renderLayerCounts();
       lastAlt = null;
       applyZoomVisibility();
       console.log('[travel-globe] ' + airports.length + ' airports plotted (' + scattered + ' scattered)');
@@ -1334,6 +1733,14 @@ function showUnavailable(title, bodyHtml) {
   var aEl = document.getElementById('tb-look-abs');
   if (vEl) { vEl.textContent = 'unknown'; vEl.className = 'look-v look-none'; }
   if (aEl) aEl.textContent = 'the airport plane could not be read';
+  var bEl = document.getElementById('tb-look-band');
+  if (bEl) bEl.textContent = '';
+  // And so must the "what is wrong" list. An empty problem list beside an
+  // unreadable plane would read as "nothing is wrong", which is the one thing
+  // we categorically do not know at that moment.
+  var wEl = document.getElementById('wr-airports');
+  if (wEl) wEl.innerHTML = '<span class="wr-none">The airport plane could not be read, so we ' +
+    'cannot say what is impaired. This is not an all-clear.</span>';
 }
 
 /** The census. Every number here is counted from the payload we actually drew,
@@ -1454,11 +1861,13 @@ var lastLook = { newest: null, sweep: null };
 function renderLastLook() {
   var vEl = document.getElementById('tb-look-v');
   var aEl = document.getElementById('tb-look-abs');
+  var bEl = document.getElementById('tb-look-band');
   if (!vEl || !aEl) return;
 
   if (!lastLook.newest) {
     vEl.textContent = 'never';
     vEl.className = 'look-v look-none';
+    if (bEl) bEl.textContent = '';
     aEl.textContent = 'no observation is held for any field';
     return;
   }
@@ -1469,6 +1878,12 @@ function renderLastLook() {
 
   vEl.textContent = fmtAgo(lastLook.newest) || 'time not held';
   vEl.className = 'look-v look-' + cls;
+  // hub-051 §7: the age BAND is now carried by a word, because the colour that
+  // used to carry it was borrowed from the hazard ramp. Confidence is slate on
+  // this page, always — a sweep going stale is a hole in what we know, not an
+  // airport with a problem, and it must not compete with one for the reader's
+  // alarm response.
+  if (bEl) bEl.textContent = cls === FRESH.FRESH ? '' : freshWords(cls);
   aEl.textContent = (fmtAbs(lastLook.newest) || '') +
     (lastLook.sweep ? '  ·  sweep ' + lastLook.sweep : '');
 }
@@ -1612,19 +2027,57 @@ function renderBoard(d) {
   TRAVEL_DOMAIN_ORDER.forEach(function (meta, i) {
     var entry = byDomain[meta.domain];
     var st = (RS && entry) ? RS.domainState(entry) : { provisional: false };
-    var score = entry && typeof entry.score === 'number' ? entry.score : null;
-    var val = score == null ? '--' : score.toFixed(1);
+    // `available: false` is published with score 1 / level NORMAL for a domain
+    // with no events in scope. Rendering that as a calm reading would be the
+    // honesty rule inverted — "we have nothing" drawn as "it is fine" — on the
+    // one page whose entire argument is that an unchecked airport is never
+    // drawn as a fine airport. So no reading is UNKNOWN, on the slate axis.
+    var hasRead = !!entry && entry.available !== false &&
+      typeof entry.score === 'number' && isFinite(entry.score);
+    var score = hasRead ? entry.score : null;
+    var pct = indexBarPct(score);
+    var lvl = hasRead ? String(entry.level || '').toUpperCase() : '';
     var chip = (RS && st.provisional) ? RS.chipHTML(st, 'PROV') : '';
-    html += '<div class="bd-row' + (i === 0 ? ' lead' : '') + '" title="' +
-      esc(meta.label + ' — rank ' + (i + 1) + ' by flight impact' +
-        (entry && entry.topEvent ? '\n' + entry.topEvent : '')) + '">' +
+
+    html += '<a class="bd-row' + (i === 0 ? ' lead' : '') + '" href="/travelrisk/risk/' +
+      esc(meta.domain.replace(/_/g, '-')) + '" title="' +
+      esc(meta.label + ' — rank ' + (i + 1) + ' by flight impact. Open the ' + meta.label +
+        ' risk map.' + (entry && entry.topEvent ? '\n' + entry.topEvent : '')) + '">' +
       '<span class="bd-rank">' + (i + 1) + '</span>' +
       '<span class="bd-name">' + esc(meta.label) + '</span>' +
       chip +
-      '<span class="bd-val' + (st.provisional ? ' prov' : '') + '" style="color:' + scoreColor(score) + '">' +
-      esc(val) + '</span></div>';
+      // MAGNITUDE AS LENGTH, NOT AS AN ALARM COLOUR.
+      '<span class="bd-track' + (pct == null ? ' empty' : '') + '">' +
+        (pct == null ? '' : '<i class="bd-fill" style="width:' + pct.toFixed(1) + '%"></i>') +
+      '</span>' +
+      '<span class="bd-val' + (st.provisional ? ' prov' : '') + (hasRead ? '' : ' none') + '">' +
+        (hasRead ? esc(score.toFixed(1)) : '--') +
+      '</span>' +
+      '<span class="bd-lvl">' + esc(hasRead ? lvl : 'NO READING') + '</span>' +
+      '</a>';
   });
   document.getElementById('bd-rows').innerHTML = html;
+
+  // The spread notice. Derived every refresh from the published numbers only.
+  var sp = describeSpread(d.domains || []);
+  var spEl = document.getElementById('bd-spread');
+  if (spEl) {
+    if (sp && sp.tight && sp.n >= 3) {
+      var elev = sp.byLevel.ELEVATED || 0;
+      spEl.innerHTML =
+        '<b style="color:#cbd5e1;display:block;letter-spacing:.06em;">ALL ' + sp.n +
+        ' DOMAINS SIT INSIDE ' + sp.span.toFixed(1) + ' POINTS</b>' +
+        'Range ' + sp.min.toFixed(1) + '&ndash;' + sp.max.toFixed(1) + ' on a 0&ndash;' + INDEX_MAX +
+        ' scale. ' + elev + ' fall on the ELEVATED side of the 4.0 band boundary &mdash; but a domain at ' +
+        '4.0 and a domain at 3.9 differ by a tenth of a provisional point, not by a state of the world. ' +
+        'That is why this board draws magnitude as a bar and leaves red and amber to the things we ' +
+        'checked and found impaired.';
+      spEl.style.display = 'block';
+    } else {
+      spEl.innerHTML = '';
+      spEl.style.display = 'none';
+    }
+  }
 
   var comp = typeof d.composite === 'number' ? d.composite : null;
   var cEl = document.getElementById('bd-composite');
@@ -1646,59 +2099,418 @@ function renderBoard(d) {
 }
 
 /* ===========================================================================
- * 8. SIGNALS — context, and only context
+ * 8. THE CONTEXT LAYERS — SIGNALS and INCIDENTS  (hub-051 item 1)
  *
- * Deliberately subordinate: 4 px, low alpha, no labels, behind everything.
- * On the community globe signals are the subject. Here they are the weather
- * around the subject, and they are drawn so a reader can never mistake one
- * for an airport.
+ * Airports remain the PRINCIPAL anchor (TRAVELRISK-SITE-SPEC §3). These two
+ * layers are context arranged around them, and the visual grammar keeps all
+ * three apart at a glance without reading a legend:
+ *
+ *   AIRPORT   a disc or a hollow ring, sized 5–16 px, carrying an IATA label.
+ *   INCIDENT  a pulsing point inside a static halo ring. No label.
+ *   SIGNAL    a flat 4 px dot. No outline, no halo, no label, low alpha.
+ *
+ * The INCIDENT layer is PORTED from globe.html (fetch shape, SEV ramp, size
+ * ramp, pulse period, halo geometry, `disableDepthTestDistance`, the
+ * `scaleByDistance` curve) rather than reinvented, because that code has been
+ * live against real incident geography for months. Three deliberate
+ * departures, each argued:
+ *
+ *   · `?section=active&limit=100` instead of two hard-coded 100-row pages and a
+ *     client-side status filter. The route supports it; fetching 200 rows to
+ *     discard 195 of them was a cost globe.html paid for no reason. The
+ *     client-side status guard is KEPT anyway — a belt against a route change.
+ *   · SEV3 and SEV4 take the confidence slate rather than cyan and slate.
+ *     A SEV4 sharing a hue with a degraded airfield is precisely the dilution
+ *     this task exists to undo. SEV1 and SEV2 keep red and amber, which they
+ *     have earned — a declared incident IS a checked impairment.
+ *   · Deterministic collision scatter is applied. globe.html has none, and
+ *     incidents carry region-centroid coordinates far more often than airports
+ *     do, which is the exact stacking that forced PR#10/#11.
  * ======================================================================== */
 var SIGNAL_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+var incidentEntities = [], incidentList = [], signalCounts = { plotted: 0, hidden: 0 };
 
+/* ── The presentation filter (hub-051 item 2/3) ────────────────────────────
+ * DUPLICATED, KNOWINGLY, from src/lib/travelrisk/presentation.ts — this is a
+ * static page with no build step and cannot import TypeScript. That module
+ * remains canonical: if the two ever disagree, it wins.
+ *
+ * DEMOTION IS NOT DELETION. travel-intel keeps polling every one of these on
+ * the same cadence, `signals.category` is untouched, and community.wfmlabs.com
+ * still renders all of them. This filter draws fewer markers; it does not stop
+ * a single row being written. The count withheld is printed in the legend,
+ * because a surface that silently drops rows is indistinguishable from a
+ * surface with no data. */
+var HIDDEN_PRODUCERS = [
+  'travel-intel/septa', 'travel-intel/bart', 'travel-intel/cta',
+  'travel-intel/ttc', 'travel-intel/mbta', 'travel-intel/tfl',
+  'travel-intel/nws', 'travel-intel/tomtom'
+];
+function isHiddenProducer(source) {
+  return HIDDEN_PRODUCERS.indexOf(String(source || '').trim().toLowerCase()) !== -1;
+}
+
+/* ── Layer state ──────────────────────────────────────────────────────────
+ * Three independent switches. Airport visibility is ALSO governed by tier
+ * revelation, so the airport switch is a master gate applied on top of it in
+ * applyZoomVisibility() — never a second, competing rule. */
+var layerOn = { airports: true, incidents: true, signals: true };
+
+/** Deterministic scatter shared by both context layers, same construction as
+ *  applyScatter() above: hash a stable identity string so a marker never jumps
+ *  between refreshes, and divide the longitude offset by cos(lat) so the
+ *  scatter reads circular rather than squashed toward the poles. */
+function scatterOffset(key, i, lat) {
+  var h = 0, s = String(key || i);
+  for (var c = 0; c < s.length; c++) h = (h * 31 + s.charCodeAt(c)) % 3600;
+  var ang = (h / 3600) * Math.PI * 2;
+  var r = 0.22 + (i % 3) * 0.09;                      // ≈ 25–45 km
+  return {
+    dLat: Math.sin(ang) * r,
+    dLon: Math.cos(ang) * r / Math.max(0.25, Math.cos(lat * Math.PI / 180))
+  };
+}
+function destack(list, latKey, lonKey, idKey) {
+  var buckets = {};
+  list.forEach(function (x) {
+    var la = num(x[latKey]), lo = num(x[lonKey]);
+    if (la == null || lo == null) return;
+    var k = la.toFixed(2) + ',' + lo.toFixed(2);
+    (buckets[k] = buckets[k] || []).push(x);
+  });
+  Object.keys(buckets).forEach(function (k) {
+    var g = buckets[k];
+    if (g.length < 2) return;
+    g.forEach(function (x, i) {
+      if (i === 0) return;
+      var off = scatterOffset(x[idKey], i, num(x[latKey]));
+      x[latKey] = num(x[latKey]) + off.dLat;
+      x[lonKey] = num(x[lonKey]) + off.dLon;
+      x._scattered = true;
+    });
+  });
+}
+
+/* ── SIGNALS ──────────────────────────────────────────────────────────────
+ * Deliberately subordinate: 4 px, low alpha, no labels. On the community globe
+ * signals are the subject; here they are the weather around the subject. */
 function clearSignals() {
   signalEntities.forEach(function (e) { viewer.entities.remove(e); });
   signalEntities = [];
 }
 
 function fetchSignals() {
-  if (!document.getElementById('sig-toggle').checked) return Promise.resolve();
+  if (!layerOn.signals) return Promise.resolve();
   return fetch('/api/roc-globe?mins=150', { signal: AbortSignal.timeout(15000) })
     .then(function (r) { return r.ok ? r.json() : { signals: [] }; })
     .then(function (d) {
       clearSignals();
-      var plotted = 0;
-      (d.signals || []).forEach(function (s) {
+      var rows = (d.signals || []).slice();
+      destack(rows, 'lat', 'lon', 'id');
+      var plotted = 0, hiddenByFilter = 0, skippedPromoted = 0;
+      rows.forEach(function (s) {
+        // The producer filter — this surface only.
+        if (isHiddenProducer(s.source)) { hiddenByFilter++; return; }
+        // PORTED FROM globe.html: a signal already adopted into an OPEN incident
+        // is skipped, and the incident layer draws it instead. No double-plot,
+        // no fade-out of something that has been escalated — and it retires the
+        // amber `promoted` styling, which was a LIFECYCLE fact wearing a hazard
+        // colour (one of the six meanings of yellow this task set out to undo).
+        if (s.promoted) { skippedPromoted++; return; }
         var lat = num(s.lat), lon = num(s.lon);
         if (lat == null || lon == null) return;
         var created = new Date(s.created_at).getTime();
         if (isNaN(created) || Date.now() - created > SIGNAL_MAX_AGE_MS) return;
         plotted++;
-        var base = Cesium.Color.fromCssColorString(s.promoted ? '#eab308' : '#38bdf8');
+        // One hue for the whole layer. Signals are the raw stream, not a
+        // verdict, and colour-coding them by category re-introduced twelve
+        // competing hues over the anchors they are meant to sit behind.
+        var base = Cesium.Color.fromCssColorString('#38bdf8');
         signalEntities.push(viewer.entities.add({
           position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          show: layerOn.signals,
           point: {
-            pixelSize: s.promoted ? 6 : 4,
+            pixelSize: 4,
             color: new Cesium.CallbackProperty(function () {
               var frac = 1 - (Date.now() - created) / SIGNAL_MAX_AGE_MS;
               return base.withAlpha(Math.max(0, Math.min(0.4, frac * 0.4)));
             }, false),
             outlineWidth: 0,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            disableDepthTestDistance: DEPTH_TEST,
             scaleByDistance: new Cesium.NearFarScalar(1e6, 1.0, 2e7, 0.45)
           },
-          properties: { travelRole: 'signal', sigTitle: s.title || 'Signal', sigCategory: s.category || '' }
+          properties: {
+            travelRole: 'signal', sigTitle: s.title || 'Signal',
+            sigCategory: s.category || '', sigSource: s.source || ''
+          }
         }));
       });
-      var el = document.getElementById('ct-signals');
-      if (el) el.textContent = '(' + plotted + ' in last 2 h)';
+      signalCounts = { plotted: plotted, hidden: hiddenByFilter, promoted: skippedPromoted };
+      renderLayerCounts();
     })
     .catch(function () {});
 }
 
-document.getElementById('sig-toggle').addEventListener('change', function () {
-  if (this.checked) fetchSignals();
-  else { clearSignals(); var el = document.getElementById('ct-signals'); if (el) el.textContent = '(hidden)'; }
+/* ── INCIDENTS ────────────────────────────────────────────────────────────── */
+/** SEV ramp. SEV1/SEV2 are the alarm and keep the hazard hues — a declared
+ *  incident is a checked impairment and has earned them. SEV3/SEV4 drop to the
+ *  confidence slate rather than borrowing cyan: on a surface where amber must
+ *  mean exactly one thing, a SEV4 in a hazard hue is dilution. NO ORANGE. */
+function incidentColor(sev) {
+  switch ((sev || '').toUpperCase()) {
+    case 'SEV1': return C_SEVERE;
+    case 'SEV2': return C_MOD;
+    case 'SEV3': return '#94a3b8';
+    case 'SEV4': return '#64748b';
+    default: return '#94a3b8';
+  }
+}
+function incidentSize(sev) {
+  switch ((sev || '').toUpperCase()) {
+    case 'SEV1': return 14;
+    case 'SEV2': return 11;
+    case 'SEV3': return 9;
+    case 'SEV4': return 7;
+    default: return 8;
+  }
+}
+
+function clearIncidents() {
+  incidentEntities.forEach(function (e) { viewer.entities.remove(e); });
+  incidentEntities = [];
+}
+
+function fetchIncidents() {
+  return fetch('/api/incidents?section=active&limit=100', { signal: AbortSignal.timeout(15000) })
+    .then(function (r) { return r.ok ? r.json() : { docs: [] }; })
+    .then(function (d) {
+      clearIncidents();
+      var rows = (d.docs || []).filter(function (p) {
+        // Belt as well as braces: `section=active` should already have done
+        // this, but a closed incident on a live globe is a lie about the world
+        // and is worth two lines of defence.
+        var st = String(p.status || '').toLowerCase();
+        return st !== 'closed' && st !== 'resolved';
+      });
+      incidentList = rows.slice();
+      destack(rows, 'location_lat', 'location_lon', 'slug');
+
+      var plotted = 0, noGeo = 0;
+      rows.forEach(function (p) {
+        var lat = num(p.location_lat), lon = num(p.location_lon);
+        if (lat == null || lon == null) { noGeo++; return; }
+        plotted++;
+        var css = incidentColor(p.sev_level);
+        var base = incidentSize(p.sev_level);
+        var col = Cesium.Color.fromCssColorString(css);
+        var pos = Cesium.Cartesian3.fromDegrees(lon, lat);
+
+        // Static halo ring, drawn first so the pulsing core sits inside it.
+        incidentEntities.push(viewer.entities.add({
+          position: pos, show: layerOn.incidents,
+          point: {
+            pixelSize: base * 2.6,
+            color: col.withAlpha(0.08),
+            outlineColor: col.withAlpha(0.35),
+            outlineWidth: 1,
+            disableDepthTestDistance: DEPTH_TEST,
+            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55)
+          },
+          // globe.html gives its halo a role that matches no click branch, so
+          // clicking the ring silently does nothing there. Here the halo
+          // carries the same role and slug as the core, so the whole target is
+          // live — the ring is the easiest thing to hit at globe zoom.
+          properties: { travelRole: 'incident', incSlug: p.slug || '', incId: p.id }
+        }));
+
+        incidentEntities.push(viewer.entities.add({
+          position: pos, show: layerOn.incidents,
+          point: {
+            pixelSize: PULSE_OK
+              ? new Cesium.CallbackProperty(function () {
+                  var t = (Date.now() % 1600) / 1600;
+                  return base + Math.sin(t * Math.PI * 2) * 3;
+                }, false)
+              : base + 1,
+            color: col.withAlpha(0.95),
+            outlineColor: col.withAlpha(0.9),
+            outlineWidth: 2,
+            disableDepthTestDistance: DEPTH_TEST,
+            scaleByDistance: new Cesium.NearFarScalar(1e6, 1.25, 2e7, 0.55)
+          },
+          properties: {
+            travelRole: 'incident',
+            incTitle: p.title || 'Incident', incSlug: p.slug || '', incId: p.id,
+            incDomain: p.domain || '', incSev: p.sev_level || '',
+            incStatus: p.status || '', incLocation: p.location_name || p.location_country || '',
+            incDeclared: p.declared_at || ''
+          }
+        }));
+      });
+      incidentCounts = { plotted: plotted, noGeo: noGeo, total: rows.length };
+      renderLayerCounts();
+      renderWrongIncidents();
+    })
+    .catch(function (e) {
+      incidentCounts = null;   // null ≠ zero. A failed read is not an all-clear.
+      renderLayerCounts();
+      renderWrongIncidents();
+      console.error('[travel-globe] incident fetch failed', e);
+    });
+}
+var incidentCounts = { plotted: 0, noGeo: 0, total: 0 };
+
+/* ── Layer switching ──────────────────────────────────────────────────────
+ * Entities already exist; the switch flips `.show`. The airport switch defers
+ * to applyZoomVisibility() so tier revelation stays the single authority on
+ * which airports are drawn — the master gate is applied there, not duplicated
+ * here. */
+function applyLayerVisibility() {
+  incidentEntities.forEach(function (e) { e.show = layerOn.incidents; });
+  signalEntities.forEach(function (e) { e.show = layerOn.signals; });
+  lastAlt = null;
+  applyZoomVisibility();
+}
+
+function renderLayerCounts() {
+  function set(id, txt) { var e = document.getElementById(id); if (e) e.textContent = txt; }
+  set('ct-layer-airports', layerOn.airports ? '(' + airports.length + ')' : '(hidden)');
+  set('ct-incidents', !layerOn.incidents ? '(hidden)'
+    : incidentCounts === null ? '(could not read)'
+    : '(' + incidentCounts.plotted + ' open' +
+      (incidentCounts.noGeo ? ', ' + incidentCounts.noGeo + ' without coordinates' : '') + ')');
+  set('ct-signals', !layerOn.signals ? '(hidden)'
+    : '(' + signalCounts.plotted + ' in last 2 h)');
+
+  // The disclosure. Never optional: hiding rows without saying so makes this
+  // surface indistinguishable from one with no data.
+  var note = document.getElementById('ly-filter-note');
+  if (!note) return;
+  var bits = [];
+  if (signalCounts.hidden)
+    bits.push(signalCounts.hidden + ' signal' + (signalCounts.hidden === 1 ? '' : 's') +
+      ' withheld from this view: urban-transit, marine and road feeds (SEPTA, BART, CTA, TTC, MBTA, ' +
+      'TfL, NWS marine, TomTom). Still collected on the same cadence, still shown in full on ' +
+      'community.wfmlabs.com — a presentation filter for a flight-impact audience, not a change ' +
+      'to what the platform monitors.');
+  if (signalCounts.promoted)
+    bits.push(signalCounts.promoted + ' signal' + (signalCounts.promoted === 1 ? '' : 's') +
+      ' already adopted into an open incident are drawn by the incident layer instead, not twice.');
+  note.innerHTML = bits.map(function (b) { return esc(b); }).join('<br><br>');
+}
+
+['airports', 'incidents', 'signals'].forEach(function (k) {
+  var el = document.getElementById(k === 'airports' ? 'ap-toggle' : k === 'incidents' ? 'inc-toggle' : 'sig-toggle');
+  if (!el) return;
+  el.addEventListener('change', function () {
+    layerOn[k] = this.checked;
+    if (k === 'signals' && this.checked && signalEntities.length === 0) fetchSignals();
+    else applyLayerVisibility();
+    renderLayerCounts();
+  });
 });
+
+/* ── "WHAT IS WRONG NOW" (hub-051 §7) ─────────────────────────────────────
+ * The direct answer to "where is real risk right now". Exhaustive by
+ * construction: it lists every field the sweep checked and graded impaired, and
+ * every open incident. If it is empty it says so in words, because an empty
+ * list is a READ of the store and must never be mistaken for an absence of
+ * monitoring. */
+function renderWrongAirports() {
+  var el = document.getElementById('wr-airports');
+  if (!el) return;
+  var bad = airports.filter(function (a) { return a._op === OP.DEGRADED; });
+  if (!bad.length) {
+    el.innerHTML = '<span class="wr-none">Nothing we checked is currently impaired. ' +
+      'This is a read of the latest sweep, not an absence of monitoring — ' +
+      esc(airports.filter(function (a) { return a._op === OP.UNKNOWN || a._op === OP.NOFEED; }).length) +
+      ' of ' + esc(airports.length) + ' fields are still unchecked, and they are drawn hollow.</span>';
+    return;
+  }
+  // Worst first, then by business-travel exposure. Exposure ORDERS the list; it
+  // never changes the state a field is in.
+  bad.sort(function (x, y) {
+    var sx = degradedBand(x).level === 'severe' ? 0 : 1;
+    var sy = degradedBand(y).level === 'severe' ? 0 : 1;
+    if (sx !== sy) return sx - sy;
+    return (num(y.business_travel_weight) || 0) - (num(x.business_travel_weight) || 0);
+  });
+  el.innerHTML = bad.map(function (a) {
+    var band = degradedBand(a);
+    var d = delaySentence(a);
+    return '<button class="wr-item' + (band.level === 'severe' ? ' severe' : '') +
+      '" onclick="flyToAirport(\'' + esc(a._uid) + '\')">' +
+      '<span class="wr-code">' + esc(a.iata || a.icao || '?') + '</span> ' +
+      '<span class="wr-where">' + esc(a.name || a.icao || '') +
+        (a.country ? ', ' + esc(a.country) : '') + '</span>' +
+      '<span class="wr-why">' + esc(str(a.obsStatusReason) || str(a.operational_reason) || 'reason not published') +
+        (d ? ' · ' + esc(d) : '') +
+        ' · ' + esc(fmtAgo(checkedAt(a)) || 'no check time held') + '</span>' +
+      '</button>';
+  }).join('');
+}
+
+function renderWrongIncidents() {
+  var el = document.getElementById('wr-incidents');
+  if (!el) return;
+  if (incidentCounts === null) {
+    el.innerHTML = '<span class="wr-none">The incident store could not be read just now. ' +
+      'That is a connection failure, not an all-clear.</span>';
+    return;
+  }
+  if (!incidentList.length) {
+    el.innerHTML = '<span class="wr-none">No incidents are open. This is a read of the incidents ' +
+      'table, not an absence of monitoring.</span>';
+    return;
+  }
+  var order = { SEV1: 0, SEV2: 1, SEV3: 2, SEV4: 3 };
+  var rows = incidentList.slice().sort(function (x, y) {
+    return (order[String(x.sev_level).toUpperCase()] == null ? 9 : order[String(x.sev_level).toUpperCase()]) -
+           (order[String(y.sev_level).toUpperCase()] == null ? 9 : order[String(y.sev_level).toUpperCase()]);
+  });
+  el.innerHTML = rows.map(function (p) {
+    var sev = String(p.sev_level || '').toUpperCase();
+    var severe = sev === 'SEV1';
+    var hasGeo = num(p.location_lat) != null && num(p.location_lon) != null;
+    return '<button class="wr-item' + (severe ? ' severe' : '') +
+      '" onclick="flyToIncident(' + esc(p.id) + ')">' +
+      '<span class="wr-code" style="color:' + incidentColor(sev) + '">' + esc(sev || 'SEV?') + '</span> ' +
+      '<span class="wr-where">' + esc(p.title || 'Incident') + '</span>' +
+      '<span class="wr-why">' + esc(titleCase(p.domain) || 'domain not held') +
+        ' · ' + esc(p.location_name || p.location_country || 'location not held') +
+        ' · ' + esc(fmtAgo(p.declared_at) || 'declared time not held') +
+        (hasGeo ? '' : ' · no coordinates, so it is not on the map') + '</span>' +
+      '</button>';
+  }).join('');
+}
+
+window.flyToAirport = function (uid) {
+  var a = airportByUid[uid];
+  if (!a || !viewer || a._lat == null) return;
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(a._lon, a._lat, 900000),
+    duration: PULSE_OK ? 1.4 : 0
+  });
+  showTrace(a);
+};
+
+window.flyToIncident = function (id) {
+  var p = null;
+  for (var i = 0; i < incidentList.length; i++) if (incidentList[i].id === id) { p = incidentList[i]; break; }
+  if (!p) return;
+  var lat = num(p.location_lat), lon = num(p.location_lon);
+  // An incident with no coordinates cannot be flown to, and pretending
+  // otherwise by flying somewhere plausible would be the worst kind of lie on
+  // this page. Open its record instead.
+  if (lat == null || lon == null) {
+    if (p.slug) window.open('/incidents/' + p.slug, '_blank', 'noopener');
+    return;
+  }
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(lon, lat, 2500000),
+    duration: PULSE_OK ? 1.4 : 0
+  });
+};
 
 /* ===========================================================================
  * 9. HOVER + CLICK
@@ -1713,14 +2525,81 @@ function airportFromPick(picked) {
   var uid = p.uid ? p.uid.getValue() : null;
   return uid ? airportByUid[uid] : null;
 }
+/** hub-051: the context layers are pickable too. Airports WIN when several
+ *  entities sit under the cursor — they are the principal anchor of this
+ *  surface, and a signal dot stealing a hover from LHR would invert that. */
+function propsFromPick(picked, role) {
+  if (!picked || !picked.id || !picked.id.properties) return null;
+  var p = picked.id.properties;
+  var r = p.travelRole ? p.travelRole.getValue() : null;
+  if (r !== role) return null;
+  var out = {};
+  ['incTitle', 'incSlug', 'incId', 'incDomain', 'incSev', 'incStatus', 'incLocation', 'incDeclared',
+   'sigTitle', 'sigCategory', 'sigSource'].forEach(function (k) {
+    if (p[k]) out[k] = p[k].getValue();
+  });
+  return out;
+}
+function firstOfRole(picks, role) {
+  for (var i = 0; i < picks.length; i++) {
+    var v = propsFromPick(picks[i], role);
+    if (v) return v;
+  }
+  return null;
+}
+
+/** Tooltip for an incident. Same three-line shape as the airport tooltip so the
+ *  reader's eye does not have to re-learn the panel per layer. */
+function showIncidentTip(v, x, y) {
+  tooltip.querySelector('.tt-code').textContent =
+    (v.incSev || 'SEV?') + '  ·  ' + (titleCase(v.incDomain) || 'domain not held');
+  tooltip.querySelector('.tt-name').textContent = v.incTitle || 'Incident';
+  var stEl = tooltip.querySelector('.tt-state');
+  stEl.textContent = 'DECLARED INCIDENT — ' + String(v.incStatus || 'status not held').toUpperCase();
+  stEl.style.color = incidentColor(v.incSev);
+  tooltip.querySelector('.tt-when').textContent =
+    (v.incLocation ? v.incLocation + '  ·  ' : '') +
+    'declared ' + (fmtChecked(v.incDeclared) || 'time not held');
+  tooltip.querySelector('.tt-adv').innerHTML =
+    '<span style="color:#64748b">Declared by Watchkeeper against the same thresholds as the rest of ' +
+    'the platform. Click to open the incident record and its evidence.</span>';
+  tooltip.style.display = 'block';
+  tooltip.style.left = Math.min(x + 15, window.innerWidth - 320) + 'px';
+  tooltip.style.top = Math.min(y + 12, window.innerHeight - 150) + 'px';
+}
+
+/** Tooltip for a signal. Deliberately thin — a signal is an observation in the
+ *  raw stream, not a verdict, and the tooltip says so rather than dressing it
+ *  up as one. */
+function showSignalTip(v, x, y) {
+  tooltip.querySelector('.tt-code').textContent = String(v.sigCategory || 'signal').toUpperCase();
+  tooltip.querySelector('.tt-name').textContent = v.sigTitle || 'Signal';
+  var stEl = tooltip.querySelector('.tt-state');
+  stEl.textContent = 'SIGNAL — raw stream, not a declared incident';
+  stEl.style.color = '#38bdf8';
+  tooltip.querySelector('.tt-when').textContent = 'source: ' + (v.sigSource || 'not held');
+  tooltip.querySelector('.tt-adv').innerHTML =
+    '<span style="color:#64748b">Nothing has been declared on this yet. It is context around the ' +
+    'airports, not a statement about one.</span>';
+  tooltip.style.display = 'block';
+  tooltip.style.left = Math.min(x + 15, window.innerWidth - 320) + 'px';
+  tooltip.style.top = Math.min(y + 12, window.innerHeight - 150) + 'px';
+}
 
 if (viewer) {
   var hoverHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   hoverHandler.setInputAction(function (move) {
-    var picks = viewer.scene.drillPick(move.endPosition, 4, 10, 10);
+    var picks = viewer.scene.drillPick(move.endPosition, 6, 10, 10);
     var a = null;
     for (var i = 0; i < picks.length && !a; i++) a = airportFromPick(picks[i]);
-    if (!a) { tooltip.style.display = 'none'; return; }
+    if (!a) {
+      var inc = firstOfRole(picks, 'incident');
+      if (inc) { showIncidentTip(inc, move.endPosition.x, move.endPosition.y); return; }
+      var sig = firstOfRole(picks, 'signal');
+      if (sig) { showSignalTip(sig, move.endPosition.x, move.endPosition.y); return; }
+      tooltip.style.display = 'none';
+      return;
+    }
 
     tooltip.querySelector('.tt-code').textContent =
       (a.iata ? a.iata + ' / ' : '') + (a.icao || '') + '  ·  T' + a._tier;
@@ -1783,10 +2662,16 @@ if (viewer) {
 
   var clickHandler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
   clickHandler.setInputAction(function (click) {
-    var picks = viewer.scene.drillPick(click.position, 5, 10, 10);
+    var picks = viewer.scene.drillPick(click.position, 6, 10, 10);
     var a = null;
     for (var i = 0; i < picks.length && !a; i++) a = airportFromPick(picks[i]);
-    if (a) showTrace(a); else closeTrace();
+    if (a) { showTrace(a); return; }
+    // An incident's own record IS its trace panel — it carries the evidence
+    // layer, the decision log and the rule version (hub-026). Reproducing a
+    // thinner version of it here would be a second source of truth.
+    var inc = firstOfRole(picks, 'incident');
+    if (inc && inc.incSlug) { window.open('/incidents/' + inc.incSlug, '_blank', 'noopener'); return; }
+    closeTrace();
   }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
   viewer.camera.changed.addEventListener(applyZoomVisibility);
@@ -1841,12 +2726,18 @@ function showTrace(a) {
   //    carried it. Separated from the raw axes below so a reader can always see
   //    that the marker is DERIVED, and from what. ──
   var opColor = a._op === OP.DEGRADED ? degradedColor(a) : (a._op === OP.NOMINAL ? C_NOMINAL : C_UNKNOWN);
-  var opVerdict = a._op === OP.DEGRADED ? 'DEGRADED'
+  var band = a._op === OP.DEGRADED ? degradedBand(a) : null;
+  var opVerdict = a._op === OP.DEGRADED ? ('DEGRADED — ' + band.level.toUpperCase())
     : (a._op === OP.NOMINAL ? 'NOMINAL — CHECKED' : (a._op === OP.NOFEED ? 'NOT CHECKED — NO FEED' : 'NOT CHECKED'));
   h += '<div class="tr-sec">' +
     '<div class="tr-sec-h"><span>Airfield state</span><em>what this marker claims</em></div>' +
     '<div class="tr-verdict" style="color:' + opColor + '">' + esc(opVerdict) + '</div>' +
     '<div class="tr-why">' + esc(opClassWhy(a, a._op)) + '</div>' +
+    // hub-051 §7: the marker's HUE is now a claim in its own right, so it gets
+    // a stated reason like every other claim on this panel. A reader should
+    // never have to infer a severity grade from a colour they are trusting.
+    (band ? '<div class="tr-why">Drawn ' + (band.level === 'severe' ? 'red' : 'amber') +
+      ' because ' + esc(band.why) + '</div>' : '') +
     '</div>';
 
   // ── AXIS 1: OPERATIONAL — the hard fact, from the controlling state ──
@@ -1956,6 +2847,16 @@ function showTrace(a) {
       (str(a.obsRuleVersion) ? ' <span class="dim">' + esc(a.obsRuleVersion) + '</span>' : '')) +
     kv('severity', a.severity != null ? esc(a.severity) : '<span class="tr-v unknown">not held</span>') +
     kv('severity band', held(a.severity_band)) +
+    // The two fields above are NULL on every one of the 272 rows the endpoint
+    // serves — they belong to the airspace-ring source, which is not
+    // credentialed. Said out loud, because a reader looking at two "not held"
+    // lines is entitled to know whether that is this airport or the whole
+    // dataset, and because it is the reason the marker ramp grades off the
+    // observation feed's categorical status instead.
+    '<div class="tr-why">No airport row currently carries a <code>severity_band</code> or a numeric ' +
+    '<code>severity</code>. The marker\'s grade therefore comes from the observation feed\'s own ' +
+    'published category (<code>obsStatus</code>), graded under the observation rule named above. ' +
+    'Nothing is scored in the browser.</div>' +
     kv('ring source', held(a.ring_source)) +
     kv('monitor tier', 'Tier ' + a._tier + ' — ' +
       (a._tier === 1 ? 'polled every 15 min' : a._tier === 2 ? 'regular sweep' : 'event-driven only')) +
@@ -1977,32 +2878,78 @@ function showTrace(a) {
 /* ===========================================================================
  * 11. CHROME + BOOT
  * ======================================================================== */
+function setPanelCollapsed(id, collapsed) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle('collapsed', !!collapsed);
+  var btn = el.querySelector('.p-toggle');
+  if (btn) btn.innerHTML = collapsed ? '&#9660;' : '&#9650;';
+  try { localStorage.setItem('travelglobe.panel.' + id, collapsed ? '1' : '0'); } catch (e) {}
+}
 window.togglePanel = function (id) {
   var el = document.getElementById(id);
   if (!el) return;
-  el.classList.toggle('collapsed');
-  var btn = el.querySelector('.p-toggle');
-  if (btn) btn.innerHTML = el.classList.contains('collapsed') ? '&#9660;' : '&#9650;';
+  setPanelCollapsed(id, !el.classList.contains('collapsed'));
 };
 
+/* hub-051 §7: THE LEGEND STARTS COLLAPSED; THE PROBLEM LIST STARTS OPEN.
+ *
+ * These panels are absolute overlays, and expanded they cover roughly a third
+ * of the canvas — which in the world-extent flat view is the whole of the
+ * Americas. Something has to yield, and it should be the panel that explains
+ * the notation rather than the panel that names the problems.
+ *
+ * Collapsed leaves a 30 px header, one click from restored, and the four-state
+ * key it holds is ALSO printed under the globe on the landing hero — so nothing
+ * is lost, only deferred. The reader's own choice, once made, wins forever. */
+try {
+  var savedLegend = localStorage.getItem('travelglobe.panel.statepanel');
+  setPanelCollapsed('statepanel', savedLegend === null ? true : savedLegend === '1');
+  var savedWrong = localStorage.getItem('travelglobe.panel.wrongpanel');
+  if (savedWrong === '1') setPanelCollapsed('wrongpanel', true);
+} catch (e) {
+  setPanelCollapsed('statepanel', true);
+}
+
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTrace(); });
+
+/* hub-051 item 1: EMBED MODE. The landing hero frames this page in an iframe,
+ * where the Hub's own nav sits directly above it — so `?embed=1` drops this
+ * page's link row and tightens the panel offsets. It changes CHROME ONLY. The
+ * markers, the classifier, the census and every number are identical, and the
+ * same URL without the flag is the full-screen page. */
+try {
+  if (new URLSearchParams(window.location.search).get('embed') === '1') {
+    document.body.classList.add('embed');
+  }
+} catch (e) { /* URLSearchParams unavailable — full chrome is the safe default */ }
 
 if (viewer) {
   fetchAirports();
   fetchOpRisk();
   fetchSignals();
+  fetchIncidents();
+  renderLayerCounts();
 
-  // Airports re-read on the observation cadence; the index and signals on their own.
+  // Airports re-read on the observation cadence; the index, incidents and
+  // signals on their own.
   setInterval(function () {
     // Rebuilding entities wholesale is the honest refresh: state can change in
     // both directions, and a marker must never keep a stale shape.
     viewer.entities.removeAll();
     airportByUid = {};
     signalEntities = [];
-    fetchAirports().then(function () { return fetchSignals(); });
+    incidentEntities = [];
+    fetchAirports()
+      .then(function () { return fetchSignals(); })
+      .then(function () { return fetchIncidents(); });
   }, 5 * 60 * 1000);
   setInterval(fetchOpRisk, 10 * 60 * 1000);
   setInterval(fetchSignals, 5 * 60 * 1000);
+  // Incidents move slower than signals but faster than the index. globe.html
+  // polls them every 5 minutes; matched, so the two globes cannot disagree
+  // about what is open.
+  setInterval(fetchIncidents, 5 * 60 * 1000);
 
   // hub-049. The headline age advances on its own clock, between payload
   // refreshes. Cheap — it re-reads one stored timestamp and writes two nodes.

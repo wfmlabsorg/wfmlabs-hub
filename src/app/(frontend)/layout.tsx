@@ -28,11 +28,16 @@ export async function generateMetadata(): Promise<Metadata> {
   }
 }
 
+// hub-051 item 5. `/research` is gone from here too, not only from the nav —
+// Ted said "remove DISPLAYING research", and a footer link is displaying it.
+// The travelrisk surface only. COMMUNITY's footer (DEFAULT_FOOTER_LINKS in
+// Footer.tsx) still carries Research and is untouched.
 const TRAVELRISK_FOOTER: FooterGroup[] = [
   {
     title: 'Travel Risk',
     links: [
       { href: '/travelrisk#board', label: 'Risk Board' },
+      { href: '/travelrisk/risk', label: 'Risk maps' },
       { href: '/incidents', label: 'Incidents' },
       { href: '/signals', label: 'Signals' },
       { href: '/briefs', label: 'Briefs' },
@@ -41,9 +46,9 @@ const TRAVELRISK_FOOTER: FooterGroup[] = [
   {
     title: 'How it works',
     links: [
+      { href: '/roc/globe/travel-globe.html', label: 'Airport globe' },
       { href: '/data-sources', label: 'Data sources' },
       { href: '/roc', label: 'ROC dashboards' },
-      { href: '/research', label: 'Research' },
       { href: '/about', label: 'About' },
     ],
   },
