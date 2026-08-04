@@ -97,14 +97,34 @@ const COMMUNITY_NAV = [
 // Travel-first nav. Same destinations, different emphasis and order — no page
 // on this list is unique to travelrisk. The board anchor is the travel-first
 // domain board on the landing itself.
+//
+// ── hub-051 items 4 + 5 ───────────────────────────────────────────────────
+// `/research` is GONE from this list (Ted, 2026-08-01: "Remove displaying
+// research, not appropriate here"). Removed from the TRAVELRISK nav ONLY —
+// COMMUNITY_NAV above still carries it, the page itself is untouched, and
+// community.wfmlabs.com renders exactly what it rendered before. Demotion is
+// not deletion.
+//
+// `/travelrisk/risk` is new: the index of the twelve per-domain risk maps.
+//
+// RECOMMENDED, NOT CUT — flagged for Ted rather than removed unilaterally:
+//   · `/roc` — the OpenMCT operations centre, 13 dashboards about the
+//     platform's own monitoring. It is an instrument panel for a different
+//     job than "is my traveller's flight at risk". RECOMMEND demoting it to a
+//     footer link on this surface.
+//   · `/briefs` — Compass briefs are workforce-management framed rather than
+//     flight-impact framed. RECOMMEND keeping: they are the only narrative on
+//     the surface, and the fix is brief framing (AGENTS fleet), not nav.
+//   · `/data-sources` — KEEP. On a surface whose entire argument is
+//     traceability, the page naming where the data comes from is load-bearing.
 const TRAVELRISK_NAV = [
   { href: '/travelrisk#board', label: 'Risk Board' },
+  { href: '/travelrisk/risk', label: 'Risk Maps' },
   { href: '/incidents', label: 'Incidents' },
   { href: '/signals', label: 'Signals' },
   { href: '/briefs', label: 'Briefs' },
   { href: '/roc', label: 'ROC' },
   { href: '/data-sources', label: 'APIs' },
-  { href: '/research', label: 'Research' },
   { href: '/about', label: 'About' },
 ]
 

@@ -1,5 +1,6 @@
 import React from 'react'
 import { NEUTRAL, NEUTRAL_DIM, NEUTRAL_LINE, NEUTRAL_FILL, levelColor } from '@/lib/scoreState'
+import { INDEX_HUE, INDEX_MAX, indexBarPct } from '@/lib/travelrisk/riskAxes'
 
 /**
  * Presentational parts for the travelrisk surface (hub-047).
@@ -114,6 +115,11 @@ export function StateChip({
 }
 
 // ── Level pill — the HAZARD axis ───────────────────────────────────────────
+//
+// Retained for the travel-intel disruption tiles, which report a MEASURED
+// operational condition (an FAA ground stop is a fact about an airport) and so
+// legitimately belong on the hazard ramp. It is no longer used for the op-risk
+// index — see IndexReadout below and src/lib/travelrisk/riskAxes.ts for why.
 
 export function LevelPill({ level, score }: { level: string | null; score: number | null }) {
   const c = levelColor(level)
@@ -130,6 +136,71 @@ export function LevelPill({ level, score }: { level: string | null; score: numbe
       >
         {level || 'UNKNOWN'}
       </span>
+    </span>
+  )
+}
+
+// ── Index readout — the RANKING axis (hub-051 §7) ──────────────────────────
+//
+// The op-risk index used to render through LevelPill, on the hazard ramp, with
+// a hard colour cliff at 4.0. Live, the twelve domains span 3.7–4.6, so that
+// cliff painted nine of them amber and three teal and made a tenth of a
+// provisional point look like a change in the state of the world. See
+// src/lib/travelrisk/riskAxes.ts for the full diagnosis.
+//
+// Magnitude is now a BAR — length, which the eye reads accurately — in one hue.
+// The published level word is printed verbatim beside it, so nothing is
+// withheld; it is demoted from a colour flood to a label, which is what a
+// provisional, absolute-basis ranking of event volume has earned. A domain with
+// no reading gets a hatched empty track and says so, rather than a zero-length
+// bar that reads as calm.
+
+export function IndexBar({ score, width = '100%' }: { score: number | null; width?: string }) {
+  const pct = indexBarPct(score)
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-block', width, height: '0.3125rem', borderRadius: '3px',
+        background: pct === null ? 'transparent' : 'rgba(148,163,184,0.16)',
+        backgroundImage: pct === null
+          ? `repeating-linear-gradient(45deg, ${NEUTRAL_LINE} 0 2px, transparent 2px 4px)`
+          : undefined,
+        overflow: 'hidden', verticalAlign: 'middle', flexShrink: 0,
+      }}
+    >
+      {pct !== null && (
+        <span style={{ display: 'block', height: '100%', width: `${pct.toFixed(1)}%`, background: INDEX_HUE, opacity: 0.85 }} />
+      )}
+    </span>
+  )
+}
+
+export function IndexReadout({
+  score, level, available = true, big,
+}: {
+  score: number | null
+  level: string | null
+  available?: boolean
+  big?: boolean
+}) {
+  const has = available && typeof score === 'number'
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+      <IndexBar score={has ? score : null} width={big ? '4.5rem' : '3rem'} />
+      <span
+        style={{
+          fontFamily: MONO, fontSize: big ? '1.125rem' : '0.8125rem', fontWeight: 700,
+          color: has ? 'var(--fg)' : NEUTRAL, fontVariantNumeric: 'tabular-nums',
+          fontStyle: has ? undefined : 'italic',
+        }}
+      >
+        {has ? (score as number).toFixed(1) : '—'}
+      </span>
+      <span style={{ fontFamily: MONO, fontSize: '0.5625rem', letterSpacing: '0.08em', color: NEUTRAL_DIM }}>
+        {has ? (level || 'LEVEL NOT HELD') : 'NO READING'}
+      </span>
+      {!big && <span style={{ fontFamily: MONO, fontSize: '0.5rem', color: NEUTRAL_DIM }}>/{INDEX_MAX}</span>}
     </span>
   )
 }

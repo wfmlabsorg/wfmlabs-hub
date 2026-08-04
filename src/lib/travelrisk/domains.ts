@@ -59,6 +59,36 @@ export const TRAVELRISK_VISIBLE_DOMAINS: readonly TravelRiskDomain[] = TRAVELRIS
 export const TRAVELRISK_HIDDEN_DOMAINS: readonly TravelRiskDomain[] =
   TRAVELRISK_DOMAIN_ORDER.filter((d) => !TRAVELRISK_VISIBLE_DOMAINS.includes(d))
 
+/**
+ * ── PER-DOMAIN RISK MAP ROUTING (hub-051 item 4) ───────────────────────────
+ * Ted, 2026-08-01: *"build out links to each of our Risk area maps so that we
+ * can open a new page with Weather or Disaster or Travel and see those
+ * scorecard maps."*
+ *
+ * TWELVE REAL, LINKABLE URLS — not a client-side switcher. `/travelrisk/risk/
+ * supply-chain` is a page a reader can bookmark, paste into a ticket, and open
+ * in a second tab beside another one. A switcher would have been less code and
+ * a worse instrument.
+ *
+ * The canonical domain key keeps its underscore (`supply_chain`) because that
+ * is what ovix-api publishes and nothing on this surface may rename a domain.
+ * Only the URL segment is hyphenated.
+ */
+export function domainSlug(domain: string): string {
+  return domain.replace(/_/g, '-')
+}
+
+/** Resolve a URL segment back to canonical domain metadata, or undefined. */
+export function domainFromSlug(slug: string | null | undefined): TravelRiskDomain | undefined {
+  const key = String(slug || '').trim().toLowerCase().replace(/-/g, '_')
+  return TRAVELRISK_DOMAIN_ORDER.find((d) => d.domain === key)
+}
+
+/** Canonical href for a domain's risk-map page. */
+export function domainHref(domain: string): string {
+  return `/travelrisk/risk/${domainSlug(domain)}`
+}
+
 const RANK = new Map(TRAVELRISK_DOMAIN_ORDER.map((d) => [d.domain, d.rank]))
 
 /** Flight-impact rank for a domain key; unknown domains sort last, stably. */

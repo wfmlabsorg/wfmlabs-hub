@@ -2,11 +2,11 @@ import React from 'react'
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { neonQuery } from '@/lib/neon'
-import { SignalFeed } from '@/components/signals/SignalFeed'
 import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
+import AirportGlobeHero from '@/components/travelrisk/AirportGlobeHero'
 import { DataUnavailable } from '@/components/DataUnavailable'
 import {
-  Panel, Trace, StateChip, LevelPill, GapNotice, CoverageBar, StatTile, TileGrid, MONO,
+  Panel, Trace, StateChip, LevelPill, IndexReadout, GapNotice, CoverageBar, StatTile, TileGrid, MONO,
 } from '@/components/travelrisk/parts'
 import {
   TRAVELRISK_VISIBLE_DOMAINS,
@@ -14,12 +14,19 @@ import {
   TRAVELRISK_PRIORITY_CATEGORIES,
   travelRank,
   travelDomainMeta,
+  domainHref,
 } from '@/lib/travelrisk/domains'
 import {
   domainState, summarize, explain, fmtUpdated, fmtSettles, levelColor,
   NEUTRAL, NEUTRAL_DIM, NEUTRAL_LINE,
   type OpRiskPayload,
 } from '@/lib/scoreState'
+import {
+  HAZARD, describeSpread, spreadSentence,
+} from '@/lib/travelrisk/riskAxes'
+import {
+  applyProducerFilter, tileIsFullyHidden, hiddenNotice, TRAVELRISK_HIDDEN_PRODUCERS,
+} from '@/lib/travelrisk/presentation'
 import { domainColor } from '@/lib/domainColors'
 
 /**
@@ -121,6 +128,11 @@ interface TravelScores {
     sourceCheckedAt?: string; timestamp?: string
   }[]
 }
+interface SignalRow {
+  id: number; title: string; source: string; category: string
+  severity: string | null; severity_label: string | null
+  region_name: string | null; created_at: string; source_url: string | null
+}
 interface TravelHealth {
   status?: string; lastUpdate?: string
   rules?: Record<string, string>
@@ -136,7 +148,7 @@ export default async function TravelRiskPage() {
   const userAgent = (await headers()).get('user-agent') || ''
   const isMobile = /iPhone|iPad|Android|Mobile|webOS|BlackBerry|Opera Mini/i.test(userAgent)
 
-  const [opRisk, travelScores, travelHealth, sweep, degraded, coverage, latency, incidents, briefs] =
+  const [opRisk, travelScores, travelHealth, sweep, degraded, coverage, latency, incidents, briefs, travelSignals] =
     await Promise.all([
       j<OpRiskPayload>(`${OVIX_API}/api/ovix/op-risk?scope=global`),
       j<TravelScores>(`${TRAVEL_INTEL}/api/travel/scores`),
@@ -192,6 +204,34 @@ export default async function TravelRiskPage() {
         FROM briefs
         WHERE brief_type = 'summary' AND status = 'published'
         ORDER BY published_at DESC LIMIT 1`),
+      // hub-051 item 2/3. Travel signals, ON THIS SURFACE, with the urban-transit
+      // / marine / road producers demoted. The filter is applied in SQL so the
+      // page does not fetch 40 rows to show 8; the deny-list is the SAME named
+      // list the globe and the disclosure line use (src/lib/travelrisk/
+      // presentation.ts), never a second hand-maintained copy. A COUNT of what
+      // was withheld comes back with it, because hiding rows without saying so
+      // makes this surface indistinguishable from one with no data.
+      //
+      // This replaces <SignalFeed category="travel" />, which cannot filter by
+      // producer. That component is shared with community.wfmlabs.com and is
+      // therefore left completely untouched.
+      sql<SignalRow & { withheld: string }>(
+        `WITH t AS (
+           SELECT id, title, source, category::text AS category,
+                  severity::text AS severity, severity_label,
+                  region_name, created_at, source_url,
+                  lower(source) = ANY($1::text[]) AS hidden
+             FROM signals
+            WHERE category = 'travel'
+              AND created_at > now() - interval '48 hours'
+         )
+         SELECT id, title, source, category, severity, severity_label,
+                region_name, created_at, source_url,
+                (SELECT count(*) FROM t WHERE hidden)::text AS withheld
+           FROM t WHERE NOT hidden
+          ORDER BY created_at DESC LIMIT 8`,
+        [TRAVELRISK_HIDDEN_PRODUCERS.map((p) => p.source)],
+      ),
     ])
 
   const sum = summarize(opRisk)
@@ -222,7 +262,37 @@ export default async function TravelRiskPage() {
     .map((x) => x.i)
 
   const latestBrief = briefs?.[0] || null
-  const airportEvents = (travelScores?.events || []).filter((e) => e.scope === 'airport').slice(0, 6)
+
+  // ── hub-051 item 2/3: the presentation filter ───────────────────────────
+  // travel-intel's event list and its domain tiles both carry the demoted
+  // producers. Events are filtered by SOURCE (so News-Intel's Red Sea / Hormuz
+  // shipping intelligence survives while the single NWS coastal gale warning
+  // does not); tiles are hidden only when their ENTIRE population is demoted,
+  // which is derived on every render and therefore self-correcting.
+  const allTravelEvents = travelScores?.events || []
+  const eventFilter = applyProducerFilter(
+    allTravelEvents.map((e) => ({ ...e, source: e.source ? `travel-intel/${e.source}` : null })),
+  )
+  const visibleTiles = (travelScores?.domains || []).filter(
+    (d) => !tileIsFullyHidden(d.domain, allTravelEvents.map((e) => ({
+      domain: e.domain, source: e.source ? `travel-intel/${e.source}` : null,
+    }))),
+  )
+  const hiddenTiles = (travelScores?.domains || []).filter((d) => !visibleTiles.includes(d))
+  const airportEvents = eventFilter.kept.filter((e) => e.scope === 'airport').slice(0, 6)
+
+  // Signals: the SQL above already filtered; the count it carried back is what
+  // the disclosure line quotes.
+  const signalsWithheld = Number(travelSignals?.[0]?.withheld ?? 0) || 0
+
+  // ── hub-051 §7: the spread, described rather than coloured ──────────────
+  const spread = describeSpread(entries)
+  const spreadNote = spreadSentence(spread)
+
+  // The airports that are actually impaired. This is the answer to "where is
+  // real risk right now", and it leads the page rather than sitting four
+  // panels down.
+  const degradedCount = num(sweepRow?.degraded)
 
   const opRiskTrace = [
     'source: ovix-api /api/ovix/op-risk?scope=global',
@@ -232,20 +302,35 @@ export default async function TravelRiskPage() {
 
   return (
     <>
-      <SignalGlobeHero
-        mobile={isMobile}
-        eyebrow="Travel Risk · Live"
-        title="Operational risk, ranked by flight impact"
-        ctaHref="/travelrisk#board"
-        ctaLabel="See the risk board ↓"
-        // hub-049: this surface's globe is the AIRPORT globe (hub-048), not the
-        // region globe. The hero used to hardcode the community target, so the
-        // 272 airport anchors were unreachable from the page that owns them.
-        globeHref="/roc/globe/travel-globe.html"
-        globeLabel="🛫 Open the airport globe →"
-        globeCtaOnDesktop
-        priorityCategories={TRAVELRISK_PRIORITY_CATEGORIES}
-      />
+      {/* ── HERO (hub-051 item 1 + 2) ───────────────────────────────────────
+          Ted: "The Globe here /roc/globe/travel-globe.html should be our main
+          home page landing globe with the airports, incidents and signals."
+
+          hub-049 got as far as pointing a BUTTON at the airport globe. That was
+          the wrong fix to the right complaint: the airports were still one
+          click away, and the hero was still the generic signal globe. The
+          airport globe IS the hero now — framed in place, with all three layers
+          on it, not linked from beside a different map.
+
+          On mobile it stays the lightweight hero. hub-010 decided Cesium does
+          not go on a phone (battery, memory, and a 272-anchor scene that cannot
+          be read at that width), and nothing about this task makes that a worse
+          decision. */}
+      {isMobile ? (
+        <SignalGlobeHero
+          mobile
+          eyebrow="Travel Risk · Live"
+          title="Operational risk, ranked by flight impact"
+          ctaHref="/travelrisk#board"
+          ctaLabel="See the risk board ↓"
+          globeHref="/roc/globe/travel-globe.html"
+          globeLabel="🛫 Open the airport globe →"
+          globeCtaOnDesktop
+          priorityCategories={TRAVELRISK_PRIORITY_CATEGORIES}
+        />
+      ) : (
+        <AirportGlobeHero />
+      )}
 
       <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem 2rem' }}>
 
@@ -259,15 +344,51 @@ export default async function TravelRiskPage() {
           </div>
         ) : (
           <Panel
-            title="Global operational risk"
-            subtitle="One composite across all 12 monitored domains — the same index community.wfmlabs.com reads, arranged travel-first."
-            right={<LevelPill level={sum.compositeLevel} score={typeof opRisk.composite === 'number' ? opRisk.composite : null} />}
+            title="Right now"
+            subtitle="Two different questions, deliberately not merged. What did we CHECK and find impaired — and separately, how does the provisional 12-domain index rank the world today."
+            right={
+              <IndexReadout
+                score={typeof opRisk.composite === 'number' ? opRisk.composite : null}
+                level={sum.compositeLevel}
+                big
+              />
+            }
           >
-            <TileGrid>
-              <StatTile label="Composite" value={typeof opRisk.composite === 'number' ? opRisk.composite.toFixed(1) : '—'} sub={sum.compositeLevel || 'unknown'} color={levelColor(sum.compositeLevel)} />
-              <StatTile label="Basis" value={`${sum.basis.settled}/${sum.total}`} sub="settled" color={NEUTRAL} hatched={sum.provisional} />
-              <StatTile label="Provisional" value={sum.basis.provisional} sub="scored on an absolute basis" color={NEUTRAL} hatched={sum.provisional} />
-              <StatTile label="Unavailable" value={sum.basis.unavailable} sub="no reading" color={NEUTRAL} hatched />
+            {/* ── hub-051 §7: THE HAZARD COUNT LEADS ─────────────────────
+                The old headline was the composite index in a hazard colour,
+                which is how nine amber domains ended up being the loudest thing
+                on a page with ten genuinely degraded airports on it. What a
+                reader needs first is the count of things we checked and found
+                broken; the index is a ranking and sits beside it, not above it. */}
+            <TileGrid min="8.5rem">
+              <StatTile
+                label="Impaired"
+                value={sweepRow ? degradedCount : '—'}
+                sub={sweepRow ? `airports checked and degraded · ${timeAgo(sweepRow.observed_at)}` : 'no sweep readable'}
+                color={sweepRow && degradedCount > 0 ? HAZARD.degraded : NEUTRAL}
+                hatched={!sweepRow}
+              />
+              <StatTile
+                label="Open incidents"
+                value={incidents === null ? '—' : rankedIncidents.length === 0 ? 0 : (incidents.length)}
+                sub={incidents === null ? 'could not be read' : 'declared by Watchkeeper'}
+                color={incidents && incidents.length > 0 ? HAZARD.degraded : NEUTRAL}
+                hatched={incidents === null}
+              />
+              <StatTile
+                label="Not checked"
+                value={sweepRow ? num(sweepRow.unknown) : '—'}
+                sub="no answer or no feed — drawn hollow, never calm"
+                color={NEUTRAL}
+                hatched
+              />
+              <StatTile
+                label="Index basis"
+                value={`${sum.basis.settled}/${sum.total}`}
+                sub={`settled · ${sum.basis.provisional} provisional · ${sum.basis.unavailable} no reading`}
+                color={NEUTRAL}
+                hatched={sum.provisional}
+              />
             </TileGrid>
 
             {sum.provisional && (
@@ -303,8 +424,13 @@ export default async function TravelRiskPage() {
           title="The risk board — ordered by impact on a flight"
           subtitle="Rank is presentation only. Scores, thresholds and the canonical 12-domain taxonomy are identical to the rest of the platform; only the order and the emphasis differ."
           right={
-            <span style={{ fontFamily: MONO, fontSize: '0.625rem', color: NEUTRAL_DIM, letterSpacing: '0.06em' }}>
-              {TRAVELRISK_VISIBLE_DOMAINS.length} OF {TRAVELRISK_VISIBLE_DOMAINS.length + TRAVELRISK_HIDDEN_DOMAINS.length} DOMAINS
+            <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <span style={{ fontFamily: MONO, fontSize: '0.625rem', color: NEUTRAL_DIM, letterSpacing: '0.06em' }}>
+                {TRAVELRISK_VISIBLE_DOMAINS.length} OF {TRAVELRISK_VISIBLE_DOMAINS.length + TRAVELRISK_HIDDEN_DOMAINS.length} DOMAINS
+              </span>
+              <a href="/travelrisk/risk" style={{ fontSize: '0.75rem', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
+                All twelve risk maps →
+              </a>
             </span>
           }
         >
@@ -312,15 +438,22 @@ export default async function TravelRiskPage() {
             {board.map(({ meta, entry, st }) => {
               const dc = domainColor(meta.domain)
               const missing = !entry
+              const available = !!entry && entry.available !== false
               return (
-                <article
+                // hub-051 item 4: every card is now a LINK to that domain's own
+                // risk-map page. Twelve real URLs, not a switcher.
+                <a
                   key={meta.domain}
+                  href={domainHref(meta.domain)}
                   style={{
+                    display: 'block',
                     background: 'var(--bg-secondary)',
                     border: '1px solid var(--border)',
                     borderLeft: `3px solid ${dc}`,
                     borderRadius: 'var(--radius)',
                     padding: '0.75rem 0.875rem',
+                    textDecoration: 'none',
+                    color: 'inherit',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
@@ -339,8 +472,15 @@ export default async function TravelRiskPage() {
                     </span>
                     <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <StateChip state={st.state} title={explain(st) || undefined} compact />
-                      <LevelPill level={st.level} score={st.score} />
                     </span>
+                  </div>
+
+                  {/* hub-051 §7: magnitude as a bar in ONE hue, with the
+                      published level word beside it. This card used to paint
+                      itself amber whenever the score crossed 4.0 — nine of
+                      twelve did, and the board became a wall. */}
+                  <div style={{ marginBottom: '0.5rem' }}>
+                    <IndexReadout score={st.score} level={st.level} available={available} />
                   </div>
 
                   <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
@@ -364,14 +504,35 @@ export default async function TravelRiskPage() {
                           typeof entry.eventCount === 'number' ? `${entry.eventCount} events` : null,
                           st.scoreBasis ? `basis ${st.scoreBasis}` : null,
                           entry.ruleVersion ? `rule ${entry.ruleVersion}` : null,
+                          'open the risk map →',
                         ]}
                       />
                     </>
                   )}
-                </article>
+                </a>
               )
             })}
           </div>
+
+          {/* hub-051 §7: the single most useful thing a reader can be told
+              about today's board — that all twelve sit inside a 0.9-point band
+              — which colour actively concealed. Derived every render, and it
+              disappears by itself once the domains genuinely separate. */}
+          {spreadNote && (
+            <div
+              style={{
+                marginTop: '0.875rem', padding: '0.75rem 0.875rem',
+                borderLeft: `2px solid ${NEUTRAL}`, background: 'rgba(148,163,184,0.07)',
+                borderRadius: 'var(--radius)', fontSize: '0.8125rem',
+                color: 'var(--fg-muted)', lineHeight: 1.6,
+              }}
+            >
+              <strong style={{ color: NEUTRAL, fontFamily: MONO, fontSize: '0.625rem', letterSpacing: '0.09em', display: 'block', marginBottom: '0.25rem' }}>
+                READ THE SPREAD BEFORE THE BANDS
+              </strong>
+              {spreadNote}
+            </div>
+          )}
 
           {TRAVELRISK_HIDDEN_DOMAINS.length > 0 && (
             <p style={{ margin: '0.875rem 0 0', fontSize: '0.75rem', color: NEUTRAL_DIM }}>
@@ -497,7 +658,7 @@ export default async function TravelRiskPage() {
           ) : (
             <>
               <TileGrid min="8rem">
-                {(travelScores.domains || []).map((d) => (
+                {visibleTiles.map((d) => (
                   <StatTile
                     key={d.domain}
                     label={d.domain}
@@ -507,6 +668,21 @@ export default async function TravelRiskPage() {
                   />
                 ))}
               </TileGrid>
+
+              {/* hub-051 item 2/3. A tile is hidden only when its ENTIRE event
+                  population is demoted — derived on every render, so it
+                  self-corrects. `maritime` survives on that rule today, because
+                  20 of its 21 events are News-Intel shipping intelligence and
+                  only the single NWS coastal gale warning is demoted. */}
+              {hiddenTiles.length > 0 && (
+                <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: NEUTRAL_DIM, lineHeight: 1.6 }}>
+                  Not shown on this surface:{' '}
+                  <strong style={{ color: NEUTRAL }}>{hiddenTiles.map((d) => d.domain).join(', ')}</strong>{' '}
+                  — every event scoring {hiddenTiles.length === 1 ? 'that tile' : 'those tiles'} comes from a
+                  city-transit, marine or road producer. Those feeds still run on the same cadence and are
+                  shown in full on community.wfmlabs.com. Demotion is not deletion.
+                </p>
+              )}
 
               {airportEvents.length > 0 && (
                 <div style={{ marginTop: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
@@ -669,9 +845,57 @@ export default async function TravelRiskPage() {
 
         {/* ── 7. Signals + brief ───────────────────────────────────────── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(20rem, 1fr))', gap: '1.25rem' }}>
-          <Panel title="Live travel signals" subtitle="The travel domain of the member intel feed." accent="#38bdf8">
-            <SignalFeed limit={8} category="travel" compact />
-            <Trace items={['source: Hub signals (scouts · travel-intel · web-scout · sentinel)']} />
+          <Panel
+            title="Live travel signals"
+            subtitle="The travel domain of the member intel feed, last 48 hours."
+            accent="#38bdf8"
+          >
+            {travelSignals === null ? (
+              <DataUnavailable
+                title="Signals could not be read"
+                detail="The signal store did not answer just now. This is a connection issue, not an all-clear."
+              />
+            ) : travelSignals.length === 0 ? (
+              <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>
+                No travel signals in the last 48 hours that this surface shows.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+                {travelSignals.map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap',
+                      padding: '0.4rem 0.5rem', background: 'var(--bg-secondary)',
+                      borderRadius: 'var(--radius)', borderLeft: '3px solid #38bdf8',
+                    }}
+                  >
+                    <span style={{ fontSize: '0.8125rem', fontWeight: 600, minWidth: 0, flex: '1 1 14rem' }}>
+                      {s.title}
+                    </span>
+                    <span style={{ fontFamily: MONO, fontSize: '0.5625rem', color: NEUTRAL_DIM, flexShrink: 0 }}>
+                      {s.source} · {s.region_name || 'no region'} · {timeAgo(s.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* hub-051 item 2/3. THE DISCLOSURE IS NOT OPTIONAL. A surface that
+                quietly drops rows is indistinguishable from a surface with no
+                data, so the count withheld and the reason ride with the list. */}
+            {signalsWithheld > 0 && (
+              <p style={{ margin: '0.75rem 0 0', fontSize: '0.75rem', color: NEUTRAL_DIM, lineHeight: 1.6 }}>
+                {hiddenNotice(signalsWithheld)}
+              </p>
+            )}
+            <Trace
+              items={[
+                'source: Hub signals (scouts · travel-intel · web-scout · sentinel)',
+                `filter: travelrisk producer deny-list (${TRAVELRISK_HIDDEN_PRODUCERS.length} producers, presentation only)`,
+                'window: 48 h',
+              ]}
+            />
           </Panel>
 
           <Panel title="Latest brief" subtitle="Compass publishes an operational brief as events develop.">
