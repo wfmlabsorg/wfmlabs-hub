@@ -7,8 +7,8 @@ import React from 'react'
 
 const categoryColors: Record<string, { bg: string; fg: string; border: string }> = {
   weather: { bg: '#dbeafe', fg: '#1e40af', border: '#3b82f6' },
-  seismic: { bg: '#fee2e2', fg: '#991b1b', border: '#ef4444' },
-  disaster: { bg: '#ffedd5', fg: '#9a3412', border: '#f97316' },
+  seismic: { bg: '#ffe4e6', fg: '#9f1239', border: '#f43f5e' },
+  disaster: { bg: '#fee2e2', fg: '#991b1b', border: '#ef4444' },
   cyber: { bg: '#d1fae5', fg: '#065f46', border: '#22c55e' },
   health: { bg: '#fce7f3', fg: '#9d174d', border: '#ec4899' },
   infrastructure: { bg: '#ede9fe', fg: '#5b21b6', border: '#8b5cf6' },
@@ -26,7 +26,7 @@ const categoryLabels: Record<string, string> = {
 }
 
 const severityColors: Record<string, string> = {
-  extreme: '#e74c3c', severe: '#f39c12', moderate: '#3498db', info: '#27ae60',
+  extreme: '#e74c3c', severe: '#eab308', moderate: '#3498db', info: '#27ae60',
 }
 
 export default async function BriefDetailPage({

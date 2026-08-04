@@ -73,7 +73,7 @@ const categoryIcons: Record<string, string> = {
 
 const severityBadgeColors: Record<string, { bg: string; fg: string }> = {
   extreme: { bg: '#fecaca', fg: '#991b1b' },
-  severe: { bg: '#fed7aa', fg: '#9a3412' },
+  severe: { bg: '#fef08a', fg: '#854d0e' },
   moderate: { bg: '#bfdbfe', fg: '#1e40af' },
   info: { bg: '#d1fae5', fg: '#065f46' },
 }

@@ -10,7 +10,7 @@ const categoryGradients: Record<string, string> = {
   'topic-surface': 'linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)',
   'wiki-highlight': 'linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%)',
   'research-finding': 'linear-gradient(135deg, #2563eb 0%, #3b82f6 100%)',
-  'opinion': 'linear-gradient(135deg, #f59e0b 0%, #f97316 100%)',
+  'opinion': 'linear-gradient(135deg, #eab308 0%, #f59e0b 100%)',
   'tutorial': 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
   'industry-analysis': 'linear-gradient(135deg, #e11d48 0%, #f43f5e 100%)',
 }

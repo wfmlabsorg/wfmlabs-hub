@@ -14,8 +14,8 @@ interface FeedInfo {
 
 const DASHBOARDS: FeedInfo[] = [
   { name: 'weather', label: 'Weather', icon: '⛈', color: '#3b82f6', rocPath: 'roc-dashboards:weather' },
-  { name: 'seismic', label: 'Seismic', icon: '🌋', color: '#ef4444', rocPath: 'roc-dashboards:seismic' },
-  { name: 'disaster', label: 'Disaster', icon: '🔥', color: '#f97316', rocPath: 'roc-dashboards:disaster' },
+  { name: 'seismic', label: 'Seismic', icon: '🌋', color: '#f43f5e', rocPath: 'roc-dashboards:seismic' },
+  { name: 'disaster', label: 'Disaster', icon: '🔥', color: '#ef4444', rocPath: 'roc-dashboards:disaster' },
   { name: 'cyber', label: 'Cyber', icon: '🛡', color: '#22c55e', rocPath: 'roc-dashboards:cyber' },
   { name: 'health', label: 'Health', icon: '🏥', color: '#ec4899', rocPath: 'roc-dashboards:health' },
   { name: 'infrastructure', label: 'Infrastructure', icon: '🏗', color: '#8b5cf6', rocPath: 'roc-dashboards:infrastructure' },
@@ -27,7 +27,7 @@ const DASHBOARDS: FeedInfo[] = [
 
 function sevColor(s: number): string {
   if (s >= 8) return '#ef4444'
-  if (s >= 6) return '#f97316'
+  if (s >= 6) return '#f87171'
   if (s >= 4) return '#eab308'
   if (s >= 2) return '#22d3ee'
   return '#10b981'
