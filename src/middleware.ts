@@ -34,7 +34,9 @@ const PUBLIC_PATHS = [
 
 const PUBLIC_PREFIXES = [
   '/api/',
-  '/roc/',
+  // '/roc/' narrowed 2026-09-05 (hub-052): the OpenMCT app redirects home in
+  // next.config.ts; only the travelrisk airport globe under /roc/globe/ stays public.
+  '/roc/globe/',
   '/incidents',
   '/_next/',
   '/favicon',
