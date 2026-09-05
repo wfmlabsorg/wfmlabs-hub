@@ -6,7 +6,8 @@ import { auth } from '@/lib/auth'
 import { SignalFeed } from '@/components/signals/SignalFeed'
 import { AssetCard } from '@/components/cards/AssetCard'
 import { MemberAvatar } from '@/components/MemberAvatar'
-import SignalGlobeHero from '@/components/globe/SignalGlobeHero'
+// SignalGlobeHero removed from the landing 2026-09-05 (hub-052) — globe hibernated.
+// Component and /api/roc-globe left in place for the travelrisk surface and easy restore.
 
 export const dynamic = 'force-dynamic'
 
@@ -49,61 +50,9 @@ function briefDate(date: string): string {
 //  Section components (shared across auth states + desktop/mobile)
 // ──────────────────────────────────────────────────────────────────────────
 
-// 1 — HERO: OVIX Volatility Tape (iframe, eager)
-function HeroTape({ mobile }: { mobile: boolean }) {
-  return (
-    <section
-      style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderTop: '3px solid #22d3ee',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        marginBottom: '1rem',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '0.5rem',
-          padding: mobile ? '0.625rem 0.75rem' : '0.75rem 1.125rem',
-          borderBottom: '1px solid var(--border)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
-          <span style={{ width: '0.4rem', height: '0.4rem', borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 6px #22c55e', animation: 'pulse 2s infinite', flexShrink: 0 }} />
-          <span style={{ fontSize: mobile ? '0.6875rem' : '0.8125rem', fontWeight: 700, color: 'var(--fg)' }}>
-            Operational Volatility Index
-          </span>
-          {!mobile && (
-            <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
-              — live · 28 feeds · updates ~5 min
-            </span>
-          )}
-        </div>
-        <a href="/roc" style={{ fontSize: mobile ? '0.6875rem' : '0.75rem', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', flexShrink: 0 }}>
-          Open full ROC ↗
-        </a>
-      </div>
-      <iframe
-        src="/roc/dashboards/scores.html"
-        title="OVIX Volatility Tape"
-        loading="eager"
-        allow="clipboard-write"
-        style={{
-          display: 'block',
-          width: '100%',
-          height: mobile ? '520px' : '750px',
-          border: 'none',
-          background: 'var(--bg)',
-        }}
-      />
-    </section>
-  )
-}
+// 1 — HERO: the OVIX Volatility Tape (an iframe of the ROC scores dashboard) was
+// removed 2026-09-05 (hub-052): the OpenMCT app is hibernated and /roc/dashboards/*
+// now redirects home. Restore from git history alongside the /roc rewrite.
 
 // Section header helper
 function SectionHead({ icon, title, count, href, linkLabel }: { icon?: string; title: string; count?: number | string; href?: string; linkLabel?: string }) {
@@ -546,9 +495,7 @@ export default async function HomePage() {
   if (isMobile) {
     return (
       <>
-        <SignalGlobeHero mobile />
         <div style={{ padding: '0.75rem' }}>
-          <HeroTape mobile />
           <BriefLink brief={latestBrief} />
           <StatusStrip {...statusProps} />
           {!isAuthed && (
@@ -566,9 +513,7 @@ export default async function HomePage() {
   // ── Desktop ──
   return (
     <>
-      <SignalGlobeHero mobile={false} />
       <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem' }}>
-        <HeroTape mobile={false} />
         <BriefLink brief={latestBrief} />
         <StatusStrip {...statusProps} />
         {sharedSections()}

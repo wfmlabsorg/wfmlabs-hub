@@ -80,9 +80,11 @@ export interface SurfaceChrome {
   navLinks: { href: string; label: string }[]
 }
 
+// hub-052 (Ted, 2026-09-05): the OpenMCT globe/ROC app and the Incidents
+// surface are HIBERNATED on the community site — not deleted. Tools stays.
+// `/roc` now 307s to `/` (next.config.ts). `/incidents` pages still exist and
+// are still public (travelrisk uses them); they are simply no longer in this nav.
 const COMMUNITY_NAV = [
-  { href: '/roc', label: 'ROC' },
-  { href: '/incidents', label: 'Incidents' },
   { href: '/briefs', label: 'Briefs' },
   { href: '/signals', label: 'Signals' },
   { href: '/tools', label: 'Tools' },
@@ -123,7 +125,8 @@ const TRAVELRISK_NAV = [
   { href: '/incidents', label: 'Incidents' },
   { href: '/signals', label: 'Signals' },
   { href: '/briefs', label: 'Briefs' },
-  { href: '/roc', label: 'ROC' },
+  // `/roc` removed 2026-09-05 (hub-052) — the OpenMCT app is hibernated and the
+  // route redirects home. Incidents/Signals/Briefs stay: travelrisk is untouched.
   { href: '/data-sources', label: 'APIs' },
   { href: '/about', label: 'About' },
 ]

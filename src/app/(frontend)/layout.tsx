@@ -48,7 +48,7 @@ const TRAVELRISK_FOOTER: FooterGroup[] = [
     links: [
       { href: '/roc/globe/travel-globe.html', label: 'Airport globe' },
       { href: '/data-sources', label: 'Data sources' },
-      { href: '/roc', label: 'ROC dashboards' },
+      // 'ROC dashboards' (/roc) removed 2026-09-05 — OpenMCT app hibernated (hub-052).
       { href: '/about', label: 'About' },
     ],
   },

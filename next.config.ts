@@ -8,19 +8,21 @@ const nextConfig: NextConfig = {
   // Debates retired 2026-06-23 (WFM-74) — old debate URLs redirect to the research surface.
   // Pricing removed 2026-07-15 (hub-032) — operating model being rethought; temporary (307)
   // redirect so inbound links don't 404 and the URL isn't permanently claimed.
+  // ROC / OpenMCT globe hibernated 2026-09-05 (hub-052) — temporary (307) redirect home,
+  // same pattern as /pricing. The static app stays in public/roc/ for an easy restore:
+  // re-add the `/roc → /roc/index.html` rewrite and the SAMEORIGIN headers below.
   redirects: async () => [
     { source: '/debates', destination: '/research', permanent: true },
     { source: '/debates/:slug*', destination: '/research', permanent: true },
     { source: '/pricing', destination: '/', permanent: false },
+    { source: '/roc', destination: '/', permanent: false },
+    { source: '/roc/index.html', destination: '/', permanent: false },
+    { source: '/roc/dashboards/:path*', destination: '/', permanent: false },
+    { source: '/roc/admin/:path*', destination: '/', permanent: false },
+    { source: '/globe-home.html', destination: '/', permanent: false },
+    // NOT redirected: /roc/globe/* — the travelrisk airport globe lives there and
+    // that surface is untouched by hub-052.
   ],
-  rewrites: async () => ({
-    beforeFiles: [
-      // Serve ROC OpenMCT at /roc (static HTML from public/roc/index.html)
-      { source: '/roc', destination: '/roc/index.html' },
-    ],
-    afterFiles: [],
-    fallback: [],
-  }),
   images: {
     remotePatterns: [
       {
@@ -49,23 +51,18 @@ const nextConfig: NextConfig = {
           { key: 'Access-Control-Allow-Headers', value: 'Content-Type, Authorization, X-API-Key' },
         ],
       },
-      // ROC static files + globe — allow iframing from same origin
+      // travelrisk airport globe — still served from /roc/globe/, still iframe-able same-origin
       {
-        source: '/roc/:path*',
+        source: '/roc/globe/:path*',
         headers: [
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
           { key: 'Cache-Control', value: 'public, max-age=0, s-maxage=60, stale-while-revalidate=30' },
         ],
       },
+      // Global security headers (excludes /roc/globe/ above). The OpenMCT app and
+      // /globe-home.html used to be excluded too; both redirect home while hibernated (hub-052).
       {
-        source: '/globe-home.html',
-        headers: [
-          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-        ],
-      },
-      // Global security headers (excludes /roc/ and globe which have their own above)
-      {
-        source: '/((?!roc/|globe-).*)',
+        source: '/((?!roc/globe/).*)',
         headers: [
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
