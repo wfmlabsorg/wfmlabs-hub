@@ -36,6 +36,8 @@ import { CONFIDENCE, HAZARD, ADVISORY_HUE } from '@/lib/travelrisk/riskAxes'
 
 const FRAME_SRC = '/roc/globe/travel-globe.html?embed=1'
 export const AIRPORT_GLOBE_HREF = '/roc/globe/travel-globe.html'
+/** gev-001: the God's Eye View board (weather, aviation hazards, cyclones, delays) on the same classifier. */
+export const GEV_HREF = '/roc/globe/gev.html'
 
 function Key({ mark, label, note }: { mark: React.ReactNode; label: string; note: string }) {
   return (
@@ -73,6 +75,7 @@ export function AirportGlobeHero() {
               272 airports, every open incident, and the live signal stream — on one map
             </h1>
           </div>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <a
             href={AIRPORT_GLOBE_HREF}
             style={{
@@ -83,6 +86,17 @@ export function AirportGlobeHero() {
           >
             Open full screen ↗
           </a>
+          <a
+            href={GEV_HREF}
+            style={{
+              fontFamily: MONO, fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em',
+              color: '#f472b6', textDecoration: 'none', border: '1px solid rgba(244,114,182,0.35)',
+              borderRadius: '4px', padding: '0.3rem 0.65rem', whiteSpace: 'nowrap',
+            }}
+          >
+            God&apos;s Eye view ↗
+          </a>
+          </div>
         </div>
 
         <div
