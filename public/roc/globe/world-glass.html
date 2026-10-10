@@ -890,6 +890,10 @@ function renderFeeds() {
   document.getElementById('feeds').innerHTML = '<span class="f ' + (gaps.length ? 'gap' : wait ? 'wait' : 'ok') + '">' + ok + '/' + on.length + ' feeds ok</span>'
     + gaps.map(function (g) { return '<span class="f gap" title="' + esc(feeds[g].note) + '">GAP ' + esc(g) + '</span>'; }).join('');
 }
+/** Colours reach HTML style attributes: only #hex and rgb()/rgba() pass, anything else falls back. */
+var HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+var RGB_COLOR = /^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(?:,\s*(?:0|1|0?\.\d+|\d{1,3}%)\s*)?\)$/i;
+function safeColor(c) { var s = String(c); return HEX_COLOR.test(s) || RGB_COLOR.test(s) ? s : '#94a3b8'; }
 function renderWatch() {
   // an airport with a story entry already says everything its plain "degraded" entry would
   var storyIcao = {}; watchItems.stories.forEach(function (w) { if (w.id && w.id.indexOf('sa:') === 0) storyIcao[w.id.slice(3)] = 1; });
@@ -897,7 +901,7 @@ function renderWatch() {
   var all = Object.keys(watchItems).reduce(function (acc, k) { return acc.concat(k === 'airports' ? plainAirports : watchItems[k]); }, []).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
-  el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
+  el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + safeColor(w.color) + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
   Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { activate(node, function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) { lookup[w.id]._id = w.id; showCard(lookup[w.id]); } }); });
 }
 function kvs(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) { return '<div>' + esc(r[0]) + '</div><div>' + (r[2] ? r[1] : esc(r[1])) + '</div>'; }).join('') + '</div>'; }
@@ -1026,11 +1030,13 @@ window.WG = {
   feed: feed, layerOn: layerOn,
   put: function (id, payload) { lookup[id] = payload; },
   card: function (kind, fn) { cardRenderers[kind] = fn; },
-  watch: function (id, items) { watchItems[id] = items || []; renderWatch(); },
+  watch: function (id, items) { watchItems[id] = (items || []).map(function (w) { var o = {}; for (var k in w) o[k] = w[k]; o.color = safeColor(w.color); return o; }); renderWatch(); },
   addLayer: function (def) {
     if (!def || !def.id || sources[def.id] || IMAGERY_LAYERS[def.id]) return null;
     var on = bootHash && bootHash.l != null ? bootHash.l.split(',').indexOf(def.id) !== -1 : def.on !== false;
-    layerDefs.push({ id: def.id, label: def.label || def.id, color: def.color || '#94a3b8', on: on });
+    if (!/^[a-z0-9_-]{1,32}$/.test(String(def.id))) return null;   // ids reach data-* attributes and the share hash
+    var col = safeColor(def.color || '#94a3b8'); if (col.charAt(0) !== '#') col = '#94a3b8';   // the swatch appends a hex alpha
+    layerDefs.push({ id: def.id, label: def.label || def.id, color: col, on: on });
     var src = new Cesium.CustomDataSource(def.id); src.show = on; sources[def.id] = src; viewer.dataSources.add(src);
     watchItems[def.id] = watchItems[def.id] || [];
     pluginLoaders[def.id] = function () {
