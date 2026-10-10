@@ -870,6 +870,7 @@ function setLayer(id, on) {
   else if (id === 'tiles3d') { setTiles3d(on); }
   else if (id === 'lightning') { if (on && !ltLayer) loadLightning(); if (ltLayer) ltLayer.show = on; }
   else if (sources[id]) sources[id].show = on && !(replayIdx >= 0 && (id === 'airports' || id === 'arcs'));
+  if (on && pluginLoaders[id]) pluginLoaders[id]();
   if (id === 'flights') { if (on) loadFlights(true); else { sources.flights.entities.removeAll(); watchItems.flights = []; lastFlightKey = ''; renderWatch(); } }
   renderLayers(); writeHash();
 }
@@ -893,15 +894,17 @@ function renderWatch() {
   // an airport with a story entry already says everything its plain "degraded" entry would
   var storyIcao = {}; watchItems.stories.forEach(function (w) { if (w.id && w.id.indexOf('sa:') === 0) storyIcao[w.id.slice(3)] = 1; });
   var plainAirports = watchItems.airports.filter(function (w) { return !(w.id && storyIcao[w.id.slice(3)]); });
-  var all = [].concat(watchItems.stories, watchItems.flights, watchItems.cyclones, watchItems.incidents, watchItems.arcs, plainAirports, watchItems.events, watchItems.hazards).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
+  var all = Object.keys(watchItems).reduce(function (acc, k) { return acc.concat(k === 'airports' ? plainAirports : watchItems[k]); }, []).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
   el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
   Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { activate(node, function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) { lookup[w.id]._id = w.id; showCard(lookup[w.id]); } }); });
 }
 function kvs(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) { return '<div>' + esc(r[0]) + '</div><div>' + (r[2] ? r[1] : esc(r[1])) + '</div>'; }).join('') + '</div>'; }
+var cardRenderers = {};            // kind → function (payload) { return { html, at: [lon, lat] | null } }   (plugins, via WG)
 function showCard(x) {
   var h = '';
+  if (cardRenderers[x.kind]) { var pr = cardRenderers[x.kind](x) || {}; return finishCard(pr.html || '', pr.at || null, x); }
   if (x.kind === 'airport') { var a = x.a;
     h = '<div class="h">Airport · ' + esc(a._op) + '</div><div class="ct">' + esc((a.name || '') + ' (' + (a.iata || a.icao) + ')') + '</div>' + kvs([
       ['operational', opClassWhy(a, a._op)], ['delays', delaySentence(a)], ['advisory', a._adv], ['freshness', freshWords(a._fresh)],
@@ -943,6 +946,9 @@ function showCard(x) {
       + '<pre>A listed high-volume corridor where both airports classify DEGRADED right now. It is not a statement about any single flight; it marks where misconnects and knock-on cancellations concentrate.</pre>'; }
   var at = x.kind === 'storyAirport' ? [x.a.lon, x.a.lat] : x.kind === 'storyFlight' ? (x.f.pos_lon != null ? [x.f.pos_lon, x.f.pos_lat] : [x.home.lon, x.home.lat]) : x.kind === 'airport' ? [x.a._lon, x.a._lat] : x.kind === 'cyclone' ? [x.s.lon, x.s.lat] : x.kind === 'event' ? [num(x.e.lon), num(x.e.lat)]
     : x.kind === 'incident' ? [num(x.p.location_lon), num(x.p.location_lat)] : x.kind === 'flight' ? [x.a.lon, x.a.lat] : null;
+  finishCard(h, at, x);
+}
+function finishCard(h, at, x) {
   if (at && at[0] != null && at[1] != null) h += '<div style="margin-top:10px"><button id="flyoverbtn">⟳ Fly over (3D)</button></div>';
   selected = x._id || ''; writeHash();
   document.getElementById('cardbody').innerHTML = h; document.getElementById('card').classList.add('open');
@@ -997,6 +1003,46 @@ document.getElementById('linkbtn').onclick = function () {
 setInterval(loadAirports, 5 * 60e3); setInterval(loadHazards, 5 * 60e3); setInterval(loadCyclones, 10 * 60e3);
 setInterval(loadRadar, 10 * 60e3); setInterval(loadEvents, 2 * 60e3); setInterval(loadIncidents, 2 * 60e3);
 setInterval(renderLayers, 60e3);   // ages tick
+
+/* =========================================================================
+ * 9. PLUGIN INTERFACE — window.WG
+ *    A layer can live in its own file (e.g. /roc/globe/wg-aviation.js) and register itself here, so
+ *    parallel work never edits this page. Load plugin scripts AFTER this script; they call:
+ *
+ *      WG.addLayer({ id, label, color, on, refreshMs, load: function (src) { ... return promise } })
+ *        src is the layer's Cesium.CustomDataSource; load() runs at boot (if on), on refresh, and when
+ *        the layer is switched on. Report health with WG.feed(id, ok, n, atIso, note) — a failed feed
+ *        must say so (GAP), never render as an empty "nothing happening" layer.
+ *      WG.card(kind, function (payload) { return { html, at: [lon, lat] } })   card renderer
+ *      WG.put(entityId, payload)        what a click on that entity opens (payload.kind picks the renderer)
+ *      WG.watch(id, items)              watch-list entries { rank, kind, color, title, sub, lon, lat, h, id }
+ *      helpers: WG.viewer, WG.Cesium, WG.C(css, alpha), WG.pulse(ms, lo, hi), WG.EXAG, WG.PLANE,
+ *               WG.esc, WG.num, WG.ago, WG.kvs, WG.flyTo, WG.rings(geom), WG.hierarchy(poly), WG.arc(...)
+ * ====================================================================== */
+var pluginLoaders = {};
+window.WG = {
+  viewer: viewer, Cesium: Cesium, C: C, pulse: pulse, EXAG: EXAG, PLANE: PLANE, REDUCED: REDUCED,
+  esc: esc, num: num, ago: ago, kvs: kvs, flyTo: flyTo, rings: rings, hierarchy: hierarchy, arc: storyArc,
+  feed: feed, layerOn: layerOn,
+  put: function (id, payload) { lookup[id] = payload; },
+  card: function (kind, fn) { cardRenderers[kind] = fn; },
+  watch: function (id, items) { watchItems[id] = items || []; renderWatch(); },
+  addLayer: function (def) {
+    if (!def || !def.id || sources[def.id] || IMAGERY_LAYERS[def.id]) return null;
+    var on = bootHash && bootHash.l != null ? bootHash.l.split(',').indexOf(def.id) !== -1 : def.on !== false;
+    layerDefs.push({ id: def.id, label: def.label || def.id, color: def.color || '#94a3b8', on: on });
+    var src = new Cesium.CustomDataSource(def.id); src.show = on; sources[def.id] = src; viewer.dataSources.add(src);
+    watchItems[def.id] = watchItems[def.id] || [];
+    pluginLoaders[def.id] = function () {
+      if (!layerOn(def.id)) return null;
+      try { return Promise.resolve(def.load(src)).catch(function (e) { feed(def.id, false, 0, null, String((e && e.message) || e)); }); }
+      catch (e) { feed(def.id, false, 0, null, String((e && e.message) || e)); return null; }
+    };
+    renderLayers(); renderFeeds(); pluginLoaders[def.id]();
+    if (def.refreshMs) setInterval(pluginLoaders[def.id], def.refreshMs);
+    return src;
+  }
+};
 })();
 </script>
 </body>
