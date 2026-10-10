@@ -173,7 +173,8 @@
     <div class="row"><i style="border:2px solid #94a3b8"></i>airport not checked (never drawn calm)</div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
-    <div class="row">hazard volumes are extruded to their published top altitude (×6)</div>
+    <div class="row"><i style="background:#ef4444"></i>story flight cancelled (dashed) · <i style="background:#e879f9"></i>diverted · <i style="background:#f59e0b"></i>2 h+ late</div>
+    <div class="row">hazard volumes and aircraft altitudes are exaggerated ×6</div>
   </div>
 
   <div id="mobtabs"><button data-p="layers">Layers</button><button data-p="watch">Watch</button><button data-p="legend">Key</button></div>
@@ -199,7 +200,8 @@ var layerDefs = [
   { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: true },
   { id: 'events',    label: 'Live travel events',   color: '#f97316', on: true },
   { id: 'incidents', label: 'Open incidents',       color: '#ef4444', on: true },
-  { id: 'flights',   label: 'Live aircraft (zoom)', color: '#e2e8f0', on: true },
+  { id: 'stories',   label: 'Story flights',        color: '#f472b6', on: true },
+  { id: 'flights',   label: 'All traffic (zoom)',   color: '#e2e8f0', on: false },
   { id: 'arcs',      label: 'Disrupted corridors',  color: '#fb923c', on: true },
   { id: 'ir',        label: 'Satellite infrared',   color: '#cbd5e1', on: false },
   { id: 'lightning', label: 'Lightning density',    color: '#fde047', on: false },
@@ -207,7 +209,7 @@ var layerDefs = [
 ];
 var IMAGERY_LAYERS = { radar: 1, ir: 1, lightning: 1, tiles3d: 1 };
 var sources = {};                   // layer id → Cesium.CustomDataSource
-var watchItems = { airports: [], cyclones: [], events: [], hazards: [], incidents: [], flights: [], arcs: [] };
+var watchItems = { airports: [], cyclones: [], events: [], hazards: [], incidents: [], flights: [], arcs: [], stories: [] };
 
 function C(css, a) { var c = Cesium.Color.fromCssColorString(css); return a == null ? c : c.withAlpha(a); }
 function ago(iso) { var t = Date.parse(iso); if (!isFinite(t)) return '—'; var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
@@ -542,6 +544,7 @@ function loadFlights(force) {
       var src = sources.flights; src.entities.removeAll(); var em = [];
       (d.aircraft || []).forEach(function (a) {
         var id = 'fl:' + a.hex, col = altColor(a), hM = a.ground ? 0 : (a.alt_ft || 0) * 0.3048 * EXAG;
+        if (src.entities.getById(id)) return;   // duplicate hex in one response: Cesium throws on a duplicate id
         lookup[id] = { kind: 'flight', a: a };
         src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, hM),
           billboard: { image: PLANE, color: C(col), scale: a.emergency ? 0.9 : 0.55, rotation: a.track != null ? -Cesium.Math.toRadians(a.track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
@@ -783,6 +786,80 @@ function flyover(lon, lat) {
 }
 ['mousedown', 'wheel', 'touchstart', 'keydown'].forEach(function (ev) { viewer.canvas.addEventListener(ev, stopOrbit, { passive: true }); });
 /* =========================================================================
+ * 6j. STORY FLIGHTS (cycle 3) — only the flights that carry a story
+ *     Airports with a reason (operational / sweep / FAA / news / cyclone), the flights on their
+ *     boards that are cancelled, diverted or ≥ 60 min late, live emergency squawks worldwide.
+ *     Not the traffic picture: that is the separate "All traffic (zoom)" layer, off by default.
+ * ====================================================================== */
+var STORY = { cancelled: '#ef4444', diverted: '#e879f9', delayed: '#f59e0b' };
+var REASON_COLOR = { operational: '#ef4444', faa: '#ef4444', sweep: '#f59e0b', cyclone: '#ec4899', news: '#a78bfa' };
+var ARCS_PER_AIRPORT = 10;
+function storyArc(src, id, a1, a2, col, dashed) {
+  var g = new Cesium.EllipsoidGeodesic(Cesium.Cartographic.fromDegrees(a1[0], a1[1]), Cesium.Cartographic.fromDegrees(a2[0], a2[1]));
+  var peak = Math.min(700000, g.surfaceDistance * 0.12), pts = [];
+  for (var i = 0; i <= 32; i++) { var f = i / 32, p = g.interpolateUsingFraction(f); pts.push(Cesium.Cartesian3.fromRadians(p.longitude, p.latitude, Math.sin(f * Math.PI) * peak)); }
+  src.entities.add({ id: id, polyline: { positions: pts, width: dashed ? 1.8 : 2.2, material: dashed ? new Cesium.PolylineDashMaterialProperty({ color: C(col, 0.85), dashLength: 10 }) : C(col, 0.8) } });
+}
+function loadStories() {
+  return fetch('/api/gev-story-flights', { signal: AbortSignal.timeout(25000) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
+    .then(function (d) {
+      var src = sources.stories; src.entities.removeAll(); var watch = [];
+      var byIcao = {}; (d.airports || []).forEach(function (a) { byIcao[a.icao] = a; });
+      // airports with a story
+      (d.airports || []).forEach(function (a) {
+        if (a.lat == null || a.lon == null) return;
+        var kinds = (a.reasons || []).map(function (r) { return r.kind; }), sc = a.story_counts || {};
+        var col = kinds.indexOf('operational') !== -1 || kinds.indexOf('faa') !== -1 || sc.cancelled ? '#ef4444' : kinds.indexOf('cyclone') !== -1 ? '#ec4899' : kinds.indexOf('sweep') !== -1 ? '#f59e0b' : '#a78bfa';
+        var id = 'sa:' + a.icao, tag = (a.iata || a.icao) + (a.boarded_at ? (sc.cancelled ? '  ✕' + sc.cancelled : '') + (sc.diverted ? '  ↷' + sc.diverted : '') + (sc.delayed ? '  ⏱' + sc.delayed : '') + (!sc.cancelled && !sc.diverted && !sc.delayed ? '  board clean' : '') : '  · story');
+        lookup[id] = { kind: 'storyAirport', a: a, flights: (d.flights || []).filter(function (f) { return f.airport_icao === a.icao; }) };
+        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
+          ellipse: { semiMajorAxis: 70000, semiMinorAxis: 70000, material: C(col, 0.0001), outline: true, outlineColor: C(col, 0.95), outlineWidth: 2, height: 0 },
+          label: { text: tag, font: 'bold 12px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 4, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            pixelOffset: new Cesium.Cartesian2(0, -22), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.6e7) } });
+        var total = (sc.cancelled || 0) + (sc.diverted || 0) + (sc.delayed || 0);
+        watch.push({ rank: 66 + Math.min(24, (sc.cancelled || 0) * 0.6 + (sc.diverted || 0) * 2 + (sc.delayed || 0) * 0.08) + (kinds.indexOf('operational') !== -1 ? 10 : 0), kind: 'STORY AIRPORT · ' + kinds.filter(function (k, i) { return kinds.indexOf(k) === i; }).join(' + ').toUpperCase(), color: col,
+          title: (a.name || a.icao) + ' (' + (a.iata || a.icao) + ')', sub: a.boarded_at ? ((sc.cancelled || 0) + ' cancelled · ' + (sc.diverted || 0) + ' diverted · ' + (sc.delayed || 0) + ' ≥60 min late') : ((a.reasons || [])[0] || {}).text || 'story, not yet boarded',
+          lon: a.lon, lat: a.lat, h: 1500000, id: id });
+      });
+      // story flights: arcs for the worst per airport, planes where ADS-B sees them
+      var perAirport = {};
+      (d.flights || []).forEach(function (f, i) {
+        var home = byIcao[f.airport_icao]; if (!home) return;
+        var id = 'sf:' + f.airport_icao + ':' + f.direction + ':' + f.flight_number, col = STORY[f.story_kind] || '#f59e0b';
+        if (src.entities.getById(id) || src.entities.getById(id + ':arc')) return;   // already drawn (Cesium throws on a duplicate id)
+        lookup[id] = { kind: 'storyFlight', f: f, home: home };
+        var big = f.story_kind !== 'delayed' || (f.delay_min || 0) >= 120;
+        if (big && f.other_lat != null && f.other_lon != null && (perAirport[f.airport_icao] = (perAirport[f.airport_icao] || 0) + 1) <= ARCS_PER_AIRPORT) {
+          var from = f.direction === 'departure' ? [home.lon, home.lat] : [f.other_lon, f.other_lat], to = f.direction === 'departure' ? [f.other_lon, f.other_lat] : [home.lon, home.lat];
+          storyArc(src, id + ':arc', from, to, col, f.story_kind === 'cancelled');
+        }
+        if (f.pos_lat != null && f.pos_lon != null) {
+          src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(f.pos_lon, f.pos_lat, (f.pos_alt_ft || 0) * 0.3048 * EXAG),
+            billboard: { image: PLANE, color: C(col), scale: 0.75, rotation: f.pos_track != null ? -Cesium.Math.toRadians(f.pos_track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
+            label: { text: f.flight_number + (f.delay_min ? ' +' + f.delay_min + 'm' : ''), font: '11px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(12, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.0e6) } });
+        }
+      });
+      // live emergency squawks, worldwide
+      var emSeen = {};
+      (d.emergencies || []).forEach(function (a) {
+        var id = 'em:' + a.hex; if (emSeen[id] || src.entities.getById(id)) return; emSeen[id] = 1;   // Cesium throws on a duplicate id
+        lookup[id] = { kind: 'flight', a: a };
+        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, (a.alt_ft || 0) * 0.3048 * EXAG),
+          billboard: { image: PLANE, color: C('#ef4444'), scale: 1.0, rotation: a.track != null ? -Cesium.Math.toRadians(a.track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
+          label: { text: (a.flight || a.reg || a.hex) + '  SQUAWK ' + a.squawk, font: 'bold 12px monospace', fillColor: C('#fca5a5'), outlineColor: Cesium.Color.BLACK, outlineWidth: 4, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(14, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT } });
+        src.entities.add({ id: id + ':ring', position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat), ellipse: { semiMajorAxis: pulse(1600, 20000, 140000), semiMinorAxis: pulse(1600, 20000, 140000), material: C('#ef4444', 0.0001), outline: true, outlineColor: C('#ef4444', 0.9), outlineWidth: 2, height: 0 } });
+        watch.push({ rank: 97, kind: 'SQUAWK ' + a.squawk + ' · ' + String(a.emergency).toUpperCase(), color: '#ef4444', title: (a.flight || a.reg || a.hex) + (a.type ? ' · ' + a.type : ''), sub: (a.alt_ft != null ? 'FL' + Math.round(a.alt_ft / 100) : '') + ' · live ADS-B', lon: a.lon, lat: a.lat, h: 600000, id: id });
+      });
+      watchItems.stories = watch.sort(function (x, y) { return y.rank - x.rank; }).slice(0, 8); renderWatch();
+      var m = d.meta || {}, nf = (d.flights || []).length;
+      var sqFail = (d.meta && d.meta.failed) || [];
+      feed('stories', sqFail.length === 0, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : '') + (sqFail.length ? ' · GAP: ' + sqFail.join(', ') : ''));
+    })
+    .catch(function (e) { feed('stories', false, 0, null, String(e.message || e)); });
+}
+/* =========================================================================
  * 7. CHROME — layers, feed health, watch list, card, clock
  * ====================================================================== */
 function layerOn(id) { var d = layerDefs.filter(function (x) { return x.id === id; })[0]; return d ? d.on : false; }
@@ -813,7 +890,10 @@ function renderFeeds() {
     + gaps.map(function (g) { return '<span class="f gap" title="' + esc(feeds[g].note) + '">GAP ' + esc(g) + '</span>'; }).join('');
 }
 function renderWatch() {
-  var all = [].concat(watchItems.flights, watchItems.cyclones, watchItems.incidents, watchItems.arcs, watchItems.airports, watchItems.events, watchItems.hazards).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
+  // an airport with a story entry already says everything its plain "degraded" entry would
+  var storyIcao = {}; watchItems.stories.forEach(function (w) { if (w.id && w.id.indexOf('sa:') === 0) storyIcao[w.id.slice(3)] = 1; });
+  var plainAirports = watchItems.airports.filter(function (w) { return !(w.id && storyIcao[w.id.slice(3)]); });
+  var all = [].concat(watchItems.stories, watchItems.flights, watchItems.cyclones, watchItems.incidents, watchItems.arcs, plainAirports, watchItems.events, watchItems.hazards).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
   el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
@@ -844,11 +924,24 @@ function showCard(x) {
     h = '<div class="h">Aircraft · adsb.lol</div><div class="ct">' + esc(f.flight || f.reg || f.hex) + (f.type ? ' · ' + esc(f.type) : '') + '</div>' + kvs([
       ['altitude', f.ground ? 'on ground' : f.alt_ft != null ? f.alt_ft.toLocaleString() + ' ft (FL' + Math.round(f.alt_ft / 100) + ')' : null], ['ground speed', f.gs_kt != null ? f.gs_kt + ' kt' : null], ['track', f.track != null ? Math.round(f.track) + '°' : null],
       ['squawk', f.squawk ? f.squawk + (f.emergency ? ' — ' + f.emergency.toUpperCase() : '') : null], ['registration', f.reg], ['ICAO hex', f.hex]]); }
+  else if (x.kind === 'storyAirport') { var sa = x.a, sc = sa.story_counts || {};
+    var REASON = { operational: 'Operational', sweep: 'Airport sweep', faa: 'FAA', news: 'News', cyclone: 'Cyclone' };
+    h = '<div class="h">Story airport' + (sa.boarded_at ? ' · board ' + ago(sa.boarded_at) + ' ago' : ' · not yet boarded') + '</div><div class="ct">' + esc((sa.name || sa.icao) + ' (' + (sa.iata || sa.icao) + ')') + '</div>'
+      + '<div class="h" style="margin-top:6px">Why it has a story</div>' + (sa.reasons || []).map(function (r) {
+          return '<div style="margin:3px 0"><span style="color:' + (REASON_COLOR[r.kind] || '#94a3b8') + '">' + esc(REASON[r.kind] || r.kind) + '</span> · ' + (r.ref && /^https?:/.test(r.ref) ? '<a href="' + esc(r.ref) + '" target="_blank" rel="noopener">' + esc(r.text) + '</a>' : esc(r.text)) + '</div>'; }).join('')
+      + (sa.boarded_at ? '<div class="h" style="margin-top:8px">Board (next 8 h, last 4 h)</div>' + kvs([['cancelled', String(sc.cancelled || 0)], ['diverted', String(sc.diverted || 0)], ['≥ 60 min late', String(sc.delayed || 0)]])
+        + '<pre>' + x.flights.slice(0, 14).map(function (f) { return (f.flight_number + '        ').slice(0, 9) + (f.direction === 'departure' ? '→ ' : '← ') + ((f.other_iata || '???') + '    ').slice(0, 4) + f.story_kind.toUpperCase() + (f.delay_min && f.story_kind === 'delayed' ? ' +' + f.delay_min + 'm' : '') + '  ' + (f.airline_name || ''); }).join('\n') + '</pre>' : ''); }
+  else if (x.kind === 'storyFlight') { var sf = x.f, home = x.home;
+    h = '<div class="h">Story flight · ' + esc(sf.story_kind) + '</div><div class="ct">' + esc(sf.flight_number) + (sf.airline_name ? ' · ' + esc(sf.airline_name) : '') + '</div>' + kvs([
+      ['route', sf.direction === 'departure' ? (home.iata || home.icao) + ' → ' + (sf.other_iata || sf.other_name || '?') : (sf.other_iata || sf.other_name || '?') + ' → ' + (home.iata || home.icao)],
+      ['status', sf.status], ['scheduled', sf.sched_utc ? sf.sched_utc.slice(0, 16).replace('T', ' ') + 'Z' : null], ['revised', sf.revised_utc ? sf.revised_utc.slice(0, 16).replace('T', ' ') + 'Z' : null],
+      ['delay', sf.delay_min != null ? sf.delay_min + ' min' : null], ['position', sf.pos_lat != null ? 'live ADS-B, ' + (sf.pos_alt_ft != null ? 'FL' + Math.round(sf.pos_alt_ft / 100) : '') : 'not seen by free ADS-B'],
+      ['why', (home.reasons || []).map(function (r) { return r.text; }).join(' · ')]]); }
   else if (x.kind === 'arc') {
     h = '<div class="h">Corridor · both ends degraded</div><div class="ct">' + esc((x.a.iata || x.a.icao) + ' ⇄ ' + (x.b.iata || x.b.icao)) + '</div>' + kvs([
       [x.a.iata || x.a.icao, delaySentence(x.a) || opClassWhy(x.a, x.a._op)], [x.b.iata || x.b.icao, delaySentence(x.b) || opClassWhy(x.b, x.b._op)]])
       + '<pre>A listed high-volume corridor where both airports classify DEGRADED right now. It is not a statement about any single flight; it marks where misconnects and knock-on cancellations concentrate.</pre>'; }
-  var at = x.kind === 'airport' ? [x.a._lon, x.a._lat] : x.kind === 'cyclone' ? [x.s.lon, x.s.lat] : x.kind === 'event' ? [num(x.e.lon), num(x.e.lat)]
+  var at = x.kind === 'storyAirport' ? [x.a.lon, x.a.lat] : x.kind === 'storyFlight' ? (x.f.pos_lon != null ? [x.f.pos_lon, x.f.pos_lat] : [x.home.lon, x.home.lat]) : x.kind === 'airport' ? [x.a._lon, x.a._lat] : x.kind === 'cyclone' ? [x.s.lon, x.s.lat] : x.kind === 'event' ? [num(x.e.lon), num(x.e.lat)]
     : x.kind === 'incident' ? [num(x.p.location_lon), num(x.p.location_lat)] : x.kind === 'flight' ? [x.a.lon, x.a.lat] : null;
   if (at && at[0] != null && at[1] != null) h += '<div style="margin-top:10px"><button id="flyoverbtn">⟳ Fly over (3D)</button></div>';
   selected = x._id || ''; writeHash();
@@ -858,7 +951,7 @@ function showCard(x) {
 document.getElementById('cardx').onclick = function () { document.getElementById('card').classList.remove('open'); selected = ''; writeHash(); };
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction(function (click) {
   var picked = viewer.scene.pick(click.position); var ent = picked && picked.id; if (!ent || !ent.id) return;
-  var base = String(ent.id).replace(/:(halo|lbl|ring)$/, ''); if (lookup[base]) { lookup[base]._id = base; showCard(lookup[base]); }
+  var base = String(ent.id).replace(/:(halo|lbl|ring|arc)$/, ''); if (lookup[base]) { lookup[base]._id = base; showCard(lookup[base]); }
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 Array.prototype.forEach.call(document.querySelectorAll('#mobtabs button'), function (b) {
   b.onclick = function () { ['layers', 'watch', 'legend'].forEach(function (id) { var el = document.getElementById(id); el.classList.toggle('show', id === b.dataset.p && !el.classList.contains('show')); }); };
@@ -872,7 +965,7 @@ window.__gevDiag = function () { var o = { renderError: window.__gevRenderError 
  * ====================================================================== */
 renderLayers(); renderFeeds();
 var q0 = readHash();
-Promise.all([loadAirports(), loadHazards(), loadCyclones(), loadRadar(), loadEvents(), loadIncidents()]).then(function () {
+Promise.all([loadAirports(), loadHazards(), loadCyclones(), loadRadar(), loadEvents(), loadIncidents(), loadStories()]).then(function () {
   var b = document.getElementById('boot'); b.style.opacity = 0; setTimeout(function () { b.style.display = 'none'; }, 900);
   if (layerOn('ir')) loadIR(); if (layerOn('lightning')) loadLightning(); if (layerOn('tiles3d')) setTiles3d(true);
   if (q0.look) setLook(q0.look);
@@ -882,6 +975,7 @@ Promise.all([loadAirports(), loadHazards(), loadCyclones(), loadRadar(), loadEve
 });
 viewer.camera.moveEnd.addEventListener(function () { writeHash(); loadFlights(false); });
 setInterval(function () { loadFlights(true); }, 20e3);
+setInterval(loadStories, 2 * 60e3);
 setInterval(function () { if (irLayers.length) loadIR(); }, 10 * 60e3);
 setInterval(function () { if (ltLayer) loadLightning(); }, 5 * 60e3);
 setInterval(loadHistory, 15 * 60e3);
