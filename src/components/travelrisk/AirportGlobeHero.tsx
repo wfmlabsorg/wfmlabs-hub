@@ -36,8 +36,8 @@ import { CONFIDENCE, HAZARD, ADVISORY_HUE } from '@/lib/travelrisk/riskAxes'
 
 const FRAME_SRC = '/roc/globe/travel-globe.html?embed=1'
 export const AIRPORT_GLOBE_HREF = '/roc/globe/travel-globe.html'
-/** gev-001: the God's Eye View board (weather, aviation hazards, cyclones, delays) on the same classifier. */
-export const GEV_HREF = '/roc/globe/gev.html'
+/** gev-001/002: the World Glass board (weather, aviation hazards, cyclones, delays, aircraft) on the same classifier. */
+export const GEV_HREF = '/roc/globe/world-glass.html'
 
 function Key({ mark, label, note }: { mark: React.ReactNode; label: string; note: string }) {
   return (
@@ -94,7 +94,7 @@ export function AirportGlobeHero() {
               borderRadius: '4px', padding: '0.3rem 0.65rem', whiteSpace: 'nowrap',
             }}
           >
-            God&apos;s Eye view ↗
+            World Glass ↗
           </a>
           </div>
         </div>
