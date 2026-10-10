@@ -891,7 +891,9 @@ function renderFeeds() {
     + gaps.map(function (g) { return '<span class="f gap" title="' + esc(feeds[g].note) + '">GAP ' + esc(g) + '</span>'; }).join('');
 }
 /** Colours reach HTML style attributes: only #hex and rgb()/rgba() pass, anything else falls back. */
-function safeColor(c) { return /^#[0-9a-f]{3,8}$/i.test(String(c)) || /^rgba?\([\d.,\s%]+\)$/i.test(String(c)) ? String(c) : '#94a3b8'; }
+var HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+var RGB_COLOR = /^rgba?\(\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(?:,\s*(?:0|1|0?\.\d+|\d{1,3}%)\s*)?\)$/i;
+function safeColor(c) { var s = String(c); return HEX_COLOR.test(s) || RGB_COLOR.test(s) ? s : '#94a3b8'; }
 function renderWatch() {
   // an airport with a story entry already says everything its plain "degraded" entry would
   var storyIcao = {}; watchItems.stories.forEach(function (w) { if (w.id && w.id.indexOf('sa:') === 0) storyIcao[w.id.slice(3)] = 1; });
@@ -1032,7 +1034,7 @@ window.WG = {
   addLayer: function (def) {
     if (!def || !def.id || sources[def.id] || IMAGERY_LAYERS[def.id]) return null;
     var on = bootHash && bootHash.l != null ? bootHash.l.split(',').indexOf(def.id) !== -1 : def.on !== false;
-    if (!/^[a-z0-9_-]{1,32}$/i.test(String(def.id))) return null;   // ids reach data-* attributes and the share hash
+    if (!/^[a-z0-9_-]{1,32}$/.test(String(def.id))) return null;   // ids reach data-* attributes and the share hash
     var col = safeColor(def.color || '#94a3b8'); if (col.charAt(0) !== '#') col = '#94a3b8';   // the swatch appends a hex alpha
     layerDefs.push({ id: def.id, label: def.label || def.id, color: col, on: on });
     var src = new Cesium.CustomDataSource(def.id); src.show = on; sources[def.id] = src; viewer.dataSources.add(src);
