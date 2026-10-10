@@ -30,7 +30,9 @@ export async function GET(req: Request) {
   try {
     const body = layer === 'faa' ? await faa() : await airspace()
     const maxAge = layer === 'faa' ? 120 : 600
-    return Response.json(body, { headers: { 'Cache-Control': `public, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}` } })
+    // a body that reports a failed upstream is not cached at the edge, so recovery reaches the board at once
+    const cache = body.meta.failed.length ? 'no-store' : `public, s-maxage=${maxAge}, stale-while-revalidate=${maxAge * 2}`
+    return Response.json(body, { headers: { 'Cache-Control': cache } })
   } catch (e) {
     console.error(`[gev-aviation] ${layer} failed`, e)
     return Response.json({ error: 'aviation feed unavailable', meta: { failed: [layer] } }, { status: 502 })

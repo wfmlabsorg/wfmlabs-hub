@@ -25,6 +25,8 @@
   function link(u, text) { return u && /^https:\/\//i.test(u) ? '<a href="' + attr(u) + '" target="_blank" rel="noopener">' + esc(text) + '</a>' : null; }
   function getJson(url, ms) {
     return fetch(url, { signal: AbortSignal.timeout(ms) }).then(function (r) {
+      // a proxy or platform error page is HTML: report the status, not a JSON parse error
+      if (!/application\/json/i.test(r.headers.get('content-type') || '')) throw new Error('HTTP ' + r.status + ' (non-JSON response)');
       return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; });
     });
   }
