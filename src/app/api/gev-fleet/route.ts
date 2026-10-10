@@ -201,6 +201,7 @@ let stationIndex: { at: number; map: Map<string, { name: string; lat: number; lo
 async function stations(failed: string[]) {
   if (stationIndex && Date.now() - stationIndex.at < 86400e3) return stationIndex.map
   const map = new Map<string, { name: string; lat: number; lon: number }>()
+  const before = failed.length
   for (const lang of ['en', 'fr', 'nl']) {
     try {
       const d = await getJson(IRAIL_STATIONS + lang, 86400)
@@ -215,7 +216,8 @@ async function stations(failed: string[]) {
       }
     } catch { failed.push(`iRail stations (${lang})`) }
   }
-  if (map.size) stationIndex = { at: Date.now(), map }
+  // a partial index (one language failed) is used for this request but never cached
+  if (map.size && failed.length === before) stationIndex = { at: Date.now(), map }
   return map
 }
 /** "Brux./Brus.-Schuman" → candidates "Brux.-Schuman", "Brus.-Schuman"; "Anvers-Sud / Antwerpen-Zuid" → both halves. */
