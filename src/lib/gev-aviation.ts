@@ -102,9 +102,14 @@ function memo<T>(ttl: number, load: () => Promise<T>): () => Promise<T> {
 /** Drop points closer than `tol` degrees to the last kept one, round to 3 dp. Keeps rings closed. */
 function thin(ring: number[][], tol = 0.04): LonLat[] {
   const out: LonLat[] = []
+  let prevLon: number | null = null
   for (const c of ring) {
     if (!Array.isArray(c) || !Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue
-    const p: LonLat = [Math.round(c[0] * 1000) / 1000, Math.round(c[1] * 1000) / 1000]
+    // unwrap across the antimeridian (179 → -179 becomes 179 → 181) so a Pacific FIR is not drawn the long way round
+    let lon = c[0]
+    if (prevLon != null) { while (lon - prevLon > 180) lon -= 360; while (lon - prevLon < -180) lon += 360 }
+    prevLon = lon
+    const p: LonLat = [Math.round(lon * 1000) / 1000, Math.round(c[1] * 1000) / 1000]
     const l = out[out.length - 1]
     if (!l || Math.abs(l[0] - p[0]) + Math.abs(l[1] - p[1]) >= tol) out.push(p)
   }
@@ -303,10 +308,13 @@ export async function faa() {
     return a
   }
   const jsonOk = jsonRes.status === 'fulfilled' && Array.isArray(jsonRes.value)
+  const jsonSeen = new Set<string>()       // airport:kind the JSON carried at all, resolved ones included
   if (!jsonOk) failed.push('faa-airport-events')
   else {
     for (const rec of jsonRes.value as Rec[]) {
       const code = String(rec?.airportId ?? '').trim().toUpperCase(); if (!code) continue
+      if (rec.groundStop) jsonSeen.add(`${code}:ground_stop`)
+      if (rec.groundDelay) jsonSeen.add(`${code}:ground_delay`)
       const progs = programsFromJson(rec, now, tally); if (!progs.length) continue
       const a = ensure(code); a.programs.push(...progs)
       a.name = clip(rec.airportLongName, 120)
@@ -324,6 +332,8 @@ export async function faa() {
       // with the JSON in hand the XML only fills a stop / delay program the JSON does not carry yet;
       // without it, the XML is the whole (thinner, untimed) picture
       if (jsonOk && it.p.kind !== 'ground_stop' && it.p.kind !== 'ground_delay') continue
+      // ...and never re-adds a program the JSON already reported, e.g. one it marks cancelled
+      if (jsonSeen.has(`${it.code}:${it.p.kind}`)) continue
       const have = byCode.get(it.code)
       if (have && have.programs.some((p) => p.kind === it.p.kind)) continue
       ensure(it.code).programs.push(it.p)
