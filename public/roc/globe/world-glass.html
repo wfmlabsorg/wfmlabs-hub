@@ -544,6 +544,7 @@ function loadFlights(force) {
       var src = sources.flights; src.entities.removeAll(); var em = [];
       (d.aircraft || []).forEach(function (a) {
         var id = 'fl:' + a.hex, col = altColor(a), hM = a.ground ? 0 : (a.alt_ft || 0) * 0.3048 * EXAG;
+        if (src.entities.getById(id)) return;   // duplicate hex in one response: Cesium throws on a duplicate id
         lookup[id] = { kind: 'flight', a: a };
         src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, hM),
           billboard: { image: PLANE, color: C(col), scale: a.emergency ? 0.9 : 0.55, rotation: a.track != null ? -Cesium.Math.toRadians(a.track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
@@ -826,6 +827,7 @@ function loadStories() {
       (d.flights || []).forEach(function (f, i) {
         var home = byIcao[f.airport_icao]; if (!home) return;
         var id = 'sf:' + f.airport_icao + ':' + f.direction + ':' + f.flight_number, col = STORY[f.story_kind] || '#f59e0b';
+        if (src.entities.getById(id) || src.entities.getById(id + ':arc')) return;   // already drawn (Cesium throws on a duplicate id)
         lookup[id] = { kind: 'storyFlight', f: f, home: home };
         var big = f.story_kind !== 'delayed' || (f.delay_min || 0) >= 120;
         if (big && f.other_lat != null && f.other_lon != null && (perAirport[f.airport_icao] = (perAirport[f.airport_icao] || 0) + 1) <= ARCS_PER_AIRPORT) {
@@ -840,8 +842,10 @@ function loadStories() {
         }
       });
       // live emergency squawks, worldwide
+      var emSeen = {};
       (d.emergencies || []).forEach(function (a) {
-        var id = 'em:' + a.hex; lookup[id] = { kind: 'flight', a: a };
+        var id = 'em:' + a.hex; if (emSeen[id] || src.entities.getById(id)) return; emSeen[id] = 1;   // Cesium throws on a duplicate id
+        lookup[id] = { kind: 'flight', a: a };
         src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat, (a.alt_ft || 0) * 0.3048 * EXAG),
           billboard: { image: PLANE, color: C('#ef4444'), scale: 1.0, rotation: a.track != null ? -Cesium.Math.toRadians(a.track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
           label: { text: (a.flight || a.reg || a.hex) + '  SQUAWK ' + a.squawk, font: 'bold 12px monospace', fillColor: C('#fca5a5'), outlineColor: Cesium.Color.BLACK, outlineWidth: 4, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(14, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT } });
@@ -850,7 +854,8 @@ function loadStories() {
       });
       watchItems.stories = watch.sort(function (x, y) { return y.rank - x.rank; }).slice(0, 8); renderWatch();
       var m = d.meta || {}, nf = (d.flights || []).length;
-      feed('stories', true, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : ''));
+      var sqFail = (d.meta && d.meta.failed) || [];
+      feed('stories', sqFail.length === 0, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : '') + (sqFail.length ? ' · GAP: ' + sqFail.join(', ') : ''));
     })
     .catch(function (e) { feed('stories', false, 0, null, String(e.message || e)); });
 }

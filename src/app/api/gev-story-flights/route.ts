@@ -22,19 +22,20 @@ export const dynamic = 'force-dynamic'
 const PER_AIRPORT = 40
 const SQUAWK: Record<string, string> = { '7700': 'emergency', '7600': 'radio failure', '7500': 'hijack' }
 
-async function emergencies() {
-  const out: Record<string, unknown>[] = []
+async function emergencies(): Promise<{ list: Record<string, unknown>[]; failed: string[] }> {
+  const out: Record<string, unknown>[] = [], failed: string[] = [], seen = new Set<string>()
   await Promise.all(Object.keys(SQUAWK).map(async (sq) => {
     try {
       const r = await fetch(`https://api.adsb.lol/v2/sqk/${sq}`, { headers: { 'User-Agent': 'WFMLabs-GEV/1.0 (ted@wfmlabs.com)' }, next: { revalidate: 60 }, signal: AbortSignal.timeout(10000) })
-      if (!r.ok) return
-      for (const a of (await r.json()).ac ?? []) if (typeof a.lat === 'number') out.push({
+      if (!r.ok) { failed.push(`squawk ${sq}: HTTP ${r.status}`); return }
+      // one aircraft can appear under more than one squawk query; publish it once
+      for (const a of (await r.json()).ac ?? []) if (typeof a.lat === 'number' && !seen.has(a.hex) && seen.add(a.hex)) out.push({
         hex: a.hex, flight: a.flight ? String(a.flight).trim() : null, reg: a.r ?? null, type: a.t ?? null, lat: a.lat, lon: a.lon,
         alt_ft: typeof a.alt_baro === 'number' ? a.alt_baro : null, gs_kt: typeof a.gs === 'number' ? Math.round(a.gs) : null, track: a.track ?? null, squawk: sq, emergency: SQUAWK[sq],
       })
-    } catch { /* a missing squawk feed is reported via meta.failed below */ }
+    } catch { failed.push(`squawk ${sq}: unreachable`) }
   }))
-  return out
+  return { list: out, failed }
 }
 
 export async function GET() {
@@ -73,11 +74,13 @@ export async function GET() {
     }
     const summary = run.rows[0]?.summary ?? {}
     return Response.json({
-      airports, flights, emergencies: em,
+      airports, flights, emergencies: em.list,
       meta: { run_id: run.rows[0]?.run_id ?? null, run_at: run.rows[0]?.completed_at ?? null, units_today: budget.rows[0].units, boards_today: budget.rows[0].boards,
-        daily_cap: summary.cap ?? null, boards_enabled: summary.enabled ?? null, per_airport_cap: PER_AIRPORT, positions: 'free ADS-B (adsb.lol); no coverage over Russia and parts of Africa/Asia' },
+        failed: em.failed, daily_cap: summary.cap ?? null, boards_enabled: summary.enabled ?? null, per_airport_cap: PER_AIRPORT, positions: 'free ADS-B (adsb.lol); no coverage over Russia and parts of Africa/Asia' },
     }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } })
   } catch (e) {
-    return Response.json({ error: String(e), meta: { failed: ['story-flights'] } }, { status: 502 })
+    // public endpoint: log the detail server-side, never hand pg error text to anonymous clients
+    console.error('[gev-story-flights]', e)
+    return Response.json({ error: 'story flights unavailable', meta: { failed: ['story-flights'] } }, { status: 502 })
   }
 }
