@@ -555,6 +555,7 @@ function loadFlights(force) {
         }
       });
       watchItems.flights = em; renderWatch();
+      if (pendingSel && lookup[pendingSel]) { lookup[pendingSel]._id = pendingSel; showCard(lookup[pendingSel]); pendingSel = null; }
       feed('flights', true, (d.aircraft || []).length, d.meta && d.meta.fetched_at, (d.meta ? d.meta.total : '?') + ' tracked within ' + nm + ' nm · adsb.lol (ODbL)');
     })
     .catch(function (e) { lastFlightKey = ''; feed('flights', false, 0, null, String(e.message || e)); });
@@ -725,7 +726,7 @@ function setLook(name) {
  * 6h. SHARE LINKS — camera, layers, look and the selected item live in the URL hash
  *     #c=lon,lat,km,heading,pitch&l=airports,hazards…&look=nvg&sel=tc:al092026
  * ====================================================================== */
-var selected = '', hashReady = false;
+var selected = '', hashReady = false, pendingSel = null;   // pendingSel: a shared selection whose layer has not loaded yet (aircraft)
 function writeHash() {
   if (!hashReady) return;
   var c = viewer.camera.positionCartographic, f = function (x, n) { return (+x).toFixed(n); };
@@ -876,6 +877,7 @@ Promise.all([loadAirports(), loadHazards(), loadCyclones(), loadRadar(), loadEve
   if (layerOn('ir')) loadIR(); if (layerOn('lightning')) loadLightning(); if (layerOn('tiles3d')) setTiles3d(true);
   if (q0.look) setLook(q0.look);
   if (q0.sel && lookup[q0.sel]) { lookup[q0.sel]._id = q0.sel; showCard(lookup[q0.sel]); }
+  else if (q0.sel) { selected = q0.sel; pendingSel = q0.sel; }   // keep it in the hash until its layer arrives
   hashReady = true; writeHash(); loadFlights(true); loadHistory();
 });
 viewer.camera.moveEnd.addEventListener(function () { writeHash(); loadFlights(false); });

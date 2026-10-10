@@ -19,7 +19,10 @@ const EMERG: Record<string, string> = { '7500': 'hijack', '7600': 'radio failure
 
 export async function GET(req: Request) {
   const q = new URL(req.url).searchParams
-  const lat = Number(q.get('lat')), lon = Number(q.get('lon'))
+  const rawLat = q.get('lat'), rawLon = q.get('lon')
+  // Number(null) and Number('') are 0: check presence first, or a bare request would query 0,0
+  if (!rawLat?.trim() || !rawLon?.trim()) return Response.json({ error: 'lat and lon required' }, { status: 400 })
+  const lat = Number(rawLat), lon = Number(rawLon)
   if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 85 || Math.abs(lon) > 180) return Response.json({ error: 'lat and lon required' }, { status: 400 })
   const nm = Math.min(250, Math.max(50, Math.round((Number(q.get('nm')) || 150) / 50) * 50))
   const cLat = Math.round(lat), cLon = Math.round(lon)
