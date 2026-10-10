@@ -66,15 +66,18 @@ async function hazards() {
       src: p.airSigmetType ?? 'SIGMET', hazard: p.hazard, cls, label: `${LABEL[cls]} · US ${p.airSigmetType ?? 'SIGMET'} ${p.seriesId ?? ''}`.trim(),
       from: p.validTimeFrom, to: p.validTimeTo, top: num(p.altitudeHi2 ?? p.altitudeHi1), base: num(p.altitudeLow1 ?? p.altitudeLow2), raw: clip(p.rawAirSigmet, 700) } })
   }
-  // G-AIRMETs come as 0-12h forecast snapshots; draw only the one valid nearest to now, polygons only.
-  const now = Date.now()
+  // G-AIRMETs are 3-hourly forecast SNAPSHOTS (validTime = the instant described), polygons only.
+  // Each snapshot stands for validTime ± 90 min, so `from`/`to` bracket that window. Pick the snapshot
+  // whose window contains now; failing that the next future one — never a past one the board would drop.
+  const now = Date.now(), HALF = 90 * 60e3
   const polys = gair.filter((f: any) => f.geometry?.type !== 'LineString')
-  const times = [...new Set(polys.map((f: any) => f.properties?.validTime))].filter(Boolean) as string[]
-  const nearest = times.sort((a, b) => Math.abs(Date.parse(a) - now) - Math.abs(Date.parse(b) - now))[0]
-  for (const f of polys.filter((f: any) => f.properties?.validTime === nearest)) {
+  const times = ([...new Set(polys.map((f: any) => f.properties?.validTime))].filter(Boolean) as string[]).sort()
+  const chosen = times.find((t) => Math.abs(Date.parse(t) - now) <= HALF) ?? times.find((t) => Date.parse(t) > now)
+  for (const f of polys.filter((f: any) => chosen && f.properties?.validTime === chosen)) {
     const p = f.properties ?? {}, cls = hazardClass(p.hazard ?? '')
     out.push({ type: 'Feature', geometry: f.geometry, properties: {
-      src: 'G-AIRMET', hazard: p.hazard, cls, label: `${LABEL[cls]} · US G-AIRMET`, from: p.issueTime, to: p.validTime,
+      src: 'G-AIRMET', hazard: p.hazard, cls, label: `${LABEL[cls]} · US G-AIRMET`,
+      from: new Date(Date.parse(p.validTime) - HALF).toISOString(), to: new Date(Date.parse(p.validTime) + HALF).toISOString(),
       top: num(p.top) != null ? num(p.top)! * 100 : null, base: num(p.base) != null ? num(p.base)! * 100 : null, raw: null } })
   }
   return { type: 'FeatureCollection', features: out, meta: { fetched_at: new Date().toISOString(), counts: { sigmet_intl: intl.length, sigmet_us: us.length, gairmet: polys.length }, failed } }
@@ -89,9 +92,10 @@ async function nhcLayerIds(): Promise<Record<string, number>> {
   layerIndex = { at: Date.now(), ids }
   return ids
 }
-async function nhcLayer(id: number | undefined) {
-  if (id == null) return null
-  try { return await getJson(`${NHC_MS}/${id}/query?where=1%3D1&outFields=*&outSR=4326&f=geojson`) } catch { return null }
+async function nhcLayer(id: number | undefined, failed: string[], what: string) {
+  if (id == null) { failed.push(`${what} (layer not published)`); return null }
+  try { return await getJson(`${NHC_MS}/${id}/query?where=1%3D1&outFields=*&outSR=4326&f=geojson`) }
+  catch { failed.push(what); return null }
 }
 
 async function cyclones() {
@@ -102,10 +106,13 @@ async function cyclones() {
   if (storms.length) { try { ids = await nhcLayerIds() } catch { failed.push('nhc-layers') } }
   const out = await Promise.all(storms.map(async (s) => {
     const bin = s.binNumber
-    const [cone, track, points, past] = await Promise.all(['Forecast Cone', 'Forecast Track', 'Forecast Points', 'Past Track'].map((n) => nhcLayer(ids[`${bin} ${n}`])))
+    // a storm whose cone or track did not load is reported as a gap, not shown as a complete storm
+    const [cone, track, points, past] = await Promise.all(['Forecast Cone', 'Forecast Track', 'Forecast Points', 'Past Track'].map((n) => nhcLayer(ids[`${bin} ${n}`], failed, `${s.name} ${n.toLowerCase()}`)))
     return {
       id: s.id, bin, name: s.name, classification: s.classification, intensity_kt: num(s.intensity), pressure_mb: num(s.pressure),
-      lat: num(s.latitudeNumeric), lon: num(s.longitudeNumeric), movement_dir: num(s.movementDir), movement_kt: num(s.movementSpeed),
+      lat: num(s.latitudeNumeric), lon: num(s.longitudeNumeric), movement_dir: num(s.movementDir),
+      // NHC publishes movementSpeed in mph; the board speaks knots
+      movement_kt: num(s.movementSpeed) != null ? Math.round(num(s.movementSpeed)! * 0.868976) : null,
       updated: s.lastUpdate, advisory_url: s.publicAdvisory?.url ?? null, cone, track, points, past,
     }
   }))

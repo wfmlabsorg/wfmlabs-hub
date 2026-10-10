@@ -62,6 +62,7 @@
     #clock { margin-left: auto; font-size: 12px; color: var(--ink); white-space: nowrap; }
     #rec { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-right: 6px; animation: blink 1.4s infinite; }
     @keyframes blink { 50% { opacity: 0.2; } }
+    @media (prefers-reduced-motion: reduce) { #rec { animation: none; } #boot { transition: none; } }
     #feeds { display: flex; gap: 10px; font-size: 10px; color: var(--dim); white-space: nowrap; }
     #feeds .f.ok::before { content: "●"; color: var(--teal); margin-right: 4px; }
     #feeds .f.gap::before { content: "●"; color: var(--red); margin-right: 4px; }
@@ -87,7 +88,8 @@
 
     #card { bottom: 18px; right: 18px; width: 380px; max-height: 46%; overflow: auto; padding: 14px 16px; display: none; font-size: 12px; line-height: 1.45; }
     #card.open { display: block; }
-    #card .x { position: absolute; top: 8px; right: 10px; cursor: pointer; color: var(--dim); }
+    #card .x { position: absolute; top: 8px; right: 10px; cursor: pointer; color: var(--dim); background: none; border: 0; }
+    .lay:focus-visible, .w:focus-visible, button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
     #card .ct { font-size: 15px; color: #fff; margin: 2px 0 8px; }
     #card .kv { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; }
     #card .kv div:nth-child(odd) { color: var(--dim); }
@@ -100,7 +102,17 @@
     #credits { position: absolute; z-index: 5; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9.5px; color: rgba(160,190,220,0.55); white-space: nowrap; }
     #credits a { color: inherit; }
     #boot { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; font-size: 12px; letter-spacing: 0.3em; color: var(--cyan); background: var(--bg); transition: opacity 0.8s; }
-    @media (max-width: 900px) { #layers, #watch, #legend, #feeds { display: none; } #top { left: 12px; right: 12px; } }
+    #mobtabs { display: none; }
+    @media (max-width: 900px) {
+      /* panels become one bottom sheet chosen by tabs; feed health stays in the top bar */
+      #top { left: 8px; right: 8px; flex-wrap: wrap; gap: 8px 14px; }
+      #layers, #watch, #legend { display: none; left: 8px; right: 8px; width: auto; top: auto; bottom: 52px; max-height: 48%; overflow: auto; }
+      #layers.show, #watch.show, #legend.show { display: block; }
+      #card { left: 8px; right: 8px; width: auto; bottom: 52px; }
+      #mobtabs { display: flex; position: absolute; z-index: 6; left: 8px; right: 8px; bottom: 8px; gap: 6px; }
+      #mobtabs button { flex: 1; padding: 8px 0; }
+      .bracket, #reticle, #credits { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -119,7 +131,7 @@
   <div id="layers" class="panel">
     <div class="h">Layers</div>
     <div id="laylist"></div>
-    <div id="radarctl"><button id="radarplay">▶ loop radar</button><span id="radarts">—</span></div>
+    <div id="radarctl"><button id="radarplay" disabled>▶ loop radar</button><span id="radarts">—</span></div>
   </div>
 
   <div id="watch" class="panel">
@@ -127,7 +139,7 @@
     <div id="watchlist"><div class="s">assembling…</div></div>
   </div>
 
-  <div id="card" class="panel"><span class="x" id="cardx">✕</span><div id="cardbody"></div></div>
+  <div id="card" class="panel"><button class="x" id="cardx" aria-label="Close details">✕</button><div id="cardbody"></div></div>
 
   <div id="legend" class="panel">
     <div class="h">Key</div>
@@ -139,6 +151,7 @@
     <div class="row">hazard volumes are extruded to their published top altitude (×6)</div>
   </div>
 
+  <div id="mobtabs"><button data-p="layers">Layers</button><button data-p="watch">Watch</button><button data-p="legend">Key</button></div>
   <div id="credits">Imagery © Cesium ion / Bing / NASA Black Marble · Radar © RainViewer · NOAA NHC · aviationweather.gov · idea after <a href="https://github.com/bilawalsidhu/gods-eye-view" target="_blank" rel="noopener">God's Eye View</a> (MIT)</div>
   <div id="boot">ACQUIRING…</div>
 
@@ -169,7 +182,10 @@ function C(css, a) { var c = Cesium.Color.fromCssColorString(css); return a == n
 function ago(iso) { var t = Date.parse(iso); if (!isFinite(t)) return '—'; var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
 function feed(name, ok, n, at, note) { feeds[name] = { ok: ok, n: n, at: at || new Date().toISOString(), note: note || '' }; renderFeeds(); renderLayers(); }
 function pulse(period, lo, hi) { return new Cesium.CallbackProperty(function () { if (REDUCED) return hi; var t = (Date.now() % period) / period; return lo + (hi - lo) * (0.5 - 0.5 * Math.cos(t * 2 * Math.PI)); }, false); }
-function flyTo(lon, lat, h) { viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h || 1800000), duration: 2.2 }); }
+function flyTo(lon, lat, h) {
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, h || 1800000);
+  if (REDUCED) viewer.camera.setView({ destination: dest }); else viewer.camera.flyTo({ destination: dest, duration: 2.2 });
+}
 
 /* =========================================================================
  * 1. VIEWER — night side, city lights, a real sun
@@ -271,6 +287,10 @@ function loadAirports() {
  * 3. AVIATION HAZARDS — SIGMET / G-AIRMET volumes
  * ====================================================================== */
 var HZ = { convective: '#f59e0b', turbulence: '#a78bfa', icing: '#38bdf8', volcanic: '#94785a', tropical: '#ec4899', visibility: '#64748b', wind: '#2dd4bf', other: '#94a3b8' };
+function hierarchy(poly) {   // outer ring + holes, so a polygon with an excluded area is not filled solid
+  var ll = function (ring) { return (ring || []).map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); }); };
+  return new Cesium.PolygonHierarchy(ll(poly[0]), poly.slice(1).map(function (h) { return new Cesium.PolygonHierarchy(ll(h)); }));
+}
 function rings(geom) {
   if (!geom) return [];
   if (geom.type === 'Polygon') return [geom.coordinates];
@@ -285,16 +305,15 @@ function loadHazards() {
       var now = Date.now(), n = 0, byCls = {};
       (fc.features || []).forEach(function (f, i) {
         var p = f.properties || {};
-        if (p.to && Date.parse(p.to) < now) return;                 // expired: not in force, not drawn
+        if ((p.to && Date.parse(p.to) < now) || (p.from && Date.parse(p.from) > now)) return;   // expired or not yet in force: not current, not drawn
         var col = HZ[p.cls] || HZ.other;
         var topM = p.top != null ? Math.min(p.top, 60000) * 0.3048 * EXAG : 9000 * EXAG;
         var baseM = p.base != null ? Math.min(p.base, 45000) * 0.3048 * EXAG : 0;
         rings(f.geometry).forEach(function (poly, j) {
-          var outer = (poly[0] || []).map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); });
-          if (outer.length < 3) return;
+          if (!poly[0] || poly[0].length < 3) return;
           var id = 'hz:' + i + ':' + j;
           lookup[id] = { kind: 'hazard', p: p };
-          src.entities.add({ id: id, polygon: { hierarchy: new Cesium.PolygonHierarchy(outer), height: baseM, extrudedHeight: Math.max(topM, baseM + 3000),
+          src.entities.add({ id: id, polygon: { hierarchy: hierarchy(poly), height: baseM, extrudedHeight: Math.max(topM, baseM + 3000),
             material: C(col, p.cls === 'convective' || p.cls === 'tropical' ? 0.22 : 0.15), outline: true, outlineColor: C(col, 0.85), arcType: Cesium.ArcType.RHUMB } });
         });
         n++; byCls[p.cls] = (byCls[p.cls] || 0) + 1;
@@ -302,7 +321,7 @@ function loadHazards() {
       var failed = (fc.meta && fc.meta.failed) || [];
       feed('hazards', failed.length === 0, n, fc.meta && fc.meta.fetched_at, failed.length ? 'gap: ' + failed.join(', ') : Object.keys(byCls).map(function (k) { return byCls[k] + ' ' + k; }).join(' · '));
       // the watch list gets volcanic ash and tropical SIGMETs: the two that close airspace outright
-      watchItems.hazards = (fc.features || []).filter(function (f) { var c = f.properties && f.properties.cls; return (c === 'volcanic') && (!f.properties.to || Date.parse(f.properties.to) > now); })
+      watchItems.hazards = (fc.features || []).filter(function (f) { var c = f.properties && f.properties.cls; return (c === 'volcanic') && (!f.properties.to || Date.parse(f.properties.to) > now) && (!f.properties.from || Date.parse(f.properties.from) <= now); })
         .slice(0, 3).map(function (f) { var r = rings(f.geometry)[0]; var c = r && r[0] && r[0][0]; return { rank: 55, kind: 'ASH', color: HZ.volcanic, title: f.properties.label, sub: 'valid to ' + (f.properties.to || '').slice(11, 16) + 'Z · top FL' + Math.round((f.properties.top || 0) / 100), lon: c ? c[0] : 0, lat: c ? c[1] : 0, h: 2500000 }; });
       renderWatch();
     })
@@ -330,7 +349,7 @@ function loadCyclones() {
         var col = '#ec4899';
         (s.cone && s.cone.features || []).forEach(function (f, i) {
           rings(f.geometry).forEach(function (poly, j) {
-            src.entities.add({ id: 'tc:' + s.id + ':cone:' + i + ':' + j, polygon: { hierarchy: new Cesium.PolygonHierarchy(poly[0].map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); })),
+            src.entities.add({ id: 'tc:' + s.id + ':cone:' + i + ':' + j, polygon: { hierarchy: hierarchy(poly),
               material: Cesium.Color.WHITE.withAlpha(0.10), outline: true, outlineColor: C(col, 0.9), height: 0 } });
           });
         });
@@ -380,7 +399,7 @@ function loadRadar() {
         var l = viewer.imageryLayers.addImageryProvider(prov); l.alpha = (i === radarFrames.length - 1 && layerOn('radar')) ? 0.62 : 0; l.show = layerOn('radar');
         radarLayers.push(l); overlayLayers.push(l);
       });
-      radarIdx = radarFrames.length - 1; stampRadar();
+      radarIdx = radarFrames.length - 1; stampRadar(); document.getElementById('radarplay').disabled = false;
       feed('radar', true, radarFrames.length, new Date(radarFrames[radarIdx].time * 1000).toISOString(), 'global mosaic · last ' + radarFrames.length + ' frames');
     })
     .catch(function (e) { feed('radar', false, 0, null, String(e.message || e)); });
@@ -389,8 +408,9 @@ function stampRadar() { var f = radarFrames[radarIdx]; document.getElementById('
 function showRadarFrame(i) { radarLayers.forEach(function (l, j) { l.alpha = j === i ? 0.62 : 0; }); radarIdx = i; stampRadar(); }
 document.getElementById('radarplay').onclick = function () {
   if (radarTimer) { clearInterval(radarTimer); radarTimer = null; this.textContent = '▶ loop radar'; showRadarFrame(radarLayers.length - 1); return; }
+  if (!radarLayers.length) return;
   this.textContent = '■ stop'; var k = 0;
-  radarTimer = setInterval(function () { k = (k + 1) % radarLayers.length; showRadarFrame(k); }, 650);
+  radarTimer = setInterval(function () { if (!radarLayers.length) return; k = (k + 1) % radarLayers.length; showRadarFrame(k); }, 650);
 };
 
 /* =========================================================================
@@ -424,7 +444,7 @@ function loadEvents() {
           ellipse: { semiMajorAxis: pulse(3000, 80000, 420000), semiMinorAxis: pulse(3000, 80000, 420000), material: C(col, 0.0001), outline: true, outlineColor: C(col, 0.8), outlineWidth: 2, height: 0 } });
         if (sev >= 8) top.push({ rank: 50 + sev * 3, kind: String(e.domain || 'event').toUpperCase() + ' · SEV ' + sev, color: col, title: e.title, sub: (e.location ? e.location + ' · ' : '') + (e.source || '') + ' · ' + ago(e.timestamp), lon: lon, lat: lat, h: 2200000, id: id });
       });
-      watchItems.events = top.slice(0, 6);
+      watchItems.events = top.sort(function (a, b) { return b.rank - a.rank; }).slice(0, 6);
       feed('events', true, n, d.updatedAt, 'scored live events with coordinates');
       renderWatch();
     })
@@ -443,7 +463,7 @@ function loadIncidents() {
         src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 13, color: C(col, 0.2), outlineColor: C(col), outlineWidth: 2.5 } });
         if (sev === 'SEV1' || sev === 'SEV2') top.push({ rank: sev === 'SEV1' ? 85 : 65, kind: 'INCIDENT · ' + sev, color: col, title: p.title || p.slug, sub: (p.region_name || '') + ' · opened ' + ago(p.createdAt || p.opened_at), lon: lon, lat: lat, h: 1500000, id: id });
       });
-      watchItems.incidents = top.slice(0, 4);
+      watchItems.incidents = top.sort(function (a, b) { return b.rank - a.rank; }).slice(0, 4);
       feed('incidents', true, n, null, 'open, with coordinates'); renderWatch();
     })
     .catch(function (e) { feed('incidents', false, 0, null, String(e.message || e)); });
@@ -462,10 +482,12 @@ function setLayer(id, on) {
 function renderLayers() {
   document.getElementById('laylist').innerHTML = layerDefs.map(function (d) {
     var f = feeds[d.id], n = !f ? '…' : f.ok ? (f.n + (f.at ? ' · ' + ago(f.at) : '')) : 'GAP';
-    return '<div class="lay' + (d.on ? '' : ' off') + '" data-id="' + d.id + '" title="' + esc(f ? f.note : 'loading') + '"><span class="sw" style="color:' + d.color + ';background:' + d.color + '33"></span><span>' + esc(d.label) + '</span><span class="n' + (f && !f.ok ? ' gap' : '') + '">' + esc(n) + '</span></div>';
+    return '<div class="lay' + (d.on ? '' : ' off') + '" role="switch" tabindex="0" aria-checked="' + d.on + '" data-id="' + d.id + '" title="' + esc(f ? f.note : 'loading') + '"><span class="sw" style="color:' + d.color + ';background:' + d.color + '33"></span><span>' + esc(d.label) + '</span><span class="n' + (f && !f.ok ? ' gap' : '') + '">' + esc(n) + '</span></div>';
   }).join('');
-  Array.prototype.forEach.call(document.querySelectorAll('.lay'), function (el) { el.onclick = function () { setLayer(el.dataset.id, !layerOn(el.dataset.id)); }; });
+  Array.prototype.forEach.call(document.querySelectorAll('.lay'), function (el) { activate(el, function () { setLayer(el.dataset.id, !layerOn(el.dataset.id)); }); });
 }
+/** click + Enter/Space on a focusable custom control */
+function activate(el, fn) { el.onclick = fn; el.onkeydown = function (ev) { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); fn(); } }; }
 function renderFeeds() {
   document.getElementById('feeds').innerHTML = layerDefs.map(function (d) { var f = feeds[d.id]; return '<span class="f ' + (!f ? 'wait' : f.ok ? 'ok' : 'gap') + '" title="' + esc(f ? f.note : '') + '">' + d.id + '</span>'; }).join('');
 }
@@ -473,8 +495,8 @@ function renderWatch() {
   var all = [].concat(watchItems.cyclones, watchItems.incidents, watchItems.airports, watchItems.events, watchItems.hazards).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
-  el.innerHTML = all.map(function (w, i) { return '<div class="w" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
-  Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { node.onclick = function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) showCard(lookup[w.id]); }; });
+  el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { activate(node, function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) showCard(lookup[w.id]); }); });
 }
 function kvs(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) { return '<div>' + esc(r[0]) + '</div><div>' + (r[2] ? r[1] : esc(r[1])) + '</div>'; }).join('') + '</div>'; }
 function showCard(x) {
@@ -504,6 +526,9 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction(function 
   var picked = viewer.scene.pick(click.position); var ent = picked && picked.id; if (!ent || !ent.id) return;
   var base = String(ent.id).replace(/:(halo|lbl|ring)$/, ''); if (lookup[base]) showCard(lookup[base]);
 }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+Array.prototype.forEach.call(document.querySelectorAll('#mobtabs button'), function (b) {
+  b.onclick = function () { ['layers', 'watch', 'legend'].forEach(function (id) { var el = document.getElementById(id); el.classList.toggle('show', id === b.dataset.p && !el.classList.contains('show')); }); };
+});
 setInterval(function () { document.getElementById('utc').textContent = new Date().toISOString().slice(0, 19).replace('T', ' ') + 'Z'; }, 1000);
 
 window.__gevDiag = function () { var o = { imagery: viewer.imageryLayers.length, ion: !!Cesium.Ion.defaultAccessToken }; layerDefs.forEach(function (d) { o[d.id] = { feed: feeds[d.id] || null, entities: sources[d.id] ? sources[d.id].entities.values.length : radarLayers.length }; }); o.watch = document.querySelectorAll('.w').length; return o; };
