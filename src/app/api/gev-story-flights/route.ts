@@ -24,7 +24,8 @@ const SQUAWK: Record<string, string> = { '7700': 'emergency', '7600': 'radio fai
 
 async function emergencies(): Promise<{ list: Record<string, unknown>[]; failed: string[] }> {
   const out: Record<string, unknown>[] = [], failed: string[] = [], seen = new Set<string>()
-  await Promise.all(Object.keys(SQUAWK).map(async (sq) => {
+  // sequential, not parallel: adsb.lol answers concurrent bursts with HTTP 420 (rate limit)
+  for (const sq of Object.keys(SQUAWK)) await (async () => {
     try {
       const r = await fetch(`https://api.adsb.lol/v2/sqk/${sq}`, { headers: { 'User-Agent': 'WFMLabs-GEV/1.0 (ted@wfmlabs.com)' }, next: { revalidate: 60 }, signal: AbortSignal.timeout(10000) })
       if (!r.ok) { failed.push(`squawk ${sq}: HTTP ${r.status}`); return }
@@ -34,7 +35,8 @@ async function emergencies(): Promise<{ list: Record<string, unknown>[]; failed:
         alt_ft: typeof a.alt_baro === 'number' ? a.alt_baro : null, gs_kt: typeof a.gs === 'number' ? Math.round(a.gs) : null, track: a.track ?? null, squawk: sq, emergency: SQUAWK[sq],
       })
     } catch { failed.push(`squawk ${sq}: unreachable`) }
-  }))
+    await new Promise((r) => setTimeout(r, 400))
+  })()
   return { list: out, failed }
 }
 
