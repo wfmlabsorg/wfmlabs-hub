@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>God's Eye · Travel Risk</title>
+  <meta name="robots" content="noindex">
+  <script src="/roc/roc-config.js"></script>
+  <script src="/roc/roc-score-state.js"></script>
+  <script src="/roc/globe/airport-model.js"></script>
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.124/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <!--
+    GOD'S EYE VIEW — the travel-risk board (gev-001, Phase 1)
+    =========================================================================
+    One question: where in the world, right now, is something stopping or about to stop
+    travelers — weather, airspace, hazards, or the airports themselves?
+
+    Inspired by github.com/bilawalsidhu/gods-eye-view (MIT): the globe-as-instrument idea, the
+    keyless public weather layers. No code is copied from it; this page uses the hub's own state
+    model so it cannot disagree with travel-globe.html about any airport:
+
+      airport-model.js   opClass / advClass / freshness / colours — ONE classifier (hub-051)
+      /api/roc-airports  the 272-airport plane, delay readings, operational + advisory axes
+      /api/gev-weather   aviation hazards (SIGMET worldwide, US SIGMET + G-AIRMET) and NHC cyclones
+      /api/incidents     open incidents
+      travel-intel       scored live events (aviation, transit, maritime, intel) with coordinates
+      RainViewer         global radar mosaic, last ~2 hours
+
+    Honesty rules carried over: an unchecked airport is drawn hollow, never calm; a feed that
+    failed shows a GAP, never an empty layer that reads as "nothing happening"; every number in a
+    card names its source and its age.
+  -->
+  <style>
+    :root {
+      --bg: #02060c; --ink: #cfe8ff; --dim: #6b8aa6; --line: rgba(120,190,255,0.18);
+      --cyan: #38bdf8; --amber: #f59e0b; --red: #ef4444; --teal: #18BC9C; --violet: #a78bfa;
+      --mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font-family: var(--mono); overflow: hidden; }
+    #globe { position: absolute; inset: 0; }
+    .cesium-viewer-bottom, .cesium-widget-credits { display: none !important; }
+    /* the look: scanlines, vignette, corner brackets — chrome only, pointer-transparent */
+    #fx { position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      background: repeating-linear-gradient(0deg, rgba(0,0,0,0.13) 0 1px, transparent 1px 3px),
+                  radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%); }
+    .bracket { position: absolute; width: 38px; height: 38px; border: 2px solid rgba(56,189,248,0.45); z-index: 3; pointer-events: none; }
+    .bracket.tl { top: 10px; left: 10px; border-right: 0; border-bottom: 0; } .bracket.tr { top: 10px; right: 10px; border-left: 0; border-bottom: 0; }
+    .bracket.bl { bottom: 10px; left: 10px; border-right: 0; border-top: 0; } .bracket.br { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+    #reticle { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; z-index: 3; pointer-events: none; opacity: 0.35;
+      background: linear-gradient(var(--cyan), var(--cyan)) center/1px 100% no-repeat, linear-gradient(var(--cyan), var(--cyan)) center/100% 1px no-repeat; }
+
+    .panel { position: absolute; z-index: 5; background: rgba(4,12,22,0.78); border: 1px solid var(--line); backdrop-filter: blur(6px); }
+    .h { font-size: 10px; letter-spacing: 0.18em; color: var(--dim); text-transform: uppercase; margin: 0 0 8px; }
+
+    #top { top: 18px; left: 60px; right: 60px; display: flex; align-items: center; gap: 22px; padding: 9px 16px; }
+    #brand { font-size: 13px; letter-spacing: 0.32em; color: var(--cyan); white-space: nowrap; }
+    #brand b { color: #fff; }
+    #posture { font-size: 12px; white-space: nowrap; }
+    #posture .lvl { padding: 2px 8px; border: 1px solid currentColor; margin-right: 6px; }
+    #clock { margin-left: auto; font-size: 12px; color: var(--ink); white-space: nowrap; }
+    #rec { width: 8px; height: 8px; border-radius: 50%; background: var(--red); display: inline-block; margin-right: 6px; animation: blink 1.4s infinite; }
+    @keyframes blink { 50% { opacity: 0.2; } }
+    #feeds { display: flex; gap: 10px; font-size: 10px; color: var(--dim); white-space: nowrap; }
+    #feeds .f.ok::before { content: "●"; color: var(--teal); margin-right: 4px; }
+    #feeds .f.gap::before { content: "●"; color: var(--red); margin-right: 4px; }
+    #feeds .f.wait::before { content: "●"; color: var(--dim); margin-right: 4px; }
+
+    #layers { top: 76px; left: 18px; width: 268px; padding: 12px 14px; font-size: 12px; }
+    .lay { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px dashed rgba(120,190,255,0.08); cursor: pointer; user-select: none; }
+    .lay:last-child { border-bottom: 0; }
+    .lay .sw { width: 12px; height: 12px; border: 1px solid currentColor; }
+    .lay.off { opacity: 0.38; }
+    .lay .n { color: var(--dim); font-size: 11px; }
+    .lay .n.gap { color: var(--red); }
+    #radarctl { margin-top: 10px; display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--dim); }
+    button { font: inherit; color: var(--ink); background: rgba(56,189,248,0.08); border: 1px solid var(--line); padding: 3px 9px; cursor: pointer; }
+    button:hover { border-color: var(--cyan); }
+
+    #watch { top: 76px; right: 18px; width: 340px; max-height: calc(100% - 300px); overflow: auto; padding: 12px 14px; }
+    .w { padding: 8px 0 9px; border-bottom: 1px dashed rgba(120,190,255,0.1); cursor: pointer; }
+    .w:hover .t { color: #fff; }
+    .w .k { font-size: 10px; letter-spacing: 0.08em; }
+    .w .t { font-size: 12.5px; margin-top: 2px; line-height: 1.3; }
+    .w .s { font-size: 11px; color: var(--dim); margin-top: 2px; }
+
+    #card { bottom: 18px; right: 18px; width: 380px; max-height: 46%; overflow: auto; padding: 14px 16px; display: none; font-size: 12px; line-height: 1.45; }
+    #card.open { display: block; }
+    #card .x { position: absolute; top: 8px; right: 10px; cursor: pointer; color: var(--dim); }
+    #card .ct { font-size: 15px; color: #fff; margin: 2px 0 8px; }
+    #card .kv { display: grid; grid-template-columns: 120px 1fr; gap: 3px 10px; }
+    #card .kv div:nth-child(odd) { color: var(--dim); }
+    #card pre { white-space: pre-wrap; font-size: 10.5px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 8px; margin: 10px 0 0; max-height: 160px; overflow: auto; }
+    #card a { color: var(--cyan); }
+
+    #legend { bottom: 18px; left: 18px; width: 268px; padding: 10px 14px; font-size: 10.5px; color: var(--dim); }
+    #legend .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+    #legend i { display: inline-block; width: 11px; height: 11px; }
+    #credits { position: absolute; z-index: 5; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9.5px; color: rgba(160,190,220,0.55); white-space: nowrap; }
+    #credits a { color: inherit; }
+    #boot { position: absolute; inset: 0; z-index: 9; display: grid; place-items: center; font-size: 12px; letter-spacing: 0.3em; color: var(--cyan); background: var(--bg); transition: opacity 0.8s; }
+    @media (max-width: 900px) { #layers, #watch, #legend, #feeds { display: none; } #top { left: 12px; right: 12px; } }
+  </style>
+</head>
+<body>
+  <div id="globe"></div>
+  <div id="fx"></div>
+  <div class="bracket tl"></div><div class="bracket tr"></div><div class="bracket bl"></div><div class="bracket br"></div>
+  <div id="reticle"></div>
+
+  <div id="top" class="panel">
+    <div id="brand"><b>GOD'S EYE</b> · TRAVEL RISK</div>
+    <div id="posture">posture —</div>
+    <div id="feeds"></div>
+    <div id="clock"><span id="rec"></span><span id="utc">—</span></div>
+  </div>
+
+  <div id="layers" class="panel">
+    <div class="h">Layers</div>
+    <div id="laylist"></div>
+    <div id="radarctl"><button id="radarplay">▶ loop radar</button><span id="radarts">—</span></div>
+  </div>
+
+  <div id="watch" class="panel">
+    <div class="h">Watch list · click to fly</div>
+    <div id="watchlist"><div class="s">assembling…</div></div>
+  </div>
+
+  <div id="card" class="panel"><span class="x" id="cardx">✕</span><div id="cardbody"></div></div>
+
+  <div id="legend" class="panel">
+    <div class="h">Key</div>
+    <div class="row"><i style="background:#ef4444"></i>airport degraded · column height = median delay</div>
+    <div class="row"><i style="background:#18BC9C"></i>airport checked, normal</div>
+    <div class="row"><i style="border:2px solid #94a3b8"></i>airport not checked (never drawn calm)</div>
+    <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
+    <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
+    <div class="row">hazard volumes are extruded to their published top altitude (×6)</div>
+  </div>
+
+  <div id="credits">Imagery © Cesium ion / Bing / NASA Black Marble · Radar © RainViewer · NOAA NHC · aviationweather.gov · idea after <a href="https://github.com/bilawalsidhu/gods-eye-view" target="_blank" rel="noopener">God's Eye View</a> (MIT)</div>
+  <div id="boot">ACQUIRING…</div>
+
+<script>
+(function () {
+'use strict';
+/* =========================================================================
+ * 0. STATE + SMALL HELPERS (esc/num/str/pick/fmtAgo come from airport-model.js)
+ * ====================================================================== */
+var TI = (window.RocConfig && window.RocConfig.travelIntel) || 'https://travel-intel.tedlango.workers.dev';
+var REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+var EXAG = 6;                       // vertical exaggeration for hazard volumes
+var viewer = null;
+var feeds = {};                     // name → { ok, at, n, note }
+var lookup = {};                    // entity id → card payload
+var layerDefs = [
+  { id: 'airports',  label: 'Airports & delays',    color: '#18BC9C', on: true },
+  { id: 'hazards',   label: 'Aviation hazards',     color: '#f59e0b', on: true },
+  { id: 'cyclones',  label: 'Tropical cyclones',    color: '#ec4899', on: true },
+  { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: true },
+  { id: 'events',    label: 'Live travel events',   color: '#f97316', on: true },
+  { id: 'incidents', label: 'Open incidents',       color: '#ef4444', on: true }
+];
+var sources = {};                   // layer id → Cesium.CustomDataSource
+var watchItems = { airports: [], cyclones: [], events: [], hazards: [], incidents: [] };
+
+function C(css, a) { var c = Cesium.Color.fromCssColorString(css); return a == null ? c : c.withAlpha(a); }
+function ago(iso) { var t = Date.parse(iso); if (!isFinite(t)) return '—'; var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
+function feed(name, ok, n, at, note) { feeds[name] = { ok: ok, n: n, at: at || new Date().toISOString(), note: note || '' }; renderFeeds(); renderLayers(); }
+function pulse(period, lo, hi) { return new Cesium.CallbackProperty(function () { if (REDUCED) return hi; var t = (Date.now() % period) / period; return lo + (hi - lo) * (0.5 - 0.5 * Math.cos(t * 2 * Math.PI)); }, false); }
+function flyTo(lon, lat, h) { viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h || 1800000), duration: 2.2 }); }
+
+/* =========================================================================
+ * 1. VIEWER — night side, city lights, a real sun
+ * ====================================================================== */
+try {
+  viewer = new Cesium.Viewer('globe', {
+    baseLayer: false, baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+    navigationHelpButton: false, animation: false, timeline: false, fullscreenButton: false,
+    infoBox: false, selectionIndicator: false, requestRenderMode: false
+  });
+  window.viewer = viewer;
+  var sc = viewer.scene;
+  sc.globe.enableLighting = true;                 // day/night terminator from the real sun position
+  sc.globe.dynamicAtmosphereLighting = true;
+  sc.globe.showGroundAtmosphere = true;
+  sc.globe.baseColor = Cesium.Color.fromCssColorString('#030a14');
+  sc.skyAtmosphere.show = true;
+  sc.fog.enabled = true;
+  viewer.clock.currentTime = Cesium.JulianDate.now();
+  viewer.clock.shouldAnimate = true;
+  var at = (new URLSearchParams(location.search).get('at') || '').split(',').map(Number);
+  if (at.length === 3 && at.every(isFinite)) viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(at[0], at[1], at[2] * 1000), orientation: { heading: 0, pitch: Cesium.Math.toRadians(at[2] < 4000 ? -55 : -90), roll: 0 } });
+  else viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-40, 30, 19000000) });
+
+  // Imagery: keyless Esri first so the globe is never blank, then ion (Bing + Black Marble) when a token arrives.
+  Cesium.ArcGisMapServerImageryProvider.fromUrl('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer')
+    .then(function (p) { var l = viewer.imageryLayers.addImageryProvider(p, 0); l.brightness = 0.7; l.saturation = 0.6; l.contrast = 1.12; l.nightAlpha = 0.55; })
+    .catch(function () {});
+  window.RocConfig.get().then(function (cfg) {
+    if (!cfg || !cfg.cesiumToken) return;
+    Cesium.Ion.defaultAccessToken = cfg.cesiumToken;
+    Cesium.IonImageryProvider.fromAssetId(3812).then(function (p) {   // NASA Black Marble: city lights on the night side only
+      var l = viewer.imageryLayers.addImageryProvider(p); l.dayAlpha = 0.0; l.nightAlpha = 0.95; l.brightness = 1.6;
+      viewer.imageryLayers.raiseToTop(l); reorderOverlays();
+    }).catch(function () {});
+  }).catch(function () {});
+} catch (e) {
+  document.getElementById('boot').textContent = 'GLOBE FAILED TO INITIALISE';
+  console.error('[gev] viewer init failed', e);
+  return;
+}
+layerDefs.forEach(function (d) { var s = new Cesium.CustomDataSource(d.id); s.show = d.on; sources[d.id] = s; viewer.dataSources.add(s); });
+
+/* =========================================================================
+ * 2. AIRPORTS — the shared classifier, drawn as columns
+ *    Column height is the median delay the feed measured (dep, else arr). No reading → no column;
+ *    an unchecked airport is a hollow ring, exactly as travel-globe.html draws it.
+ * ====================================================================== */
+function loadAirports() {
+  return fetch('/api/roc-airports', { signal: AbortSignal.timeout(20000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var list = (d && (d.airports || d.rows || d.data)) || [];
+      if (!list.length) throw new Error('empty airport payload');
+      var src = sources.airports; src.entities.removeAll();
+      var degraded = [], counts = { degraded: 0, nominal: 0, unknown: 0, nofeed: 0 };
+      list.map(normaliseAirport).forEach(function (a) {
+        if (a._lat == null || a._lon == null) return;
+        counts[a._op] = (counts[a._op] || 0) + 1;
+        var code = a.iata || a.icao || '';
+        var id = 'ap:' + (a.icao || code);
+        var pos = Cesium.Cartesian3.fromDegrees(a._lon, a._lat);
+        var med = a._depMedian != null ? a._depMedian : a._arrMedian;
+        lookup[id] = { kind: 'airport', a: a };
+        if (a._op === OP.DEGRADED) {
+          var col = degradedColor(a);
+          degraded.push(a);
+          if (med != null && med > 0) {
+            var len = Math.min(Math.max(med, 8), 240) * 4500;
+            src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a._lon, a._lat, len / 2),
+              cylinder: { length: len, topRadius: 42000, bottomRadius: 42000, material: C(col, 0.72), outline: true, outlineColor: C(col, 1) } });
+          } else {
+            src.entities.add({ id: id, position: pos, point: { pixelSize: 11, color: C(col), outlineColor: Cesium.Color.WHITE.withAlpha(0.7), outlineWidth: 1 } });
+          }
+          src.entities.add({ id: id + ':halo', position: pos,
+            ellipse: { semiMajorAxis: pulse(2400, 60000, 160000), semiMinorAxis: pulse(2400, 60000, 160000), material: C(col, 0.16), outline: false, height: 0 } });
+          src.entities.add({ id: id + ':lbl', position: Cesium.Cartesian3.fromDegrees(a._lon, a._lat, med ? Math.min(Math.max(med, 8), 240) * 4500 + 20000 : 20000),
+            label: { text: code + (med != null ? '  +' + Math.round(med) + 'm' : ''), font: '12px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(0, -10), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 9.0e6) } });
+        } else if (a._op === OP.NOMINAL) {
+          src.entities.add({ id: id, position: pos, point: { pixelSize: 5, color: C(C_NOMINAL, nominalAlpha(a._fresh)) } });
+        } else {
+          src.entities.add({ id: id, position: pos, point: { pixelSize: 6, color: Cesium.Color.TRANSPARENT, outlineColor: C(a._op === OP.NOFEED ? C_NOFEED : C_UNKNOWN), outlineWidth: 1.5 } });
+        }
+      });
+      degraded.sort(function (x, y) { return ((y._depMedian || y._arrMedian || 0) - (x._depMedian || x._arrMedian || 0)); });
+      watchItems.airports = degraded.slice(0, 6).map(function (a) {
+        var med = a._depMedian != null ? a._depMedian : a._arrMedian;
+        return { rank: 60 + Math.min(30, (med || 0) / 4), kind: 'AIRPORT', color: degradedColor(a), title: (a.name || a.icao) + ' (' + (a.iata || a.icao) + ')',
+          sub: (delaySentence(a) || opClassWhy(a, a._op) || 'degraded'), lon: a._lon, lat: a._lat, h: 900000, id: 'ap:' + (a.icao || a.iata) };
+      });
+      feed('airports', true, list.length, (d.meta && (d.meta.latest_sweep_at || d.meta.generated_at)) || null, counts.degraded + ' degraded · ' + counts.unknown + ' unchecked');
+      renderWatch();
+    })
+    .catch(function (e) { feed('airports', false, 0, null, String(e.message || e)); });
+}
+
+/* =========================================================================
+ * 3. AVIATION HAZARDS — SIGMET / G-AIRMET volumes
+ * ====================================================================== */
+var HZ = { convective: '#f59e0b', turbulence: '#a78bfa', icing: '#38bdf8', volcanic: '#94785a', tropical: '#ec4899', visibility: '#64748b', wind: '#2dd4bf', other: '#94a3b8' };
+function rings(geom) {
+  if (!geom) return [];
+  if (geom.type === 'Polygon') return [geom.coordinates];
+  if (geom.type === 'MultiPolygon') return geom.coordinates;
+  return [];
+}
+function loadHazards() {
+  return fetch('/api/gev-weather?layer=hazards', { signal: AbortSignal.timeout(30000) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
+    .then(function (fc) {
+      var src = sources.hazards; src.entities.removeAll();
+      var now = Date.now(), n = 0, byCls = {};
+      (fc.features || []).forEach(function (f, i) {
+        var p = f.properties || {};
+        if (p.to && Date.parse(p.to) < now) return;                 // expired: not in force, not drawn
+        var col = HZ[p.cls] || HZ.other;
+        var topM = p.top != null ? Math.min(p.top, 60000) * 0.3048 * EXAG : 9000 * EXAG;
+        var baseM = p.base != null ? Math.min(p.base, 45000) * 0.3048 * EXAG : 0;
+        rings(f.geometry).forEach(function (poly, j) {
+          var outer = (poly[0] || []).map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); });
+          if (outer.length < 3) return;
+          var id = 'hz:' + i + ':' + j;
+          lookup[id] = { kind: 'hazard', p: p };
+          src.entities.add({ id: id, polygon: { hierarchy: new Cesium.PolygonHierarchy(outer), height: baseM, extrudedHeight: Math.max(topM, baseM + 3000),
+            material: C(col, p.cls === 'convective' || p.cls === 'tropical' ? 0.22 : 0.15), outline: true, outlineColor: C(col, 0.85), arcType: Cesium.ArcType.RHUMB } });
+        });
+        n++; byCls[p.cls] = (byCls[p.cls] || 0) + 1;
+      });
+      var failed = (fc.meta && fc.meta.failed) || [];
+      feed('hazards', failed.length === 0, n, fc.meta && fc.meta.fetched_at, failed.length ? 'gap: ' + failed.join(', ') : Object.keys(byCls).map(function (k) { return byCls[k] + ' ' + k; }).join(' · '));
+      // the watch list gets volcanic ash and tropical SIGMETs: the two that close airspace outright
+      watchItems.hazards = (fc.features || []).filter(function (f) { var c = f.properties && f.properties.cls; return (c === 'volcanic') && (!f.properties.to || Date.parse(f.properties.to) > now); })
+        .slice(0, 3).map(function (f) { var r = rings(f.geometry)[0]; var c = r && r[0] && r[0][0]; return { rank: 55, kind: 'ASH', color: HZ.volcanic, title: f.properties.label, sub: 'valid to ' + (f.properties.to || '').slice(11, 16) + 'Z · top FL' + Math.round((f.properties.top || 0) / 100), lon: c ? c[0] : 0, lat: c ? c[1] : 0, h: 2500000 }; });
+      renderWatch();
+    })
+    .catch(function (e) { feed('hazards', false, 0, null, String(e.message || e)); });
+}
+
+/* =========================================================================
+ * 4. TROPICAL CYCLONES — cone, track, forecast points, spinning eye
+ * ====================================================================== */
+function saffir(kt) { return kt >= 137 ? 5 : kt >= 113 ? 4 : kt >= 96 ? 3 : kt >= 83 ? 2 : kt >= 64 ? 1 : 0; }
+var EYE = (function () {   // one canvas spiral, reused as every storm's billboard
+  var cv = document.createElement('canvas'); cv.width = cv.height = 96; var g = cv.getContext('2d');
+  g.translate(48, 48); g.strokeStyle = '#f9a8d4'; g.lineWidth = 3;
+  for (var arm = 0; arm < 3; arm++) { g.beginPath(); for (var t = 0; t < 1; t += 0.02) { var a = arm * 2.094 + t * 4.2, r = 6 + t * 38; g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.stroke(); }
+  g.fillStyle = '#ec4899'; g.beginPath(); g.arc(0, 0, 6, 0, 6.3); g.fill(); return cv;
+})();
+function linesOf(fc) { var out = []; (fc && fc.features || []).forEach(function (f) { var g = f.geometry || {}; if (g.type === 'LineString') out.push(g.coordinates); if (g.type === 'MultiLineString') out = out.concat(g.coordinates); }); return out; }
+function loadCyclones() {
+  return fetch('/api/gev-weather?layer=cyclones', { signal: AbortSignal.timeout(40000) })
+    .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
+    .then(function (d) {
+      var src = sources.cyclones; src.entities.removeAll();
+      var storms = d.storms || [];
+      storms.forEach(function (s) {
+        var col = '#ec4899';
+        (s.cone && s.cone.features || []).forEach(function (f, i) {
+          rings(f.geometry).forEach(function (poly, j) {
+            src.entities.add({ id: 'tc:' + s.id + ':cone:' + i + ':' + j, polygon: { hierarchy: new Cesium.PolygonHierarchy(poly[0].map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); })),
+              material: Cesium.Color.WHITE.withAlpha(0.10), outline: true, outlineColor: C(col, 0.9), height: 0 } });
+          });
+        });
+        linesOf(s.track).forEach(function (l, i) { src.entities.add({ id: 'tc:' + s.id + ':trk:' + i, polyline: { positions: l.map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1], 2000); }), width: 2.5, material: new Cesium.PolylineDashMaterialProperty({ color: C(col), dashLength: 14 }) } }); });
+        linesOf(s.past).forEach(function (l, i) { src.entities.add({ id: 'tc:' + s.id + ':past:' + i, polyline: { positions: l.map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1], 2000); }), width: 2, material: C('#fda4af', 0.8) } }); });
+        (s.points && s.points.features || []).forEach(function (f, i) {
+          var c = f.geometry && f.geometry.coordinates; if (!c) return; var p = f.properties || {};
+          var lbl = (p.DATELBL || p.FLDATELBL || p.TAU && ('+' + p.TAU + 'h') || '') + (p.MAXWIND ? '  ' + p.MAXWIND + 'kt' : '');
+          src.entities.add({ id: 'tc:' + s.id + ':pt:' + i, position: Cesium.Cartesian3.fromDegrees(c[0], c[1], 2000),
+            point: { pixelSize: 6, color: C(col) }, label: { text: lbl, font: '10px monospace', fillColor: C('#fbcfe8'), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6.0e6) } });
+        });
+        if (s.lat != null && s.lon != null) {
+          var cat = saffir(s.intensity_kt || 0), id = 'tc:' + s.id;
+          var spin = new Cesium.CallbackProperty(function () { return REDUCED ? 0 : -((Date.now() / 900) % (2 * Math.PI)); }, false);
+          lookup[id] = { kind: 'cyclone', s: s };
+          src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat, 3000),
+            billboard: { image: EYE, rotation: spin, scale: 0.55 + cat * 0.12, color: Cesium.Color.WHITE.withAlpha(0.95) },
+            label: { text: (s.classification === 'HU' ? 'HURRICANE ' : s.classification === 'TS' ? 'TROPICAL STORM ' : '') + String(s.name || '').toUpperCase() + (cat ? '  CAT ' + cat : '') + '\n' + (s.intensity_kt || '?') + ' kt · ' + (s.pressure_mb || '?') + ' mb',
+              font: 'bold 12px monospace', fillColor: C('#fbcfe8'), outlineColor: Cesium.Color.BLACK, outlineWidth: 4, style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -44), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.2e7) } });
+        }
+      });
+      watchItems.cyclones = storms.map(function (s) { var cat = saffir(s.intensity_kt || 0);
+        return { rank: 70 + cat * 5, kind: cat ? 'HURRICANE · CAT ' + cat : 'TROPICAL STORM', color: '#ec4899', title: s.name + ' · ' + (s.intensity_kt || '?') + ' kt, ' + (s.pressure_mb || '?') + ' mb',
+          sub: 'moving ' + (s.movement_dir != null ? s.movement_dir + '°' : '?') + ' at ' + (s.movement_kt || '?') + ' kt · advisory ' + ago(s.updated) + ' ago', lon: s.lon, lat: s.lat, h: 2600000, id: 'tc:' + s.id }; });
+      var failed = (d.meta && d.meta.failed) || [];
+      feed('cyclones', failed.length === 0, storms.length, d.meta && d.meta.fetched_at, failed.length ? 'gap: ' + failed.join(', ') : (storms.length ? storms.map(function (s) { return s.name; }).join(', ') : 'none active') + ' · NHC basins only');
+      renderWatch();
+    })
+    .catch(function (e) { feed('cyclones', false, 0, null, String(e.message || e)); });
+}
+
+/* =========================================================================
+ * 5. RADAR — RainViewer mosaic; latest frame, loop on demand
+ * ====================================================================== */
+var radarLayers = [], radarFrames = [], radarIdx = 0, radarTimer = null, overlayLayers = [];
+function reorderOverlays() { overlayLayers.forEach(function (l) { try { viewer.imageryLayers.raiseToTop(l); } catch (e) {} }); }
+function loadRadar() {
+  return fetch('https://api.rainviewer.com/public/weather-maps.json', { signal: AbortSignal.timeout(15000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var past = (d.radar && d.radar.past) || [];
+      if (!past.length) throw new Error('no radar frames');
+      radarLayers.forEach(function (l) { viewer.imageryLayers.remove(l, true); }); radarLayers = []; overlayLayers = [];
+      radarFrames = past.slice(-8);
+      radarFrames.forEach(function (fr, i) {
+        var prov = new Cesium.UrlTemplateImageryProvider({ url: d.host + fr.path + '/256/{z}/{x}/{y}/2/1_1.png', maximumLevel: 7, credit: 'RainViewer' });
+        var l = viewer.imageryLayers.addImageryProvider(prov); l.alpha = (i === radarFrames.length - 1 && layerOn('radar')) ? 0.62 : 0; l.show = layerOn('radar');
+        radarLayers.push(l); overlayLayers.push(l);
+      });
+      radarIdx = radarFrames.length - 1; stampRadar();
+      feed('radar', true, radarFrames.length, new Date(radarFrames[radarIdx].time * 1000).toISOString(), 'global mosaic · last ' + radarFrames.length + ' frames');
+    })
+    .catch(function (e) { feed('radar', false, 0, null, String(e.message || e)); });
+}
+function stampRadar() { var f = radarFrames[radarIdx]; document.getElementById('radarts').textContent = f ? new Date(f.time * 1000).toISOString().slice(11, 16) + 'Z' : '—'; }
+function showRadarFrame(i) { radarLayers.forEach(function (l, j) { l.alpha = j === i ? 0.62 : 0; }); radarIdx = i; stampRadar(); }
+document.getElementById('radarplay').onclick = function () {
+  if (radarTimer) { clearInterval(radarTimer); radarTimer = null; this.textContent = '▶ loop radar'; showRadarFrame(radarLayers.length - 1); return; }
+  this.textContent = '■ stop'; var k = 0;
+  radarTimer = setInterval(function () { k = (k + 1) % radarLayers.length; showRadarFrame(k); }, 650);
+};
+
+/* =========================================================================
+ * 6. LIVE TRAVEL EVENTS (travel-intel) + OPEN INCIDENTS
+ * ====================================================================== */
+var TRAVEL_DOMAINS = { aviation: 1, transit: 1, roads: 1, maritime: 1, intel: 1 };
+function sevColor(s) { return s >= 9 ? C_SEVERE : s >= 7 ? C_MOD : '#94a3b8'; }
+function loadEvents() {
+  return fetch(TI + '/api/travel/scores', { signal: AbortSignal.timeout(20000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var src = sources.events; src.entities.removeAll();
+      var lvl = d.level || '—', comp = d.composite;
+      var lc = lvl === 'SEVERE' || lvl === 'CRITICAL' ? '#ef4444' : lvl === 'SIGNIFICANT' ? '#f97316' : lvl === 'ELEVATED' ? '#eab308' : '#18BC9C';
+      document.getElementById('posture').innerHTML = '<span class="lvl" style="color:' + lc + '">' + esc(lvl) + '</span>' + (comp != null ? esc(comp) + '/10 composite' : '');
+      var STOPW = { the:1, and:1, for:1, with:1, from:1, amid:1, after:1, over:1, into:1, new:1, update:1, crisis:1, major:1, severe:1 };
+      function words(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function (w) { return w.length > 2 && !STOPW[w]; }).map(function (w) { return w.replace(/(ies|es|s)$/, ''); }); }
+      function overlap(a, b) { var n = 0; a.forEach(function (w) { if (b.indexOf(w) !== -1) n++; }); return n / Math.max(1, Math.min(a.length, b.length)); }
+      var groups = [], n = 0, top = [];
+      (d.events || []).forEach(function (e, i) {
+        var lat = num(e.lat), lon = num(e.lon), sev = num(e.severity) || 0;
+        if (lat == null || lon == null || !TRAVEL_DOMAINS[e.domain]) return;
+        // the fleet emits near-duplicate titles for one event: group by lead country + domain + shared words
+        var lead = String(e.location || '').split(/,\s*/)[0], w = words(e.title);
+        if (groups.some(function (g) { return g.lead === lead && g.domain === e.domain && overlap(g.w, w) >= 0.34; })) return;
+        groups.push({ lead: lead, domain: e.domain, w: w }); n++;
+        var id = 'ev:' + i, col = sevColor(sev);
+        lookup[id] = { kind: 'event', e: e };
+        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 6 + Math.max(0, sev - 5), color: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 } });
+        if (sev >= 9) src.entities.add({ id: id + ':ring', position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          ellipse: { semiMajorAxis: pulse(3000, 80000, 420000), semiMinorAxis: pulse(3000, 80000, 420000), material: C(col, 0.0001), outline: true, outlineColor: C(col, 0.8), outlineWidth: 2, height: 0 } });
+        if (sev >= 8) top.push({ rank: 50 + sev * 3, kind: String(e.domain || 'event').toUpperCase() + ' · SEV ' + sev, color: col, title: e.title, sub: (e.location ? e.location + ' · ' : '') + (e.source || '') + ' · ' + ago(e.timestamp), lon: lon, lat: lat, h: 2200000, id: id });
+      });
+      watchItems.events = top.slice(0, 6);
+      feed('events', true, n, d.updatedAt, 'scored live events with coordinates');
+      renderWatch();
+    })
+    .catch(function (e) { feed('events', false, 0, null, String(e.message || e)); document.getElementById('posture').textContent = 'posture — (travel-intel unreachable)'; });
+}
+function loadIncidents() {
+  return fetch('/api/incidents?section=active&limit=100', { signal: AbortSignal.timeout(15000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var src = sources.incidents; src.entities.removeAll(); var n = 0, top = [];
+      (d.docs || []).forEach(function (p) {
+        var st = String(p.status || '').toLowerCase(); if (st === 'closed' || st === 'resolved') return;
+        var lat = num(p.location_lat), lon = num(p.location_lon); if (lat == null || lon == null) return;
+        var sev = String(p.sev_level || '').toUpperCase(), col = sev === 'SEV1' ? C_SEVERE : sev === 'SEV2' ? C_MOD : '#94a3b8', id = 'in:' + (p.slug || p.id);
+        lookup[id] = { kind: 'incident', p: p }; n++;
+        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 13, color: C(col, 0.2), outlineColor: C(col), outlineWidth: 2.5 } });
+        if (sev === 'SEV1' || sev === 'SEV2') top.push({ rank: sev === 'SEV1' ? 85 : 65, kind: 'INCIDENT · ' + sev, color: col, title: p.title || p.slug, sub: (p.region_name || '') + ' · opened ' + ago(p.createdAt || p.opened_at), lon: lon, lat: lat, h: 1500000, id: id });
+      });
+      watchItems.incidents = top.slice(0, 4);
+      feed('incidents', true, n, null, 'open, with coordinates'); renderWatch();
+    })
+    .catch(function (e) { feed('incidents', false, 0, null, String(e.message || e)); });
+}
+
+/* =========================================================================
+ * 7. CHROME — layers, feed health, watch list, card, clock
+ * ====================================================================== */
+function layerOn(id) { var d = layerDefs.filter(function (x) { return x.id === id; })[0]; return d ? d.on : false; }
+function setLayer(id, on) {
+  layerDefs.forEach(function (d) { if (d.id === id) d.on = on; });
+  if (id === 'radar') { radarLayers.forEach(function (l, j) { l.show = on; l.alpha = on && j === radarIdx ? 0.62 : 0; }); }
+  else if (sources[id]) sources[id].show = on;
+  renderLayers();
+}
+function renderLayers() {
+  document.getElementById('laylist').innerHTML = layerDefs.map(function (d) {
+    var f = feeds[d.id], n = !f ? '…' : f.ok ? (f.n + (f.at ? ' · ' + ago(f.at) : '')) : 'GAP';
+    return '<div class="lay' + (d.on ? '' : ' off') + '" data-id="' + d.id + '" title="' + esc(f ? f.note : 'loading') + '"><span class="sw" style="color:' + d.color + ';background:' + d.color + '33"></span><span>' + esc(d.label) + '</span><span class="n' + (f && !f.ok ? ' gap' : '') + '">' + esc(n) + '</span></div>';
+  }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('.lay'), function (el) { el.onclick = function () { setLayer(el.dataset.id, !layerOn(el.dataset.id)); }; });
+}
+function renderFeeds() {
+  document.getElementById('feeds').innerHTML = layerDefs.map(function (d) { var f = feeds[d.id]; return '<span class="f ' + (!f ? 'wait' : f.ok ? 'ok' : 'gap') + '" title="' + esc(f ? f.note : '') + '">' + d.id + '</span>'; }).join('');
+}
+function renderWatch() {
+  var all = [].concat(watchItems.cyclones, watchItems.incidents, watchItems.airports, watchItems.events, watchItems.hazards).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
+  var el = document.getElementById('watchlist');
+  if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
+  el.innerHTML = all.map(function (w, i) { return '<div class="w" data-i="' + i + '"><div class="k" style="color:' + w.color + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
+  Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { node.onclick = function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) showCard(lookup[w.id]); }; });
+}
+function kvs(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) { return '<div>' + esc(r[0]) + '</div><div>' + (r[2] ? r[1] : esc(r[1])) + '</div>'; }).join('') + '</div>'; }
+function showCard(x) {
+  var h = '';
+  if (x.kind === 'airport') { var a = x.a;
+    h = '<div class="h">Airport · ' + esc(a._op) + '</div><div class="ct">' + esc((a.name || '') + ' (' + (a.iata || a.icao) + ')') + '</div>' + kvs([
+      ['operational', opClassWhy(a, a._op)], ['delays', delaySentence(a)], ['advisory', a._adv], ['freshness', freshWords(a._fresh)],
+      ['operational state', a.operational_state], ['source', a.obsSource || a.source || null]]); }
+  else if (x.kind === 'hazard') { var p = x.p;
+    h = '<div class="h">Aviation hazard · ' + esc(p.src) + '</div><div class="ct">' + esc(p.label) + '</div>' + kvs([
+      ['valid', (p.from || '').slice(0, 16).replace('T', ' ') + 'Z → ' + (p.to || '').slice(11, 16) + 'Z'], ['altitude', (p.base != null ? 'FL' + Math.round(p.base / 100) : 'SFC') + ' – ' + (p.top != null ? 'FL' + Math.round(p.top / 100) : '?')], ['hazard code', p.hazard]])
+      + (p.raw ? '<pre>' + esc(p.raw) + '</pre>' : ''); }
+  else if (x.kind === 'cyclone') { var s = x.s, cat = saffir(s.intensity_kt || 0);
+    h = '<div class="h">Tropical cyclone · NHC</div><div class="ct">' + esc(s.name) + (cat ? ' · Category ' + cat : '') + '</div>' + kvs([
+      ['intensity', (s.intensity_kt || '?') + ' kt'], ['pressure', (s.pressure_mb || '?') + ' mb'], ['position', s.lat + ', ' + s.lon], ['moving', (s.movement_dir != null ? s.movement_dir + '°' : '?') + ' at ' + (s.movement_kt || '?') + ' kt'],
+      ['advisory', ago(s.updated) + ' ago'], ['public advisory', s.advisory_url ? '<a href="' + esc(s.advisory_url) + '" target="_blank" rel="noopener">NHC text</a>' : null, true]]); }
+  else if (x.kind === 'event') { var e = x.e;
+    h = '<div class="h">Live event · ' + esc(e.domain) + ' · sev ' + esc(e.severity) + '</div><div class="ct">' + esc(e.title) + '</div>' + kvs([['where', e.location], ['seen', ago(e.timestamp) + ' ago'], ['source', e.source],
+      ['link', e.url && /^https?:/.test(e.url) ? '<a href="' + esc(e.url) + '" target="_blank" rel="noopener">source</a>' : null, true]]) + (e.detail ? '<pre>' + esc(e.detail) + '</pre>' : ''); }
+  else if (x.kind === 'incident') { var q = x.p;
+    h = '<div class="h">Incident · ' + esc(q.sev_level) + '</div><div class="ct">' + esc(q.title || q.slug) + '</div>' + kvs([['status', q.status], ['region', q.region_name], ['open since', ago(q.createdAt || q.opened_at) + ' ago'],
+      ['record', q.slug ? '<a href="/incidents/' + esc(q.slug) + '" target="_blank">incident page</a>' : null, true]]); }
+  document.getElementById('cardbody').innerHTML = h; document.getElementById('card').classList.add('open');
+}
+document.getElementById('cardx').onclick = function () { document.getElementById('card').classList.remove('open'); };
+new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction(function (click) {
+  var picked = viewer.scene.pick(click.position); var ent = picked && picked.id; if (!ent || !ent.id) return;
+  var base = String(ent.id).replace(/:(halo|lbl|ring)$/, ''); if (lookup[base]) showCard(lookup[base]);
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+setInterval(function () { document.getElementById('utc').textContent = new Date().toISOString().slice(0, 19).replace('T', ' ') + 'Z'; }, 1000);
+
+window.__gevDiag = function () { var o = { imagery: viewer.imageryLayers.length, ion: !!Cesium.Ion.defaultAccessToken }; layerDefs.forEach(function (d) { o[d.id] = { feed: feeds[d.id] || null, entities: sources[d.id] ? sources[d.id].entities.values.length : radarLayers.length }; }); o.watch = document.querySelectorAll('.w').length; return o; };
+
+/* =========================================================================
+ * 8. BOOT + REFRESH
+ * ====================================================================== */
+renderLayers(); renderFeeds();
+Promise.all([loadAirports(), loadHazards(), loadCyclones(), loadRadar(), loadEvents(), loadIncidents()]).then(function () {
+  var b = document.getElementById('boot'); b.style.opacity = 0; setTimeout(function () { b.style.display = 'none'; }, 900);
+});
+setInterval(loadAirports, 5 * 60e3); setInterval(loadHazards, 5 * 60e3); setInterval(loadCyclones, 10 * 60e3);
+setInterval(loadRadar, 10 * 60e3); setInterval(loadEvents, 2 * 60e3); setInterval(loadIncidents, 2 * 60e3);
+setInterval(renderLayers, 60e3);   // ages tick
+})();
+</script>
+</body>
+</html>
