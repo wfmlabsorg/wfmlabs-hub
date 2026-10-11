@@ -8,7 +8,7 @@ const VALID_DOMAINS = [
 ]
 const VALID_STATUSES = [
   'detected', 'declared', 'open', 'validated', 'escalated',
-  'de-escalated', 'resolving', 'closed', 'reopened',
+  'de-escalated', 'resolving', 'closed', 'reopened', 'proposed',
 ]
 
 export async function GET(req: Request) {
@@ -22,9 +22,9 @@ export async function GET(req: Request) {
   const persistent = url.searchParams.get('persistent')
   const section = url.searchParams.get('section') // 'active', 'closed', 'persistent'
 
-  // Phase 4 (roc #158): board rules write incidents with status 'proposed'; a dismissed proposal stays
-  // as 'dismissed'. Neither is public — members see proposals through /api/desk-proposals.
-  const conditions: string[] = ["status NOT IN ('proposed', 'dismissed')"]
+  // Phase 4 (roc #158/#160): 'proposed' rows are public but are not incidents yet — they come back only
+  // when asked for (?status=proposed) and never inside section=active. 'dismissed' never lists.
+  const conditions: string[] = [status === 'proposed' ? "status <> 'dismissed'" : "status NOT IN ('proposed', 'dismissed')"]
   const params: (string | number | boolean)[] = []
   let paramIdx = 1
 

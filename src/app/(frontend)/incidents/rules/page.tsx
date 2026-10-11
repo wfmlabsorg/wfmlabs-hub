@@ -4,7 +4,7 @@ import { deskRules } from '@/lib/desk'
 export const metadata = { title: 'How incidents get proposed — WFM Labs' }
 
 // Public, read-only: the rules that propose incidents, read live from desk-api GET /desk/rules so this
-// page can never drift from what actually runs. (The proposals themselves are members-only.)
+// page can never drift from what actually runs.
 export default async function IncidentRulesPage() {
   const data = await deskRules()
   return (
@@ -19,8 +19,8 @@ export default async function IncidentRulesPage() {
       <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>How incidents get proposed</h1>
       <p style={{ color: 'var(--fg-muted)', lineHeight: 1.6, fontSize: '0.9375rem' }}>
         The desk watches live items — degraded airports, diversions, cancellations, scored headlines, forecast cones, SIGMETs.
-        When one of the rules below fires, the desk <strong>proposes</strong> an incident. A proposal is visible to members
-        only. Nothing becomes a public incident until an admin confirms it; a dismissed proposal never comes back.
+        When one of the rules below fires, the desk <strong>proposes</strong> an incident. A proposal is shown to everyone,
+        marked PROPOSED. It becomes an incident only when an admin confirms it; a dismissed proposal never comes back.
       </p>
       {!data ? (
         <p style={{ color: '#f59e0b', fontSize: '0.875rem' }}>The rules could not be read from desk-api just now — this is a connection issue, not an empty rulebook.</p>

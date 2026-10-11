@@ -200,10 +200,10 @@ export default async function IncidentDetailPage({
 
   const incident = incidentRows[0]
   if (!incident) notFound()
-  // Phase 4: a proposed (or dismissed) row is a machine proposal — members only. To the public it does
-  // not exist (404, not 403, so the URL leaks nothing).
+  // Phase 4: a proposed row is public, marked PROPOSED (Ted, 2026-10-11). A dismissed one is a decision
+  // record — members only; to the public it does not exist (404, not 403, so the URL leaks nothing).
   const isProposal = incident.status === 'proposed' || incident.status === 'dismissed'
-  if (isProposal && !session?.user?.payloadMemberId) notFound()
+  if (incident.status === 'dismissed' && !session?.user?.payloadMemberId) notFound()
 
   // Fetch timeline — degrades to a visible "unavailable" note rather than failing the page.
   const timeline = await neonQuery<TimelineEntry>(
@@ -749,7 +749,7 @@ export default async function IncidentDetailPage({
               const x = incident as unknown as { proposal_rule?: string | null; proposed_by?: string | null; decided_by?: string | null; decided_at?: string | null; proposal_payload?: { facts?: { basis?: string } } | null }
               const basis = x.proposal_payload?.facts?.basis
               return incident.status === 'proposed'
-                ? `Rule ${x.proposal_rule || '?'} (${x.proposed_by || 'desk-rules'}) proposed this from live desk items${basis ? ` — basis ${basis}` : ''}. Members only: it is not public until an admin confirms it.`
+                ? `Rule ${x.proposal_rule || '?'} (${x.proposed_by || 'desk-rules'}) proposed this from live desk items${basis ? ` — basis ${basis}` : ''}. It becomes an incident when an admin confirms it.`
                 : `Dismissed by ${x.decided_by || '?'}${x.decided_at ? ` on ${new Date(x.decided_at).toISOString().slice(0, 10)}` : ''}${incident.close_reason ? ` — ${incident.close_reason}` : ''}.`
             })()}
           </p>

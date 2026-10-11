@@ -3,9 +3,9 @@
  *
  *   proposals  Incidents the desk's rules PROPOSED (roc desk-api, rules in workers/desk-api/src/rules)
  *              and no person has decided yet. Drawn as dashed amber rings; the card says which rule,
- *              on what basis, and — for admins — offers Confirm / Dismiss. Members only: the data comes
- *              through /api/desk-proposals, which answers 401 to the public; then the layer draws
- *              nothing and says "members only" in its feed line (that is a gate, not a GAP).
+ *              on what basis, and — for admins — offers Confirm / Dismiss. Public (Ted 2026-10-11): the
+ *              data comes through /api/desk-proposals; a 401 (should the gate ever return) draws nothing
+ *              and says so in the feed line (a gate, not a GAP).
  *              A proposal without coordinates is counted in the feed note and listed on the watch list,
  *              never invented onto the globe.
  * ====================================================================== */
@@ -35,7 +35,7 @@ WG.card('proposal', function (x) {
       + '<button type="button" data-prop="' + esc(String(p.id)) + '" data-act="dismiss" style="font:600 12px IBM Plex Sans,sans-serif;padding:5px 9px;border-radius:6px;border:1px solid rgba(239,68,68,.5);background:rgba(239,68,68,.06);color:#ef4444;cursor:pointer">Dismiss…</button>'
       + '<span class="s" data-prop-msg="' + esc(String(p.id)) + '"></span></div>';
   } else {
-    html += '<div class="s" style="margin-top:6px;color:#94a3b8">Members only · an admin confirms or dismisses</div>';
+    html += '<div class="s" style="margin-top:6px;color:#94a3b8">Proposed by a desk rule · an admin confirms or dismisses</div>';
   }
   var lat = WG.num(p.location_lat), lon = WG.num(p.location_lon);
   return { html: html, at: lat != null && lon != null ? [lon, lat] : null };
@@ -86,7 +86,7 @@ function loadProposals(src) {
       WG.feed('proposals', true, drawn, d.generated_at, list.length + ' awaiting a decision' + (noCoords ? ' · ' + noCoords + ' without coordinates (watch list only)' : '') + (state.admin ? ' · you can confirm/dismiss' : ''));
     });
 }
-WG.addLayer({ id: 'proposals', label: 'Proposed incidents (members)', color: AMBER, on: true, refreshMs: 2 * 60e3, load: loadProposals });
+WG.addLayer({ id: 'proposals', label: 'Proposed incidents', color: AMBER, on: true, refreshMs: 2 * 60e3, load: loadProposals });
 
 /* key: appended, not edited */
 try {
