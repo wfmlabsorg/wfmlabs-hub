@@ -249,8 +249,13 @@ function C(css, a) { var c = Cesium.Color.fromCssColorString(css); return a == n
 function ago(iso) { var t = Date.parse(iso); if (!isFinite(t)) return '—'; var m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; }
 function feed(name, ok, n, at, note) { feeds[name] = { ok: ok, n: n, at: at || new Date().toISOString(), note: note || '' }; renderFeeds(); renderLayers(); }
 function pulse(period, lo, hi) { return new Cesium.CallbackProperty(function () { if (REDUCED) return hi; var t = (Date.now() % period) / period; return lo + (hi - lo) * (0.5 - 0.5 * Math.cos(t * 2 * Math.PI)); }, false); }
+/* 2026-10-11 (Ted): the tour "scans in a bit too close" — on tour, fly two zoom levels higher (×4 the
+ * entry's own height, capped) so a stop reads as a region, not a rooftop. Manual clicks are unchanged. */
+var TOUR_ZOOM_OUT = 4, TOUR_MAX_H = 1.2e7;
 function flyTo(lon, lat, h) {
-  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, h || 1800000);
+  h = h || 1800000;
+  if (typeof tourOn !== 'undefined' && tourOn) h = Math.min(h * TOUR_ZOOM_OUT, TOUR_MAX_H);
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, h);
   if (REDUCED) viewer.camera.setView({ destination: dest }); else viewer.camera.flyTo({ destination: dest, duration: 2.2 });
 }
 

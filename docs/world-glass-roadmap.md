@@ -77,3 +77,4 @@ Turn layer conditions into **proposed** incidents that a person confirms. Nothin
 - **Tour (later the same day)**: a bar at the top names the stop (kind · title · why it is a story), with ◀ ▶, pause/
   resume, slow/normal/fast dwell, ✕; ← → space Esc work too; touching the globe pauses instead of ending the tour.
 - **Scrollbars** inside the layer list, watch list and card are thin and dark.
+- **Tour zoom** (2026-10-11): on tour, each stop flies two zoom levels higher than its own entry height (×4, capped at 12,000 km) so it reads as a region.
