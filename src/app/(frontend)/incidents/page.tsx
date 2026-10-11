@@ -78,8 +78,6 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; p
   resolving: { label: 'RESOLVING', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
   closed: { label: 'CLOSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
   reopened: { label: 'REOPENED', color: '#f97316', bg: 'rgba(249,115,22,0.1)', pulse: true },
-  proposed: { label: 'PROPOSED', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
-  dismissed: { label: 'DISMISSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
 }
 
 const domainList = [
@@ -298,7 +296,7 @@ export default async function IncidentsPage({
   // Default: show non-closed incidents (unless specifically filtering for closed)
   if (activeStatus === 'closed') {
     conditions.push("status = 'closed'")
-  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'proposed' && activeStatus !== 'dismissed') {
+  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus)) {
     conditions.push(`status = $${paramIdx++}`)
     queryParams.push(activeStatus)
   } else {
@@ -374,7 +372,7 @@ export default async function IncidentsPage({
         <div style={{ marginBottom: '1.5rem' }}>
           <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>Incidents</h1>
           <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
-            Validated operational events tracked by Watchkeeper
+            Open incidents the desk graded for business travel — air, hotel, rail and ground
           </p>
         </div>
         <DataUnavailable
@@ -444,7 +442,7 @@ export default async function IncidentsPage({
           )}
         </div>
         <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
-          Validated operational events tracked by Watchkeeper
+          Open incidents the desk graded for business travel — air, hotel, rail and ground
         </p>
       </div>
 
@@ -817,7 +815,7 @@ export default async function IncidentsPage({
             <p style={{ fontSize: '0.875rem' }}>
               {activeStatus || activeSev || activeDomain || activeCorrob
                 ? 'Try adjusting your filters.'
-                : 'Watchkeeper will declare incidents when severity thresholds are met.'}
+                : 'The desk opens an incident when a rule fires at severity 5 or above. Nothing qualifies right now.'}
             </p>
           </div>
         ) : (
