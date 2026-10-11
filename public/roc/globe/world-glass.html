@@ -562,6 +562,26 @@ function loadIncidents() {
     .catch(function (e) { feed('incidents', false, 0, null, String(e.message || e)); });
 }
 
+/* =========================================================================
+ * 6b. LIVE AIRCRAFT — adsb.lol, regional on zoom (gev-002)
+ *     Only below FLIGHT_CEIL of camera height; altitude uses the same ×EXAG as the hazard volumes,
+ *     so an aircraft sits inside the SIGMET it is flying through. Emergency squawks are ringed and
+ *     go to the top of the watch list.
+ * ====================================================================== */
+var FLIGHT_CEIL = 2600000, flightTimer = null, lastFlightKey = '';
+var PLANE = (function () {
+  var cv = document.createElement('canvas'); cv.width = cv.height = 32; var g = cv.getContext('2d');
+  g.translate(16, 16); g.fillStyle = '#ffffff';
+  g.beginPath(); g.moveTo(0, -14); g.lineTo(2.2, -4); g.lineTo(13, 3); g.lineTo(13, 6); g.lineTo(2.2, 2); g.lineTo(1.6, 10); g.lineTo(5, 13); g.lineTo(5, 15);
+  g.lineTo(0, 13.5); g.lineTo(-5, 15); g.lineTo(-5, 13); g.lineTo(-1.6, 10); g.lineTo(-2.2, 2); g.lineTo(-13, 6); g.lineTo(-13, 3); g.lineTo(-2.2, -4); g.closePath(); g.fill();
+  return cv;
+})();
+function altColor(a) { return a.emergency ? '#ef4444' : a.ground ? '#64748b' : a.alt_ft == null ? '#94a3b8' : a.alt_ft < 10000 ? '#67e8f9' : a.alt_ft < 30000 ? '#a7f3d0' : '#f8fafc'; }
+function cameraCenter() {
+  var c = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2));
+  if (!c) return null; var g = Cesium.Cartographic.fromCartesian(c);
+  return { lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude), h: viewer.camera.positionCartographic.height };
+}
 function loadFlights(force) {
   if (!layerOn('flights')) return Promise.resolve();
   var c = cameraCenter();
