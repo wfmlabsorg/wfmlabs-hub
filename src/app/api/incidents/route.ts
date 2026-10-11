@@ -22,7 +22,9 @@ export async function GET(req: Request) {
   const persistent = url.searchParams.get('persistent')
   const section = url.searchParams.get('section') // 'active', 'closed', 'persistent'
 
-  const conditions: string[] = []
+  // Phase 4 (roc #158): board rules write incidents with status 'proposed'; a dismissed proposal stays
+  // as 'dismissed'. Neither is public — members see proposals through /api/desk-proposals.
+  const conditions: string[] = ["status NOT IN ('proposed', 'dismissed')"]
   const params: (string | number | boolean)[] = []
   let paramIdx = 1
 
@@ -64,7 +66,7 @@ export async function GET(req: Request) {
 
     // Severity counts for the top bar
     const sevCounts = await pool.query(
-      "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status NOT IN ('closed') GROUP BY sev_level",
+      "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY sev_level",
     )
     const severityCounts: Record<string, number> = {}
     for (const row of sevCounts.rows) {
