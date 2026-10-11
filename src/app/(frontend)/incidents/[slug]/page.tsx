@@ -5,6 +5,7 @@ import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { ChatPanel } from '@/components/chat'
 import { IncidentAdminActions } from '@/components/incidents/IncidentAdminActions'
+import { ProposalActions } from '@/components/incidents/ProposalActions'
 import { IncidentCommunityValidation } from '@/components/incidents/IncidentCommunityValidation'
 import { CorroborationBadge, CorroborationSources } from '@/components/incidents/CorroborationBadge'
 import { IncidentEvidencePanel } from '@/components/incidents/IncidentEvidencePanel'
@@ -104,6 +105,8 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   resolving: { label: 'RESOLVING', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
   closed: { label: 'CLOSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
   reopened: { label: 'REOPENED', color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
+  proposed: { label: 'PROPOSED', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+  dismissed: { label: 'DISMISSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
 }
 
 const actionLabels: Record<string, { label: string; color: string; icon: string }> = {
@@ -197,6 +200,10 @@ export default async function IncidentDetailPage({
 
   const incident = incidentRows[0]
   if (!incident) notFound()
+  // Phase 4: a proposed (or dismissed) row is a machine proposal — members only. To the public it does
+  // not exist (404, not 403, so the URL leaks nothing).
+  const isProposal = incident.status === 'proposed' || incident.status === 'dismissed'
+  if (isProposal && !session?.user?.payloadMemberId) notFound()
 
   // Fetch timeline — degrades to a visible "unavailable" note rather than failing the page.
   const timeline = await neonQuery<TimelineEntry>(
@@ -723,8 +730,35 @@ export default async function IncidentDetailPage({
         </div>
       )}
 
+      {/* ── Proposal (phase 4): members see it, admins decide ── */}
+      {isProposal && (
+        <div
+          style={{
+            border: '1px dashed rgba(251,191,36,0.55)',
+            borderRadius: 'var(--radius)',
+            background: 'rgba(251,191,36,0.05)',
+            padding: '1rem 1.25rem',
+            marginBottom: '1.5rem',
+          }}
+        >
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fbbf24', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
+            {incident.status === 'proposed' ? 'PROPOSED BY THE DESK · AWAITING A DECISION' : 'DISMISSED PROPOSAL'}
+          </div>
+          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: 0, lineHeight: 1.5 }}>
+            {(() => {
+              const x = incident as unknown as { proposal_rule?: string | null; proposed_by?: string | null; decided_by?: string | null; decided_at?: string | null; proposal_payload?: { facts?: { basis?: string } } | null }
+              const basis = x.proposal_payload?.facts?.basis
+              return incident.status === 'proposed'
+                ? `Rule ${x.proposal_rule || '?'} (${x.proposed_by || 'desk-rules'}) proposed this from live desk items${basis ? ` — basis ${basis}` : ''}. Members only: it is not public until an admin confirms it.`
+                : `Dismissed by ${x.decided_by || '?'}${x.decided_at ? ` on ${new Date(x.decided_at).toISOString().slice(0, 10)}` : ''}${incident.close_reason ? ` — ${incident.close_reason}` : ''}.`
+            })()}
+          </p>
+          {isAdmin && incident.status === 'proposed' && <ProposalActions id={incident.id} />}
+        </div>
+      )}
+
       {/* ── Admin Actions ── */}
-      {isAdmin && (
+      {isAdmin && !isProposal && (
         <IncidentAdminActions slug={slug} sevLevel={incident.sev_level} status={incident.status} />
       )}
 

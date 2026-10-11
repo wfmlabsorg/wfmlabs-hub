@@ -1,4 +1,6 @@
 import React from 'react'
+import { auth } from '@/lib/auth'
+import { ProposalActions } from '@/components/incidents/ProposalActions'
 import { isMobile } from '@/lib/mobile'
 import { neonQuery } from '@/lib/neon'
 import { AutoRefresh } from '@/components/AutoRefresh'
@@ -78,6 +80,8 @@ const statusConfig: Record<string, { label: string; color: string; bg: string; p
   resolving: { label: 'RESOLVING', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
   closed: { label: 'CLOSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
   reopened: { label: 'REOPENED', color: '#f97316', bg: 'rgba(249,115,22,0.1)', pulse: true },
+  proposed: { label: 'PROPOSED', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' },
+  dismissed: { label: 'DISMISSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
 }
 
 const domainList = [
@@ -154,11 +158,11 @@ async function loadCoverage(): Promise<CoverageData | null> {
            FROM signals WHERE ${win} GROUP BY 1 ORDER BY 2 DESC LIMIT 8`,
       ),
       neonQuery<{ domain: string; cnt: string }>(
-        "SELECT domain, COUNT(*) AS cnt FROM incidents WHERE status != 'closed' GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
+        "SELECT domain, COUNT(*) AS cnt FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
       ),
       neonQuery<{ bucket: string; cnt: string }>(
         `SELECT ${regionBucketCase('location_country')} AS bucket, COUNT(*) AS cnt
-           FROM incidents WHERE status != 'closed' GROUP BY 1`,
+           FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1`,
       ),
       neonQuery<{ bucket: string; cnt: string }>(
         `SELECT CASE
@@ -166,7 +170,7 @@ async function loadCoverage(): Promise<CoverageData | null> {
             WHEN corroboration->>'status' = 'single-source' THEN 'single-source'
             ELSE 'uncorroborated'
           END AS bucket, COUNT(*) AS cnt
-           FROM incidents WHERE status != 'closed' GROUP BY 1`,
+           FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1`,
       ),
     ])
 
@@ -291,10 +295,13 @@ export default async function IncidentsPage({
   const queryParams: unknown[] = []
   let paramIdx = 1
 
+  // Phase 4 (roc #158): 'proposed' and 'dismissed' rows are machine proposals — never public. Members
+  // see pending proposals in the block below; the public list and filters cannot select them.
+  conditions.push("status NOT IN ('proposed', 'dismissed')")
   // Default: show non-closed incidents (unless specifically filtering for closed)
   if (activeStatus === 'closed') {
     conditions.push("status = 'closed'")
-  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus)) {
+  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'proposed' && activeStatus !== 'dismissed') {
     conditions.push(`status = $${paramIdx++}`)
     queryParams.push(activeStatus)
   } else {
@@ -346,10 +353,10 @@ export default async function IncidentsPage({
         queryParams,
       ),
       neonQuery<{ sev_level: string; cnt: string }>(
-        "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status != 'closed' GROUP BY sev_level",
+        "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY sev_level",
       ),
       neonQuery<Incident>(
-        "SELECT * FROM incidents WHERE is_persistent = true AND status != 'closed' ORDER BY declared_at DESC LIMIT 5",
+        "SELECT * FROM incidents WHERE is_persistent = true AND status NOT IN ('closed', 'proposed', 'dismissed') ORDER BY declared_at DESC LIMIT 5",
       ),
       activeStatus !== 'closed'
         ? neonQuery<Incident>(
@@ -382,6 +389,25 @@ export default async function IncidentsPage({
   }
 
   const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage } = pageData
+
+  // Phase 4: pending machine proposals, members only (desk-api writes them; a person confirms here).
+  const session = await auth()
+  const isMember = Boolean(session?.user?.payloadMemberId)
+  const isAdmin = session?.user?.role === 'admin'
+  let proposed: Incident[] = []
+  let proposedError: string | null = null
+  if (isMember) {
+    try {
+      const { rows } = await neonQuery<Incident>(
+        `SELECT * FROM incidents WHERE status = 'proposed' AND proposed_by IS NOT NULL
+         ORDER BY severity DESC NULLS LAST, created_at DESC LIMIT 20`,
+      )
+      proposed = rows
+    } catch (e) {
+      console.error('incidents: proposals fetch failed:', e)
+      proposedError = 'Proposals could not be loaded just now.'
+    }
+  }
 
   const totalDocs = parseInt(countRow?.cnt || '0')
   const totalPages = Math.ceil(totalDocs / limit)
@@ -693,6 +719,66 @@ export default async function IncidentsPage({
           })}
         </div>
       </div>
+
+      {/* Proposed by the desk — members only (phase 4) */}
+      {isMember && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (proposed.length > 0 || proposedError) && (
+        <div style={{ marginBottom: '2rem' }}>
+          <h2
+            style={{
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              color: '#fbbf24',
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              marginBottom: '0.25rem',
+            }}
+          >
+            Proposed by the desk · awaiting a decision
+          </h2>
+          <p style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', margin: '0 0 0.75rem' }}>
+            Board rules proposed these from live desk items. Members only — nothing here is public until an admin confirms it.
+            {' '}<a href="/incidents/rules" style={{ color: 'var(--fg-muted)' }}>How the rules work</a>
+          </p>
+          {proposedError && (
+            <div style={{ fontSize: '0.8125rem', color: '#f59e0b', marginBottom: '0.75rem' }}>{proposedError}</div>
+          )}
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {proposed.map((inc) => {
+              const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
+              const dc = domainColors[inc.domain] || defaultDomain
+              const rule = (inc as unknown as { proposal_rule?: string | null }).proposal_rule || 'rule'
+              const payload = (inc as unknown as { proposal_payload?: { facts?: { basis?: string } } | null }).proposal_payload
+              const basis = payload?.facts?.basis
+              return (
+                <div
+                  key={inc.id}
+                  style={{
+                    border: '1px dashed rgba(251,191,36,0.55)',
+                    borderRadius: 'var(--radius)',
+                    background: 'rgba(251,191,36,0.04)',
+                    padding: '0.875rem 1rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', marginBottom: '0.35rem' }}>
+                    <span style={{ color: '#fbbf24', fontWeight: 700, letterSpacing: '0.05em' }}>PROPOSED</span>
+                    <span style={{ color: sc.color, fontWeight: 600 }}>{inc.sev_level}</span>
+                    <span style={{ color: dc.fg }}>{inc.domain}</span>
+                    <span style={{ color: 'var(--fg-faint)' }}>rule {rule}{basis ? ` · ${basis}` : ''}</span>
+                    {inc.location_name && <span style={{ color: 'var(--fg-faint)' }}>· {inc.location_name}</span>}
+                  </div>
+                  <a href={`/incidents/${inc.slug}`} style={{ color: 'var(--fg)', fontWeight: 600, textDecoration: 'none', fontSize: '0.9375rem' }}>
+                    {inc.title}
+                  </a>
+                  {inc.impact_summary && (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: '0.35rem 0 0', lineHeight: 1.5 }}>{inc.impact_summary}</p>
+                  )}
+                  {isAdmin && <ProposalActions id={inc.id} compact />}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Persistent Situations */}
       {persistentIncidents.length > 0 && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (
