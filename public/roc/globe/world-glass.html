@@ -976,7 +976,7 @@ function renderWatch() {
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
   el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + safeColor(w.color) + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
-  Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { activate(node, function () { var w = all[+node.dataset.i]; flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) { lookup[w.id]._id = w.id; showCard(lookup[w.id]); } }); });
+  Array.prototype.forEach.call(el.querySelectorAll('.w'), function (node) { activate(node, function () { var w = all[+node.dataset.i]; if (w.lon != null && w.lat != null) flyTo(w.lon, w.lat, w.h); if (w.id && lookup[w.id]) { lookup[w.id]._id = w.id; showCard(lookup[w.id]); } }); });
 }
 function kvs(rows) { return '<div class="kv">' + rows.filter(function (r) { return r[1] != null && r[1] !== ''; }).map(function (r) { return '<div>' + esc(r[0]) + '</div><div>' + (r[2] ? r[1] : esc(r[1])) + '</div>'; }).join('') + '</div>'; }
 var cardRenderers = {};            // kind → function (payload) { return { html, at: [lon, lat] | null } }   (plugins, via WG)
