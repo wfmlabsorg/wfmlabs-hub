@@ -74,3 +74,6 @@ Turn layer conditions into **proposed** incidents that a person confirms. Nothin
   above it so the two never overlap.
 - **Scrubber**: whole bar is draggable (the sparkline no longer eats the pointer), drags redraw once per frame, and
   the 15-minute history refresh keeps the hour being replayed instead of snapping to LIVE.
+- **Tour (later the same day)**: a bar at the top names the stop (kind · title · why it is a story), with ◀ ▶, pause/
+  resume, slow/normal/fast dwell, ✕; ← → space Esc work too; touching the globe pauses instead of ending the tour.
+- **Scrollbars** inside the layer list, watch list and card are thin and dark.
