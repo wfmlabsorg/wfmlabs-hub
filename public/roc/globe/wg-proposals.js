@@ -58,7 +58,7 @@ function loadProposals(src) {
   loadProposals.src = src;
   return fetch('/api/desk-proposals', { signal: AbortSignal.timeout(20000) })
     .then(function (r) {
-      if (r.status === 401) { src.entities.removeAll(); WG.watch('proposals', []); WG.feed('proposals', true, 0, null, 'members only — sign in to see proposals'); return null; }
+      if (r.status === 401) { src.entities.removeAll(); WG.watch('proposals', []); WG.feed('proposals', true, 0, null, 'proposals read failed (401) — gate returned'); return null; }
       return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error((d && d.error) || ('HTTP ' + r.status)); return d; });
     })
     .then(function (d) {
@@ -91,6 +91,6 @@ WG.addLayer({ id: 'proposals', label: 'Proposed incidents', color: AMBER, on: tr
 /* key: appended, not edited */
 try {
   var lg = document.getElementById('legend');
-  if (lg) { var div = document.createElement('div'); div.innerHTML = '<div class="row"><span><b style="color:' + AMBER + '">◌</b> proposed incident (dashed, members only) — rules proposed, a person decides</span></div>'; while (div.firstChild) lg.appendChild(div.firstChild); }
+  if (lg) { var div = document.createElement('div'); div.innerHTML = '<div class="row"><span><b style="color:' + AMBER + '">◌</b> proposed incident (dashed) — a desk rule proposed it, a person decides</span></div>'; while (div.firstChild) lg.appendChild(div.firstChild); }
 } catch (e) { /* key is decoration */ }
 })();
