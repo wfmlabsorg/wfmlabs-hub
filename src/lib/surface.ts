@@ -120,7 +120,7 @@ const COMMUNITY_NAV = [
 // 2026-10-11 (Ted): "get rid of those risk maps off the menu. They add nothing." The twelve pages stay by
 // URL; nothing links them. The landing is World Glass now, so the first entry is the board itself.
 const TRAVELRISK_NAV = [
-  { href: '/travelrisk', label: "God's Eye" },
+  { href: '/travelrisk', label: 'World Glass' },
   { href: '/incidents', label: 'Incidents' },
   { href: '/signals', label: 'Signals' },
   { href: '/briefs', label: 'Briefs' },
