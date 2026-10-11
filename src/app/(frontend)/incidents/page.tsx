@@ -1,6 +1,4 @@
 import React from 'react'
-import { auth } from '@/lib/auth'
-import { ProposalActions } from '@/components/incidents/ProposalActions'
 import { isMobile } from '@/lib/mobile'
 import { neonQuery } from '@/lib/neon'
 import { AutoRefresh } from '@/components/AutoRefresh'
@@ -295,13 +293,12 @@ export default async function IncidentsPage({
   const queryParams: unknown[] = []
   let paramIdx = 1
 
-  // Phase 4 (roc #158/#160): 'proposed' rows have their own block above the list; 'dismissed' ones are
-  // decision records and never list. ?status=proposed shows the proposals as the list itself.
-  conditions.push(activeStatus === 'proposed' ? "status <> 'dismissed'" : "status NOT IN ('proposed', 'dismissed')")
+  // Legacy 'proposed' / 'dismissed' rows (before api-075 — rules now open incidents directly) never list.
+  conditions.push("status NOT IN ('proposed', 'dismissed')")
   // Default: show non-closed incidents (unless specifically filtering for closed)
   if (activeStatus === 'closed') {
     conditions.push("status = 'closed'")
-  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'dismissed') {
+  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'proposed' && activeStatus !== 'dismissed') {
     conditions.push(`status = $${paramIdx++}`)
     queryParams.push(activeStatus)
   } else {
@@ -390,24 +387,6 @@ export default async function IncidentsPage({
 
   const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed } = pageData
 
-  // Phase 4: pending machine proposals — public (Ted, 2026-10-11); desk-api writes them, an admin decides here.
-  const session = await auth()
-  const isMember = true
-  const isAdmin = session?.user?.role === 'admin'
-  let proposed: Incident[] = []
-  let proposedError: string | null = null
-  {
-    try {
-      const { rows } = await neonQuery<Incident>(
-        `SELECT * FROM incidents WHERE status = 'proposed' AND proposed_by IS NOT NULL
-         ORDER BY severity DESC NULLS LAST, created_at DESC LIMIT 20`,
-      )
-      proposed = rows
-    } catch (e) {
-      console.error('incidents: proposals fetch failed:', e)
-      proposedError = 'Proposals could not be loaded just now.'
-    }
-  }
 
   const totalDocs = parseInt(countRow?.cnt || '0')
   const totalPages = Math.ceil(totalDocs / limit)
@@ -706,66 +685,6 @@ export default async function IncidentsPage({
           })}
         </div>
       </div>
-
-      {/* Proposed by the desk — public (phase 4) */}
-      {isMember && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (proposed.length > 0 || proposedError) && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h2
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: '#fbbf24',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '0.25rem',
-            }}
-          >
-            Proposed by the desk · awaiting a decision
-          </h2>
-          <p style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', margin: '0 0 0.75rem' }}>
-            Board rules proposed these from live desk items. Marked PROPOSED until an admin confirms (it becomes an incident) or dismisses it.
-            {' '}<a href="/incidents/rules" style={{ color: 'var(--fg-muted)' }}>How the rules work</a>
-          </p>
-          {proposedError && (
-            <div style={{ fontSize: '0.8125rem', color: '#f59e0b', marginBottom: '0.75rem' }}>{proposedError}</div>
-          )}
-          <div style={{ display: 'grid', gap: '0.75rem' }}>
-            {proposed.map((inc) => {
-              const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
-              const dc = domainColors[inc.domain] || defaultDomain
-              const rule = (inc as unknown as { proposal_rule?: string | null }).proposal_rule || 'rule'
-              const payload = (inc as unknown as { proposal_payload?: { facts?: { basis?: string } } | null }).proposal_payload
-              const basis = payload?.facts?.basis
-              return (
-                <div
-                  key={inc.id}
-                  style={{
-                    border: '1px dashed rgba(251,191,36,0.55)',
-                    borderRadius: 'var(--radius)',
-                    background: 'rgba(251,191,36,0.04)',
-                    padding: '0.875rem 1rem',
-                  }}
-                >
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', marginBottom: '0.35rem' }}>
-                    <span style={{ color: '#fbbf24', fontWeight: 700, letterSpacing: '0.05em' }}>PROPOSED</span>
-                    <span style={{ color: sc.color, fontWeight: 600 }}>{inc.sev_level}</span>
-                    <span style={{ color: dc.fg }}>{inc.domain}</span>
-                    <span style={{ color: 'var(--fg-faint)' }}>rule {rule}{basis ? ` · ${basis}` : ''}</span>
-                    {inc.location_name && <span style={{ color: 'var(--fg-faint)' }}>· {inc.location_name}</span>}
-                  </div>
-                  <a href={`/incidents/${inc.slug}`} style={{ color: 'var(--fg)', fontWeight: 600, textDecoration: 'none', fontSize: '0.9375rem' }}>
-                    {inc.title}
-                  </a>
-                  {inc.impact_summary && (
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: '0.35rem 0 0', lineHeight: 1.5 }}>{inc.impact_summary}</p>
-                  )}
-                  {isAdmin && <ProposalActions id={inc.id} compact />}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
 
       {/* Persistent Situations */}
       {persistentIncidents.length > 0 && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (

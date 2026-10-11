@@ -8,7 +8,7 @@ const VALID_DOMAINS = [
 ]
 const VALID_STATUSES = [
   'detected', 'declared', 'open', 'validated', 'escalated',
-  'de-escalated', 'resolving', 'closed', 'reopened', 'proposed',
+  'de-escalated', 'resolving', 'closed', 'reopened',
 ]
 
 export async function GET(req: Request) {
@@ -22,9 +22,8 @@ export async function GET(req: Request) {
   const persistent = url.searchParams.get('persistent')
   const section = url.searchParams.get('section') // 'active', 'closed', 'persistent'
 
-  // Phase 4 (roc #158/#160): 'proposed' rows are public but are not incidents yet — they come back only
-  // when asked for (?status=proposed) and never inside section=active. 'dismissed' never lists.
-  const conditions: string[] = [status === 'proposed' ? "status <> 'dismissed'" : "status NOT IN ('proposed', 'dismissed')"]
+  // Legacy 'proposed' / 'dismissed' rows (before api-075 — rules open incidents directly now) never list.
+  const conditions: string[] = ["status NOT IN ('proposed', 'dismissed')"]
   const params: (string | number | boolean)[] = []
   let paramIdx = 1
 
