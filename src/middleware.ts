@@ -38,6 +38,15 @@ const PUBLIC_PREFIXES = [
   '/incidents',
   // 2026-10-11 (Ted): the signals feed is public — "remove that sign in so I can see everything on the page".
   '/signals',
+  // 2026-10-11 (Ted): "uncover the rest — APIs, Signals, Briefs, etc". The ops/intel surfaces read like the
+  // incidents page: public. Community surfaces (chat, members, me, discussions, articles, research, wiki)
+  // stay members-only until Ted says otherwise.
+  '/briefs',
+  '/compass',
+  '/data-sources',
+  '/scenarios',
+  '/frameworks',
+  '/tools',
   '/_next/',
   '/favicon',
   '/admin',
