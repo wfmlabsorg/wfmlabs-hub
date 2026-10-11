@@ -6,7 +6,7 @@ import { neonQuery } from '@/lib/neon'
 import { AutoRefresh } from '@/components/AutoRefresh'
 import { DataUnavailable } from '@/components/DataUnavailable'
 import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
-import { CoveragePanel, type DistroItem } from '@/components/incidents/CoveragePanel'
+import type { DistroItem } from '@/components/incidents/CoveragePanel'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
@@ -363,7 +363,7 @@ export default async function IncidentsPage({
             "SELECT * FROM incidents WHERE status = 'closed' ORDER BY closed_at DESC NULLS LAST LIMIT 10",
           )
         : Promise.resolve({ rows: [] as Incident[], rowCount: 0 }),
-      loadCoverage(),
+      Promise.resolve(null as CoverageData | null),   // coverage panel removed from this page 2026-10-11
     ])
     pageData = { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage }
   } catch (e) {
@@ -388,7 +388,7 @@ export default async function IncidentsPage({
     )
   }
 
-  const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage } = pageData
+  const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed } = pageData
 
   // Phase 4: pending machine proposals — public (Ted, 2026-10-11); desk-api writes them, an admin decides here.
   const session = await auth()
@@ -528,21 +528,8 @@ export default async function IncidentsPage({
         })}
       </div>
 
-      {/* Coverage / balance overview */}
-      {coverage && (
-        <CoveragePanel
-          windowDays={COVERAGE_WINDOW_DAYS}
-          totalSignals={coverage.totalSignals}
-          totalOpenIncidents={coverage.totalOpenIncidents}
-          needsValidation={coverage.needsValidation}
-          signalsByRegion={coverage.signalsByRegion}
-          signalsByCategory={coverage.signalsByCategory}
-          incidentsByDomain={coverage.incidentsByDomain}
-          incidentsByRegion={coverage.incidentsByRegion}
-          corroboration={coverage.corroboration}
-        />
-      )}
-
+      {/* 2026-10-11 (Ted): the coverage / signals-by-category box is gone from here — incidents come first.
+          Signals have their own page (/signals), now public. */}
       {/* Filters: domain + status + corroboration */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
         {/* Domain filter */}
