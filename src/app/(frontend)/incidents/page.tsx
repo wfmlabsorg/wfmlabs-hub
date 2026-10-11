@@ -295,13 +295,13 @@ export default async function IncidentsPage({
   const queryParams: unknown[] = []
   let paramIdx = 1
 
-  // Phase 4 (roc #158): 'proposed' and 'dismissed' rows are machine proposals — never public. Members
-  // see pending proposals in the block below; the public list and filters cannot select them.
-  conditions.push("status NOT IN ('proposed', 'dismissed')")
+  // Phase 4 (roc #158/#160): 'proposed' rows have their own block above the list; 'dismissed' ones are
+  // decision records and never list. ?status=proposed shows the proposals as the list itself.
+  conditions.push(activeStatus === 'proposed' ? "status <> 'dismissed'" : "status NOT IN ('proposed', 'dismissed')")
   // Default: show non-closed incidents (unless specifically filtering for closed)
   if (activeStatus === 'closed') {
     conditions.push("status = 'closed'")
-  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'proposed' && activeStatus !== 'dismissed') {
+  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus) && activeStatus !== 'dismissed') {
     conditions.push(`status = $${paramIdx++}`)
     queryParams.push(activeStatus)
   } else {
@@ -390,13 +390,13 @@ export default async function IncidentsPage({
 
   const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage } = pageData
 
-  // Phase 4: pending machine proposals, members only (desk-api writes them; a person confirms here).
+  // Phase 4: pending machine proposals — public (Ted, 2026-10-11); desk-api writes them, an admin decides here.
   const session = await auth()
-  const isMember = Boolean(session?.user?.payloadMemberId)
+  const isMember = true
   const isAdmin = session?.user?.role === 'admin'
   let proposed: Incident[] = []
   let proposedError: string | null = null
-  if (isMember) {
+  {
     try {
       const { rows } = await neonQuery<Incident>(
         `SELECT * FROM incidents WHERE status = 'proposed' AND proposed_by IS NOT NULL
@@ -720,7 +720,7 @@ export default async function IncidentsPage({
         </div>
       </div>
 
-      {/* Proposed by the desk — members only (phase 4) */}
+      {/* Proposed by the desk — public (phase 4) */}
       {isMember && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (proposed.length > 0 || proposedError) && (
         <div style={{ marginBottom: '2rem' }}>
           <h2
@@ -736,7 +736,7 @@ export default async function IncidentsPage({
             Proposed by the desk · awaiting a decision
           </h2>
           <p style={{ fontSize: '0.75rem', color: 'var(--fg-faint)', margin: '0 0 0.75rem' }}>
-            Board rules proposed these from live desk items. Members only — nothing here is public until an admin confirms it.
+            Board rules proposed these from live desk items. Marked PROPOSED until an admin confirms (it becomes an incident) or dismisses it.
             {' '}<a href="/incidents/rules" style={{ color: 'var(--fg-muted)' }}>How the rules work</a>
           </p>
           {proposedError && (
