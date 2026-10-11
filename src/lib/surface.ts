@@ -105,7 +105,7 @@ const COMMUNITY_NAV = [
 // community.wfmlabs.com renders exactly what it rendered before. Demotion is
 // not deletion.
 //
-// `/travelrisk/risk` is new: the index of the twelve per-domain risk maps.
+// `/travelrisk/risk` (twelve per-domain maps) is unlinked since 2026-10-11 — reachable by URL only.
 //
 // RECOMMENDED, NOT CUT — flagged for Ted rather than removed unilaterally:
 //   · `/roc` — the OpenMCT operations centre, 13 dashboards about the
@@ -117,9 +117,10 @@ const COMMUNITY_NAV = [
 //     the surface, and the fix is brief framing (AGENTS fleet), not nav.
 //   · `/data-sources` — KEEP. On a surface whose entire argument is
 //     traceability, the page naming where the data comes from is load-bearing.
+// 2026-10-11 (Ted): "get rid of those risk maps off the menu. They add nothing." The twelve pages stay by
+// URL; nothing links them. The landing is World Glass now, so the first entry is the board itself.
 const TRAVELRISK_NAV = [
-  { href: '/travelrisk#board', label: 'Risk Board' },
-  { href: '/travelrisk/risk', label: 'Risk Maps' },
+  { href: '/travelrisk', label: "God's Eye" },
   { href: '/incidents', label: 'Incidents' },
   { href: '/signals', label: 'Signals' },
   { href: '/briefs', label: 'Briefs' },
