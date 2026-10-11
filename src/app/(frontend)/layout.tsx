@@ -37,7 +37,6 @@ const TRAVELRISK_FOOTER: FooterGroup[] = [
     title: 'Travel Risk',
     links: [
       { href: '/travelrisk/classic#board', label: 'Risk board (classic)' },
-      { href: '/travelrisk/risk', label: 'Risk maps' },
       { href: '/incidents', label: 'Incidents' },
       { href: '/signals', label: 'Signals' },
       { href: '/briefs', label: 'Briefs' },

@@ -36,6 +36,8 @@ const PUBLIC_PREFIXES = [
   '/api/',
   '/roc/',
   '/incidents',
+  // 2026-10-11 (Ted): the signals feed is public — "remove that sign in so I can see everything on the page".
+  '/signals',
   '/_next/',
   '/favicon',
   '/admin',

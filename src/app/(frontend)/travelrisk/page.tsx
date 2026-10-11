@@ -66,7 +66,6 @@ export default async function TravelRiskPage() {
       )}
       <span style={{ marginLeft: 'auto', display: 'flex', gap: '0.9rem', flexWrap: 'wrap' }}>
         <a href="/incidents/rules" style={link}>How incidents open</a>
-        <a href="/travelrisk/risk" style={link}>Risk maps</a>
         <a href={BOARD} style={link}>Full screen ↗</a>
         <a href="/travelrisk/classic" style={{ ...link, color: 'var(--fg-faint)' }}>Classic view</a>
       </span>
