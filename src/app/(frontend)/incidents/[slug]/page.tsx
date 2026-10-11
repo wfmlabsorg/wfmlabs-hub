@@ -5,7 +5,6 @@ import config from '@payload-config'
 import { auth } from '@/lib/auth'
 import { ChatPanel } from '@/components/chat'
 import { IncidentAdminActions } from '@/components/incidents/IncidentAdminActions'
-import { ProposalActions } from '@/components/incidents/ProposalActions'
 import { IncidentCommunityValidation } from '@/components/incidents/IncidentCommunityValidation'
 import { CorroborationBadge, CorroborationSources } from '@/components/incidents/CorroborationBadge'
 import { IncidentEvidencePanel } from '@/components/incidents/IncidentEvidencePanel'
@@ -200,10 +199,10 @@ export default async function IncidentDetailPage({
 
   const incident = incidentRows[0]
   if (!incident) notFound()
-  // Phase 4: a proposed row is public, marked PROPOSED (Ted, 2026-10-11). A dismissed one is a decision
-  // record — members only; to the public it does not exist (404, not 403, so the URL leaks nothing).
-  const isProposal = incident.status === 'proposed' || incident.status === 'dismissed'
-  if (incident.status === 'dismissed' && !session?.user?.payloadMemberId) notFound()
+  // Legacy rows (before api-075): 'proposed' / 'dismissed' are not incidents — members only; 404 to the public.
+  const isLegacyProposal = incident.status === 'proposed' || incident.status === 'dismissed'
+  if (isLegacyProposal && !session?.user?.payloadMemberId) notFound()
+  const deskOpened = String(incident.declared_by || '').startsWith('desk-rules')
 
   // Fetch timeline — degrades to a visible "unavailable" note rather than failing the page.
   const timeline = await neonQuery<TimelineEntry>(
@@ -730,35 +729,21 @@ export default async function IncidentDetailPage({
         </div>
       )}
 
-      {/* ── Proposal (phase 4): members see it, admins decide ── */}
-      {isProposal && (
-        <div
-          style={{
-            border: '1px dashed rgba(251,191,36,0.55)',
-            borderRadius: 'var(--radius)',
-            background: 'rgba(251,191,36,0.05)',
-            padding: '1rem 1.25rem',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fbbf24', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>
-            {incident.status === 'proposed' ? 'PROPOSED BY THE DESK · AWAITING A DECISION' : 'DISMISSED PROPOSAL'}
+      {/* ── Opened by the desk: which rule, on what basis (api-075) ── */}
+      {deskOpened && !isLegacyProposal && (() => {
+        const x = incident as unknown as { proposal_rule?: string | null; proposal_payload?: { facts?: { basis?: string }; modes?: string[] } | null }
+        const basis = x.proposal_payload?.facts?.basis
+        const modes = x.proposal_payload?.modes?.join(' · ')
+        return (
+          <div style={{ border: '1px solid rgba(34,211,238,0.35)', borderRadius: 'var(--radius)', background: 'rgba(34,211,238,0.04)', padding: '0.75rem 1rem', marginBottom: '1.5rem', fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+            <span style={{ color: '#22d3ee', fontWeight: 700, letterSpacing: '0.05em', fontSize: '0.6875rem' }}>OPENED BY THE DESK</span>
+            {' '}rule {x.proposal_rule || '?'}{basis ? ` · basis ${basis}` : ''}{modes ? ` · affects ${modes}` : ''}. <a href="/incidents/rules" style={{ color: 'var(--fg-muted)' }}>How the rules work</a>. Not an incident? An admin can close it below; the alert email carries a one-tap close.
           </div>
-          <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: 0, lineHeight: 1.5 }}>
-            {(() => {
-              const x = incident as unknown as { proposal_rule?: string | null; proposed_by?: string | null; decided_by?: string | null; decided_at?: string | null; proposal_payload?: { facts?: { basis?: string } } | null }
-              const basis = x.proposal_payload?.facts?.basis
-              return incident.status === 'proposed'
-                ? `Rule ${x.proposal_rule || '?'} (${x.proposed_by || 'desk-rules'}) proposed this from live desk items${basis ? ` — basis ${basis}` : ''}. It becomes an incident when an admin confirms it.`
-                : `Dismissed by ${x.decided_by || '?'}${x.decided_at ? ` on ${new Date(x.decided_at).toISOString().slice(0, 10)}` : ''}${incident.close_reason ? ` — ${incident.close_reason}` : ''}.`
-            })()}
-          </p>
-          {isAdmin && incident.status === 'proposed' && <ProposalActions id={incident.id} />}
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Admin Actions ── */}
-      {isAdmin && !isProposal && (
+      {isAdmin && !isLegacyProposal && (
         <IncidentAdminActions slug={slug} sevLevel={incident.sev_level} status={incident.status} />
       )}
 
