@@ -105,6 +105,23 @@
     #legend.collapsed > :not(.h) { display: none; }
     #legend.collapsed .h { margin: 0; }
     #legend.hide { display: none; }
+    /* scrollbars inside panels: thin and dark, never the browser's white gutter */
+    #layers, #watch, #card { scrollbar-width: thin; scrollbar-color: rgba(56,189,248,0.35) transparent; }
+    #layers::-webkit-scrollbar, #watch::-webkit-scrollbar, #card::-webkit-scrollbar { width: 6px; height: 6px; }
+    #layers::-webkit-scrollbar-track, #watch::-webkit-scrollbar-track, #card::-webkit-scrollbar-track { background: transparent; }
+    #layers::-webkit-scrollbar-thumb, #watch::-webkit-scrollbar-thumb, #card::-webkit-scrollbar-thumb { background: rgba(56,189,248,0.35); border-radius: 3px; }
+    #layers::-webkit-scrollbar-thumb:hover, #watch::-webkit-scrollbar-thumb:hover, #card::-webkit-scrollbar-thumb:hover { background: rgba(56,189,248,0.6); }
+    /* tour bar: what the camera is on and why it is a story, with transport controls */
+    #tourbar { display: none; left: 50%; transform: translateX(-50%); top: 76px; max-width: calc(100% - 660px); padding: 6px 10px; font-size: 11px; align-items: center; gap: 8px; border-color: rgba(56,189,248,0.5); }
+    #tourbar.on { display: flex; }
+    #tourbar button { padding: 2px 7px; }
+    #tourbar .pos { color: var(--dim); white-space: nowrap; }
+    #tourbar .kind { font-size: 10px; letter-spacing: 0.08em; white-space: nowrap; }
+    #tourbar .ttl { color: #fff; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    #tourbar .why { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    #tourbar select { font: inherit; color: var(--ink); background: rgba(56,189,248,0.08); border: 1px solid var(--line); padding: 2px 4px; }
+    #tourbar .paused { color: #fbbf24; white-space: nowrap; }
+    body.tour-on #replaybanner { top: 118px; }
     #legend i { display: inline-block; width: 11px; height: 11px; }
     #credits { position: absolute; z-index: 5; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9.5px; color: rgba(160,190,220,0.55); white-space: nowrap; }
     #credits a { color: inherit; }
@@ -131,6 +148,7 @@
       #scrubber { left: 8px; right: 8px; transform: none; width: auto; min-width: 0; bottom: 52px; }
       #layers, #watch, #legend, #card { bottom: 104px !important; }
       #tools { flex-wrap: wrap; } #replaybanner { white-space: normal; left: 8px; right: 8px; transform: none; top: auto; bottom: 150px; }
+      #tourbar.on { left: 8px; right: 8px; transform: none; max-width: none; flex-wrap: wrap; top: auto; bottom: 196px; }
       .bracket, #reticle, #credits { display: none; }
     }
   </style>
@@ -169,6 +187,13 @@
     <button id="scrublive">LIVE</button><span id="scrubts">now · drag to replay 24 h</span>
   </div>
   <div id="replaybanner" class="panel">REPLAY · airports and events as they were at that hour · weather layers show NOW · an airport absent from the replay was fine <b>or</b> not read</div>
+  <div id="tourbar" class="panel" role="region" aria-label="Tour">
+    <button id="tourprev" title="Previous (←)">◀</button><button id="tourpause" title="Pause / resume (space)">❚❚</button><button id="tournext" title="Next (→)">▶</button>
+    <span class="pos" id="tourpos">—</span><span class="kind" id="tourkind"></span><span class="ttl" id="tourtitle"></span><span class="why" id="tourwhy"></span>
+    <span class="paused" id="tourpaused" style="display:none">paused</span>
+    <select id="tourspeed" aria-label="Tour speed"><option value="16000">slow</option><option value="9000" selected>normal</option><option value="5000">fast</option></select>
+    <button id="tourstop" title="End tour">✕</button>
+  </div>
   <div id="card" class="panel"><button class="x" id="cardx" aria-label="Close details">✕</button><div id="cardbody"></div></div>
 
   <div id="legend" class="panel">
@@ -697,19 +722,49 @@ function goLive() {
 /* =========================================================================
  * 6f. TOUR MODE — cycle the watch list; any input hands control back
  * ====================================================================== */
-var tourTimer = null, tourIdx = 0;
-function tourStep() {
+/* 2026-10-11 (Ted): the tour needs a title that says why the stop is a story, a speed, pause/resume
+ * and a way back. The bar at the top carries the watch entry (kind · title · why) for the current
+ * stop; ◀ ▶ step, ❚❚ pauses, the select sets the dwell; touching the globe PAUSES rather than ends. */
+var watchAll = [];                       // the watch list as rendered, in order — renderWatch fills it
+var tourOn = false, tourTimer = null, tourIdx = -1, tourPaused = false, tourMs = 9000;
+function $(id) { return document.getElementById(id); }
+function tourShow(i) {
   var nodes = document.querySelectorAll('#watchlist .w'); if (!nodes.length) return;
-  tourIdx = tourIdx % nodes.length; nodes[tourIdx].click(); tourIdx++;
+  tourIdx = ((i % nodes.length) + nodes.length) % nodes.length;
+  nodes[tourIdx].click();
+  var w = watchAll[tourIdx] || {};
+  $('tourpos').textContent = (tourIdx + 1) + '/' + nodes.length;
+  $('tourkind').textContent = w.kind || ''; $('tourkind').style.color = safeColor(w.color || '#94a3b8');
+  $('tourtitle').textContent = w.title || ''; $('tourtitle').title = w.title || '';
+  $('tourwhy').textContent = w.sub ? '— ' + w.sub : ''; $('tourwhy').title = w.sub || '';
 }
-function setTour(on) {
-  var btn = document.getElementById('tourbtn');
+function tourSchedule() {
   if (tourTimer) { clearInterval(tourTimer); tourTimer = null; }
-  if (on) { tourIdx = 0; tourStep(); tourTimer = setInterval(tourStep, 9000); }
-  btn.textContent = on ? '■ TOUR' : '▶ TOUR'; btn.setAttribute('aria-pressed', String(on));
+  if (tourOn && !tourPaused) tourTimer = setInterval(function () { tourShow(tourIdx + 1); }, REDUCED ? Math.max(tourMs, 12000) : tourMs);
+  $('tourpause').textContent = tourPaused ? '▶' : '❚❚'; $('tourpaused').style.display = tourPaused ? '' : 'none';
 }
-['mousedown', 'wheel', 'touchstart', 'keydown'].forEach(function (ev) {
-  viewer.canvas.addEventListener(ev, function () { if (tourTimer) setTour(false); }, { passive: true });
+function tourPause(p) { if (!tourOn) return; tourPaused = p; tourSchedule(); }
+function setTour(on) {
+  tourOn = on; tourPaused = false;
+  $('tourbar').classList.toggle('on', on); document.body.classList.toggle('tour-on', on);
+  if (on) { tourIdx = -1; tourShow(0); }
+  tourSchedule();
+  var btn = $('tourbtn'); btn.textContent = on ? '■ TOUR' : '▶ TOUR'; btn.setAttribute('aria-pressed', String(on));
+}
+['mousedown', 'wheel', 'touchstart'].forEach(function (ev) {
+  viewer.canvas.addEventListener(ev, function () { if (tourOn && !tourPaused) tourPause(true); }, { passive: true });
+});
+$('tourprev').onclick = function () { tourPause(true); tourShow(tourIdx - 1); };
+$('tournext').onclick = function () { tourPause(true); tourShow(tourIdx + 1); };
+$('tourpause').onclick = function () { tourPause(!tourPaused); };
+$('tourstop').onclick = function () { setTour(false); };
+$('tourspeed').onchange = function () { tourMs = +this.value || 9000; tourSchedule(); };
+document.addEventListener('keydown', function (ev) {
+  if (!tourOn || /INPUT|SELECT|TEXTAREA/.test((ev.target && ev.target.tagName) || '')) return;
+  if (ev.key === 'ArrowLeft') { ev.preventDefault(); tourPause(true); tourShow(tourIdx - 1); }
+  else if (ev.key === 'ArrowRight') { ev.preventDefault(); tourPause(true); tourShow(tourIdx + 1); }
+  else if (ev.key === ' ') { ev.preventDefault(); tourPause(!tourPaused); }
+  else if (ev.key === 'Escape') setTour(false);
 });
 
 /* =========================================================================
@@ -919,6 +974,7 @@ function renderWatch() {
   var storyIcao = {}; watchItems.stories.forEach(function (w) { if (w.id && w.id.indexOf('sa:') === 0) storyIcao[w.id.slice(3)] = 1; });
   var plainAirports = watchItems.airports.filter(function (w) { return !(w.id && storyIcao[w.id.slice(3)]); });
   var all = Object.keys(watchItems).reduce(function (acc, k) { return acc.concat(k === 'airports' ? plainAirports : watchItems[k]); }, []).sort(function (a, b) { return b.rank - a.rank; }).slice(0, 12);
+  watchAll = all;
   var el = document.getElementById('watchlist');
   if (!all.length) { el.innerHTML = '<div class="s">Nothing above threshold in the feeds that answered.</div>'; return; }
   el.innerHTML = all.map(function (w, i) { return '<div class="w" role="button" tabindex="0" data-i="' + i + '"><div class="k" style="color:' + safeColor(w.color) + '">' + esc(w.kind) + '</div><div class="t">' + esc(w.title) + '</div><div class="s">' + esc(w.sub || '') + '</div></div>'; }).join('');
@@ -1021,7 +1077,7 @@ document.getElementById('scrubplay').onclick = function () {
   this.textContent = '■'; var i = replayIdx >= 0 && replayIdx < replayHist.length - 1 ? replayIdx : 0; enterReplay(i);
   replayTimer = setInterval(function () { i++; if (i >= replayHist.length) { goLive(); return; } enterReplay(i); }, REDUCED ? 2500 : 1100);
 };
-document.getElementById('tourbtn').onclick = function () { setTour(!tourTimer); };
+document.getElementById('tourbtn').onclick = function () { setTour(!tourOn); };
 /* Key and layer list share the left edge. With 17 layers the list ran under the key on laptop
  * heights (2026-10-11). The list now gets a max-height that leaves room for the key; the key folds
  * to its header or hides entirely (KEY button), and both remember the choice per browser. */
