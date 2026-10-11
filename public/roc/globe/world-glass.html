@@ -71,8 +71,8 @@
     #feeds .f.gap::before { content: "●"; color: var(--red); margin-right: 4px; }
     #feeds .f.wait::before { content: "●"; color: var(--dim); margin-right: 4px; }
 
-    #layers { top: 76px; left: 18px; width: 268px; padding: 12px 14px; font-size: 12px; }
-    .lay { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px dashed rgba(120,190,255,0.08); cursor: pointer; user-select: none; }
+    #layers { top: 76px; left: 18px; width: 268px; padding: 12px 14px; font-size: 12px; overflow: auto; } /* max-height set by fitPanels() so it never runs under the key */
+    .lay { display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(120,190,255,0.08); cursor: pointer; user-select: none; }
     .lay:last-child { border-bottom: 0; }
     .lay .sw { width: 12px; height: 12px; border: 1px solid currentColor; }
     .lay.off { opacity: 0.38; }
@@ -101,6 +101,10 @@
 
     #legend { bottom: 18px; left: 18px; width: 268px; padding: 10px 14px; font-size: 10.5px; color: var(--dim); }
     #legend .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+    #legend .h { cursor: pointer; }
+    #legend.collapsed > :not(.h) { display: none; }
+    #legend.collapsed .h { margin: 0; }
+    #legend.hide { display: none; }
     #legend i { display: inline-block; width: 11px; height: 11px; }
     #credits { position: absolute; z-index: 5; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9.5px; color: rgba(160,190,220,0.55); white-space: nowrap; }
     #credits a { color: inherit; }
@@ -109,10 +113,10 @@
     #tools button { font-size: 11px; padding: 3px 8px; white-space: nowrap; }
     #looks { display: inline-flex; } #looks button { border-right-width: 0; } #looks button:last-child { border-right-width: 1px; }
     button[aria-pressed="true"] { background: rgba(56,189,248,0.28); border-color: var(--cyan); color: #fff; }
-    #scrubber { left: 50%; transform: translateX(-50%); bottom: 26px; width: min(640px, calc(100% - 640px)); min-width: 420px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 11px; }
+    #scrubber { left: 50%; transform: translateX(-50%); bottom: 26px; width: clamp(420px, calc(100% - 720px), 640px); min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 11px; }
     #scrubwrap { position: relative; flex: 1; height: 30px; }
-    #spark { position: absolute; left: 0; top: 0; width: 100%; height: 22px; opacity: 0.85; }
-    #scrub { position: absolute; left: 0; right: 0; bottom: -2px; width: 100%; accent-color: #f472b6; }
+    #spark { position: absolute; left: 0; top: 0; width: 100%; height: 22px; opacity: 0.85; pointer-events: none; } /* the slider underneath takes the drag */
+    #scrub { position: absolute; left: 0; top: 0; width: 100%; height: 30px; margin: 0; accent-color: #f472b6; cursor: ew-resize; }
     #scrubts { min-width: 160px; color: var(--dim); white-space: nowrap; }
     #replaybanner { display: none; left: 50%; transform: translateX(-50%); top: 76px; padding: 7px 14px; font-size: 11px; color: #fbcfe8; border-color: rgba(244,114,182,0.5); white-space: nowrap; }
     #mobtabs { display: none; }
@@ -143,6 +147,7 @@
     <div id="feeds"></div>
     <div id="tools"><button id="tourbtn" aria-pressed="false" title="Cycle the watch list; any input stops it">▶ TOUR</button>
       <span id="looks" role="group" aria-label="Sensor look"><button data-look="normal" aria-pressed="true">EO</button><button data-look="nvg" aria-pressed="false">NVG</button><button data-look="flir" aria-pressed="false">FLIR</button><button data-look="crt" aria-pressed="false">CRT</button></span>
+      <button id="keybtn" aria-pressed="true" title="Show or hide the key">KEY</button>
       <button id="linkbtn" title="Copy a link to exactly this view">⧉ link</button></div>
     <div id="clock"><span id="rec"></span><span id="utc">—</span></div>
   </div>
@@ -167,13 +172,13 @@
   <div id="card" class="panel"><button class="x" id="cardx" aria-label="Close details">✕</button><div id="cardbody"></div></div>
 
   <div id="legend" class="panel">
-    <div class="h">Key</div>
+    <div class="h" id="keyhead" role="button" tabindex="0" aria-expanded="true">Key ▾</div>
     <div class="row"><i style="background:#ef4444"></i>airport degraded · column height = median delay</div>
     <div class="row"><i style="background:#18BC9C"></i>airport checked, normal</div>
     <div class="row"><i style="border:2px solid #94a3b8"></i>airport not checked (never drawn calm)</div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
-    <div class="row"><i style="background:#ef4444"></i>story flight cancelled (dashed) · <i style="background:#e879f9"></i>diverted · <i style="background:#f59e0b"></i>2 h+ late</div>
+    <div class="row"><i style="background:#ef4444"></i>flight event: diverted / emergency (solid) · cancelled (dashed) · <i style="background:#f59e0b"></i>delay 2 h+ (own layer)</div>
     <div class="row">hazard volumes and aircraft altitudes are exaggerated ×6</div>
   </div>
 
@@ -195,14 +200,18 @@ var feeds = {};                     // name → { ok, at, n, note }
 var lookup = {};                    // entity id → card payload
 var layerDefs = [
   { id: 'airports',  label: 'Airports & delays',    color: '#18BC9C', on: true },
-  { id: 'hazards',   label: 'Aviation hazards',     color: '#f59e0b', on: true },
+  // Defaults (Ted, 2026-10-11): what carries the posture is ON — airports & delays, flight events,
+  // flight delays, open incidents, cyclones (plus the nathaz and faa plugins). Weather volumes
+  // (SIGMETs, radar), live event dots and corridor arcs are a click away, not the first thing seen.
+  { id: 'hazards',   label: 'Aviation hazards (SIGMET)', color: '#f59e0b', on: false },
   { id: 'cyclones',  label: 'Tropical cyclones',    color: '#ec4899', on: true },
-  { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: true },
-  { id: 'events',    label: 'Live travel events',   color: '#f97316', on: true },
+  { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: false },
+  { id: 'events',    label: 'Live travel events',   color: '#f97316', on: false },
   { id: 'incidents', label: 'Open incidents',       color: '#ef4444', on: true },
-  { id: 'stories',   label: 'Story flights',        color: '#f472b6', on: true },
+  { id: 'stories',   label: 'Flight events',        color: '#ef4444', on: true },
+  { id: 'delays',    label: 'Flight delays (2 h+)', color: '#f59e0b', on: true },
   { id: 'flights',   label: 'All traffic (zoom)',   color: '#e2e8f0', on: false },
-  { id: 'arcs',      label: 'Disrupted corridors',  color: '#fb923c', on: true },
+  { id: 'arcs',      label: 'Disrupted corridors',  color: '#fb923c', on: false },
   { id: 'ir',        label: 'Satellite infrared',   color: '#cbd5e1', on: false },
   { id: 'lightning', label: 'Lightning density',    color: '#fde047', on: false },
   { id: 'tiles3d',   label: 'Photorealistic 3D',    color: '#86efac', on: false }
@@ -638,9 +647,14 @@ function loadHistory() {
   return fetch('/api/gev-history?hours=24', { signal: AbortSignal.timeout(30000) })
     .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
     .then(function (d) {
+      // The 15-min refresh used to snap the slider to LIVE and swap the buckets under a replay in
+      // progress (stale index, wrong sparkline bar). Keep the hour being viewed if it still exists.
+      var wasAt = replayIdx >= 0 && replayHist && replayHist[replayIdx] ? replayHist[replayIdx].t : null;
       replayHist = d.buckets || [];
-      var sl = document.getElementById('scrub'); sl.max = String(Math.max(0, replayHist.length - 1)); sl.value = sl.max; sl.disabled = !replayHist.length;
-      drawSpark(); feed('history', true, replayHist.length, d.meta && d.meta.generated_at, 'hourly sweeps, problem readings only');
+      var sl = document.getElementById('scrub'); sl.max = String(Math.max(0, replayHist.length - 1)); sl.disabled = !replayHist.length;
+      if (wasAt != null) { var k = -1; replayHist.forEach(function (b, i) { if (b.t === wasAt) k = i; }); if (k >= 0) enterReplay(k); else goLive(); }
+      else { sl.value = sl.max; drawSpark(); }
+      feed('history', true, replayHist.length, d.meta && d.meta.generated_at, 'hourly sweeps, problem readings only');
     })
     .catch(function (e) { feed('history', false, 0, null, String(e.message || e)); document.getElementById('scrubts').textContent = 'history unavailable'; });
 }
@@ -791,20 +805,24 @@ function flyover(lon, lat) {
  *     boards that are cancelled, diverted or ≥ 60 min late, live emergency squawks worldwide.
  *     Not the traffic picture: that is the separate "All traffic (zoom)" layer, off by default.
  * ====================================================================== */
-var STORY = { cancelled: '#ef4444', diverted: '#e879f9', delayed: '#f59e0b' };
+/* 2026-10-11 (Ted): a diversion (emergency landing, turbulence, injury) is an EVENT and reads red and
+ * solid; a cancellation is red dashed; a long delay is amber on its own layer so it can be switched off. */
+var STORY = { cancelled: '#ef4444', diverted: '#ef4444', delayed: '#f59e0b' };
 var REASON_COLOR = { operational: '#ef4444', faa: '#ef4444', sweep: '#f59e0b', cyclone: '#ec4899', news: '#a78bfa' };
 var ARCS_PER_AIRPORT = 10;
-function storyArc(src, id, a1, a2, col, dashed) {
+function storyArc(src, id, a1, a2, col, dashed, wide) {
   var g = new Cesium.EllipsoidGeodesic(Cesium.Cartographic.fromDegrees(a1[0], a1[1]), Cesium.Cartographic.fromDegrees(a2[0], a2[1]));
   var peak = Math.min(700000, g.surfaceDistance * 0.12), pts = [];
   for (var i = 0; i <= 32; i++) { var f = i / 32, p = g.interpolateUsingFraction(f); pts.push(Cesium.Cartesian3.fromRadians(p.longitude, p.latitude, Math.sin(f * Math.PI) * peak)); }
-  src.entities.add({ id: id, polyline: { positions: pts, width: dashed ? 1.8 : 2.2, material: dashed ? new Cesium.PolylineDashMaterialProperty({ color: C(col, 0.85), dashLength: 10 }) : C(col, 0.8) } });
+  src.entities.add({ id: id, polyline: { positions: pts, width: wide ? 3.6 : dashed ? 1.8 : 2.2,
+    material: wide ? new Cesium.PolylineGlowMaterialProperty({ color: C(col, 0.95), glowPower: 0.3 }) : dashed ? new Cesium.PolylineDashMaterialProperty({ color: C(col, 0.85), dashLength: 10 }) : C(col, 0.8) } });
 }
 function loadStories() {
   return fetch('/api/gev-story-flights', { signal: AbortSignal.timeout(25000) })
     .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'HTTP ' + r.status); return j; }); })
     .then(function (d) {
       var src = sources.stories; src.entities.removeAll(); var watch = [];
+      var dsrc = sources.delays; dsrc.entities.removeAll(); var nDelayed = 0;
       var byIcao = {}; (d.airports || []).forEach(function (a) { byIcao[a.icao] = a; });
       // airports with a story
       (d.airports || []).forEach(function (a) {
@@ -827,15 +845,16 @@ function loadStories() {
       (d.flights || []).forEach(function (f, i) {
         var home = byIcao[f.airport_icao]; if (!home) return;
         var id = 'sf:' + f.airport_icao + ':' + f.direction + ':' + f.flight_number, col = STORY[f.story_kind] || '#f59e0b';
-        if (src.entities.getById(id) || src.entities.getById(id + ':arc')) return;   // already drawn (Cesium throws on a duplicate id)
+        var tgt = f.story_kind === 'delayed' ? dsrc : src; if (f.story_kind === 'delayed') nDelayed++;
+        if (tgt.entities.getById(id) || tgt.entities.getById(id + ':arc')) return;   // already drawn (Cesium throws on a duplicate id)
         lookup[id] = { kind: 'storyFlight', f: f, home: home };
         var big = f.story_kind !== 'delayed' || (f.delay_min || 0) >= 120;
         if (big && f.other_lat != null && f.other_lon != null && (perAirport[f.airport_icao] = (perAirport[f.airport_icao] || 0) + 1) <= ARCS_PER_AIRPORT) {
           var from = f.direction === 'departure' ? [home.lon, home.lat] : [f.other_lon, f.other_lat], to = f.direction === 'departure' ? [f.other_lon, f.other_lat] : [home.lon, home.lat];
-          storyArc(src, id + ':arc', from, to, col, f.story_kind === 'cancelled');
+          storyArc(tgt, id + ':arc', from, to, col, f.story_kind === 'cancelled', f.story_kind === 'diverted');
         }
         if (f.pos_lat != null && f.pos_lon != null) {
-          src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(f.pos_lon, f.pos_lat, (f.pos_alt_ft || 0) * 0.3048 * EXAG),
+          tgt.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(f.pos_lon, f.pos_lat, (f.pos_alt_ft || 0) * 0.3048 * EXAG),
             billboard: { image: PLANE, color: C(col), scale: 0.75, rotation: f.pos_track != null ? -Cesium.Math.toRadians(f.pos_track) : 0, alignedAxis: Cesium.Cartesian3.UNIT_Z },
             label: { text: f.flight_number + (f.delay_min ? ' +' + f.delay_min + 'm' : ''), font: '11px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
               pixelOffset: new Cesium.Cartesian2(12, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.0e6) } });
@@ -855,9 +874,10 @@ function loadStories() {
       watchItems.stories = watch.sort(function (x, y) { return y.rank - x.rank; }).slice(0, 8); renderWatch();
       var m = d.meta || {}, nf = (d.flights || []).length;
       var sqFail = (d.meta && d.meta.failed) || [];
+      feed('delays', true, nDelayed, m.run_at, nDelayed + ' flight(s) ≥ 60 min late · arcs drawn at 2 h+');
       feed('stories', sqFail.length === 0, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : '') + (sqFail.length ? ' · GAP: ' + sqFail.join(', ') : ''));
     })
-    .catch(function (e) { feed('stories', false, 0, null, String(e.message || e)); });
+    .catch(function (e) { feed('stories', false, 0, null, String(e.message || e)); feed('delays', false, 0, null, String(e.message || e)); });
 }
 /* =========================================================================
  * 7. CHROME — layers, feed health, watch list, card, clock
@@ -989,7 +1009,11 @@ setInterval(loadStories, 2 * 60e3);
 setInterval(function () { if (irLayers.length) loadIR(); }, 10 * 60e3);
 setInterval(function () { if (ltLayer) loadLightning(); }, 5 * 60e3);
 setInterval(loadHistory, 15 * 60e3);
-document.getElementById('scrub').oninput = function () { var i = +this.value; if (replayHist && i >= replayHist.length - 1) goLive(); else enterReplay(i); };
+var scrubPending = null;   // a drag fires dozens of input events a second; redraw once per frame
+document.getElementById('scrub').oninput = function () {
+  var i = +this.value; if (scrubPending != null) { scrubPending = i; return; } scrubPending = i;
+  requestAnimationFrame(function () { var j = scrubPending; scrubPending = null; if (replayHist && j >= replayHist.length - 1) goLive(); else enterReplay(j); });
+};
 document.getElementById('scrublive').onclick = goLive;
 document.getElementById('scrubplay').onclick = function () {
   if (!replayHist || !replayHist.length) return;
@@ -998,6 +1022,23 @@ document.getElementById('scrubplay').onclick = function () {
   replayTimer = setInterval(function () { i++; if (i >= replayHist.length) { goLive(); return; } enterReplay(i); }, REDUCED ? 2500 : 1100);
 };
 document.getElementById('tourbtn').onclick = function () { setTour(!tourTimer); };
+/* Key and layer list share the left edge. With 17 layers the list ran under the key on laptop
+ * heights (2026-10-11). The list now gets a max-height that leaves room for the key; the key folds
+ * to its header or hides entirely (KEY button), and both remember the choice per browser. */
+var legendEl = document.getElementById('legend'), keyBtn = document.getElementById('keybtn'), keyHead = document.getElementById('keyhead');
+function fitPanels() {
+  var layers = document.getElementById('layers');
+  if (window.innerWidth <= 900) { layers.style.maxHeight = ''; return; }   // mobile: the sheet CSS rules
+  var lgH = legendEl.classList.contains('hide') ? 0 : legendEl.offsetHeight;
+  layers.style.maxHeight = Math.max(140, window.innerHeight - 76 - 18 - lgH - 12) + 'px';
+}
+function setKey(show) { legendEl.classList.toggle('hide', !show); keyBtn.setAttribute('aria-pressed', String(show)); try { localStorage.setItem('wg:key', show ? '1' : '0'); } catch (e) {} fitPanels(); }
+function setKeyCollapsed(c) { legendEl.classList.toggle('collapsed', c); keyHead.textContent = c ? 'Key ▸' : 'Key ▾'; keyHead.setAttribute('aria-expanded', String(!c)); try { localStorage.setItem('wg:keyc', c ? '1' : '0'); } catch (e) {} fitPanels(); }
+activate(keyHead, function () { setKeyCollapsed(!legendEl.classList.contains('collapsed')); });
+keyBtn.onclick = function () { setKey(legendEl.classList.contains('hide')); };
+(function () { var k = null, c = null; try { k = localStorage.getItem('wg:key'); c = localStorage.getItem('wg:keyc'); } catch (e) {}
+  setKey(k != null ? k === '1' : window.innerWidth >= 1150); setKeyCollapsed(c != null ? c === '1' : window.innerHeight < 820); })();
+window.addEventListener('resize', fitPanels); setTimeout(fitPanels, 1500); setInterval(fitPanels, 10e3);
 Array.prototype.forEach.call(document.querySelectorAll('#looks button'), function (b) { b.onclick = function () { setLook(b.dataset.look); }; });
 document.getElementById('linkbtn').onclick = function () {
   var btn = this; writeHash();

@@ -227,8 +227,8 @@ function loadRegions(src) {
 }
 
 WG.addLayer({ id: 'nathaz', label: 'Natural hazards', color: '#fb7185', on: true, refreshMs: 5 * 60e3, load: loadHazards });
-WG.addLayer({ id: 'rail', label: 'Rail disruption (BE)', color: RAIL, on: true, refreshMs: 5 * 60e3, load: loadRail });
-WG.addLayer({ id: 'opregions', label: 'Regional op-risk index', color: INDEX_HUE, on: true, refreshMs: 10 * 60e3, load: loadRegions });
+WG.addLayer({ id: 'rail', label: 'Rail disruption (BE)', color: RAIL, on: false, refreshMs: 5 * 60e3, load: loadRail });
+WG.addLayer({ id: 'opregions', label: 'Regional op-risk index', color: INDEX_HUE, on: false, refreshMs: 10 * 60e3, load: loadRegions });
 
 /* key + credits: appended, not edited, so the page's own markup stays untouched */
 try {

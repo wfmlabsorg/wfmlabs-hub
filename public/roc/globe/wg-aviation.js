@@ -243,6 +243,6 @@
     });
   }
 
-  WG.addLayer({ id: 'airspace', label: 'Airspace restrictions', color: '#eab308', on: true, refreshMs: 10 * 60e3, load: loadAirspace });
+  WG.addLayer({ id: 'airspace', label: 'Airspace restrictions', color: '#eab308', on: false, refreshMs: 10 * 60e3, load: loadAirspace });
   WG.addLayer({ id: 'faa', label: 'FAA airport programs', color: '#ef4444', on: true, refreshMs: 2 * 60e3, load: loadFaa });
 })();

@@ -63,3 +63,14 @@ Turn layer conditions into **proposed** incidents that a person confirms. Nothin
 - Corridor arcs use a curated list of busy routes, not route data.
 - On preview deployments, airports and incidents (which need the hub database) and live events (CORS-limited to the
   production hosts) show GAP. This is expected; production is unaffected.
+
+## 2026-10-11 — signal over noise pass (Ted)
+- **Defaults**: ON = airports & delays, flight events, flight delays (2 h+), open incidents, tropical cyclones, natural
+  hazards, FAA airport programs. OFF = SIGMET volumes, radar, live event dots, corridor arcs, airspace restrictions,
+  rail, regional op-risk index, traffic, IR, lightning, 3D. Everything stays one click away in the layer list.
+- **Flight events vs delays**: a diversion (emergency landing, turbulence, injury) and an emergency squawk are
+  EVENTS — red, solid, glowing arc. A cancellation is red dashed. Long delays are amber on their own `delays` layer.
+- **Key**: folds to its header, hides with the KEY button, remembers both per browser; the layer list is fitted
+  above it so the two never overlap.
+- **Scrubber**: whole bar is draggable (the sparkline no longer eats the pointer), drags redraw once per frame, and
+  the 15-minute history refresh keeps the hour being replayed instead of snapping to LIVE.
