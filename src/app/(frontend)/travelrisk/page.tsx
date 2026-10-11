@@ -15,7 +15,7 @@ import { isMobile } from '@/lib/mobile'
  * on a phone) the strip carries the open incidents and a button opens the board deliberately.
  */
 export const metadata: Metadata = {
-  title: "Travel Risk — God's Eye",
+  title: "Travel Risk — World Glass",
   description: 'Live business-travel risk: airports, flights, weather, hazards, rail and incidents on one globe, read from the travel desk.',
 }
 
@@ -51,7 +51,7 @@ export default async function TravelRiskPage() {
   const link: React.CSSProperties = { color: 'var(--fg-muted)', textDecoration: 'none', fontSize: '0.75rem', whiteSpace: 'nowrap' }
   const strip = (
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1rem', flexWrap: 'wrap', padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', background: '#060610', fontSize: '0.8125rem' }}>
-      <span style={{ fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.6875rem', color: '#22d3ee' }}>Travel Risk · God&apos;s Eye</span>
+      <span style={{ fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.6875rem', color: '#22d3ee' }}>Travel Risk · World Glass</span>
       {deskDown ? (
         <span style={{ color: '#f59e0b' }}>desk unreachable — the board below reads it directly</span>
       ) : (
