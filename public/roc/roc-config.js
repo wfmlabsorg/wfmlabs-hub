@@ -12,6 +12,7 @@
     ovixApi: 'https://ovix-api.tedlango.workers.dev',         // OVIX scoring + config worker
     newsIntel: 'https://news-intel.tedlango.workers.dev',     // news-intel RSS/clustering worker
     travelIntel: 'https://travel-intel.tedlango.workers.dev', // travel-intel transit/maritime worker
+    deskApi: 'https://desk-api.tedlango.workers.dev',         // the travel desk's one read API (items, posture, proposals)
     get: function () {
       if (!_configPromise) {
         _configPromise = fetch(API_BASE + '/api/ovix/config')

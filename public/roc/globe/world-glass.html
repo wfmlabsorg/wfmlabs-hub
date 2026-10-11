@@ -204,6 +204,7 @@
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
     <div class="row"><i style="background:#ef4444"></i>flight event: diverted / emergency (solid) · cancelled (dashed) · <i style="background:#f59e0b"></i>delay 2 h+ (own layer)</div>
+    <div class="row"><i style="border:2px solid #94a3b8;background:transparent"></i>hollow = approximate position (desk placed it at a city / country airport) · unplaced items are on the watch list only</div>
     <div class="row">hazard volumes and aircraft altitudes are exaggerated ×6</div>
   </div>
 
@@ -218,6 +219,7 @@
  * 0. STATE + SMALL HELPERS (esc/num/str/pick/fmtAgo come from airport-model.js)
  * ====================================================================== */
 var TI = (window.RocConfig && window.RocConfig.travelIntel) || 'https://travel-intel.tedlango.workers.dev';
+var DESK = (window.RocConfig && window.RocConfig.deskApi) || 'https://desk-api.tedlango.workers.dev';   // one source: the desk (api-074)
 var REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 var EXAG = 6;                       // vertical exaggeration for hazard volumes
 var viewer = null;
@@ -498,77 +500,68 @@ document.getElementById('radarplay').onclick = function () {
  * ====================================================================== */
 var TRAVEL_DOMAINS = { aviation: 1, transit: 1, roads: 1, maritime: 1, intel: 1 };
 function sevColor(s) { return s >= 9 ? C_SEVERE : s >= 7 ? C_MOD : '#94a3b8'; }
+/* 2026-10-11 (api-074): events and incidents come from THE DESK (desk-api /desk/items), the same clustered,
+ * re-scored items the alerts and the proposals use, so the map and the incidents page cannot disagree.
+ * A desk item with geo 'approx' (desk-api placed it at a monitored city or a country's main airport because the
+ * producer gave no coordinates) is drawn HOLLOW and says "approximate" on its card; geo 'none' stays off the
+ * globe and only appears on the watch list. */
+function deskWhere(i) { return [i.place, i.country].filter(function (v) { return v && String(v).trim(); }).join(', '); }
+function deskGeoNote(i) { return i.geo === 'approx' ? 'APPROXIMATE — placed at ' + String(i.approx_basis || '').replace(/^city:/, '').replace(/^country:/, 'country ') : i.geo === 'none' ? 'no coordinates — not on the globe' : null; }
 function loadEvents() {
-  return fetch(TI + '/api/travel/scores', { signal: AbortSignal.timeout(20000) })
+  var posture = fetch(DESK + '/desk/posture', { signal: AbortSignal.timeout(20000) }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+  return fetch(DESK + '/desk/items?layer=1&class=event,hazard&min_sev=5&limit=300', { signal: AbortSignal.timeout(20000) })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (d) {
+      posture.then(function (p) {
+        var t = p && (p.domains || []).filter(function (x) { return x.domain === 'travel'; })[0];
+        var lvl = t && t.level ? String(t.level).toUpperCase() : null, comp = t ? t.composite : null;
+        var lc = lvl === 'SEVERE' || lvl === 'CRITICAL' ? '#ef4444' : lvl === 'SIGNIFICANT' ? '#f97316' : lvl === 'ELEVATED' ? '#eab308' : '#18BC9C';
+        document.getElementById('posture').innerHTML = lvl ? '<span class="lvl" style="color:' + lc + '">' + esc(lvl) + '</span>' + (comp != null ? esc(comp) + '/10 composite' : '') : 'posture — (no travel reading)';
+      });
       var src = sources.events; src.entities.removeAll();
-      var lvl = d.level || '—', comp = d.composite;
-      var lc = lvl === 'SEVERE' || lvl === 'CRITICAL' ? '#ef4444' : lvl === 'SIGNIFICANT' ? '#f97316' : lvl === 'ELEVATED' ? '#eab308' : '#18BC9C';
-      document.getElementById('posture').innerHTML = '<span class="lvl" style="color:' + lc + '">' + esc(lvl) + '</span>' + (comp != null ? esc(comp) + '/10 composite' : '');
-      var STOPW = { the:1, and:1, for:1, with:1, from:1, amid:1, after:1, over:1, into:1, new:1, update:1, crisis:1, major:1, severe:1 };
-      function words(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(function (w) { return w.length > 2 && !STOPW[w]; }).map(function (w) { return w.replace(/(ies|es|s)$/, ''); }); }
-      function overlap(a, b) { var n = 0; a.forEach(function (w) { if (b.indexOf(w) !== -1) n++; }); return n / Math.max(1, Math.min(a.length, b.length)); }
-      var groups = [], n = 0, top = [];
-      (d.events || []).forEach(function (e, i) {
-        var lat = num(e.lat), lon = num(e.lon), sev = num(e.severity) || 0;
-        if (lat == null || lon == null || !TRAVEL_DOMAINS[e.domain]) return;
-        // the fleet emits near-duplicate titles for one event: group by lead country + domain + shared words
-        var lead = String(e.location || '').split(/,\s*/)[0], w = words(e.title);
-        if (groups.some(function (g) { return g.lead === lead && g.domain === e.domain && overlap(g.w, w) >= 0.34; })) return;
-        groups.push({ lead: lead, domain: e.domain, w: w }); n++;
-        var id = 'ev:' + i, col = sevColor(sev);
-        lookup[id] = { kind: 'event', e: e };
-        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 6 + Math.max(0, sev - 5), color: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 } });
-        if (sev >= 9) src.entities.add({ id: id + ':ring', position: Cesium.Cartesian3.fromDegrees(lon, lat),
-          ellipse: { semiMajorAxis: pulse(3000, 80000, 420000), semiMinorAxis: pulse(3000, 80000, 420000), material: C(col, 0.0001), outline: true, outlineColor: C(col, 0.8), outlineWidth: 2, height: 0 } });
-        if (sev >= 8) top.push({ rank: 50 + sev * 3, kind: String(e.domain || 'event').toUpperCase() + ' · SEV ' + sev, color: col, title: e.title, sub: (e.location ? e.location + ' · ' : '') + (e.source || '') + ' · ' + ago(e.timestamp), lon: lon, lat: lat, h: 2200000, id: id });
+      var n = 0, approx = 0, unplaced = 0, top = [];
+      (d.items || []).forEach(function (i) {
+        var lat = num(i.lat), lon = num(i.lon), sev = num(i.severity) || 0, col = sevColor(sev), id = 'ev:' + i.item_id;
+        lookup[id] = { kind: 'event', i: i };
+        if (lat == null || lon == null) { unplaced++; }
+        else {
+          n++; var hollow = i.geo === 'approx'; if (hollow) approx++;
+          src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 6 + Math.max(0, sev - 5), color: hollow ? C(col, 0.08) : C(col), outlineColor: hollow ? C(col) : Cesium.Color.BLACK, outlineWidth: hollow ? 2 : 1 } });
+          if (sev >= 9) src.entities.add({ id: id + ':ring', position: Cesium.Cartesian3.fromDegrees(lon, lat),
+            ellipse: { semiMajorAxis: pulse(3000, 80000, 420000), semiMinorAxis: pulse(3000, 80000, 420000), material: C(col, 0.0001), outline: true, outlineColor: C(col, 0.8), outlineWidth: 2, height: 0 } });
+        }
+        if (sev >= 7) top.push({ rank: 50 + sev * 3, kind: String(i.class === 'hazard' ? 'HAZARD' : (i.domain || 'event')).toUpperCase() + ' · SEV ' + sev + (i.n > 1 ? ' · ' + i.n + ' sources' : '') + (i.geo === 'approx' ? ' · approx.' : i.geo === 'none' ? ' · unplaced' : ''),
+          color: col, title: i.title, sub: (deskWhere(i) ? deskWhere(i) + ' · ' : '') + (i.why || i.source || '') , lon: lon, lat: lat, h: 1.6e6, id: id });
       });
       watchItems.events = top.sort(function (a, b) { return b.rank - a.rank; }).slice(0, 6);
-      feed('events', true, n, d.updatedAt, 'scored live events with coordinates');
+      feed('events', true, n, d.generated_at, 'desk items (events + hazards, sev ≥ 5)' + (approx ? ' · ' + approx + ' approximate' : '') + (unplaced ? ' · ' + unplaced + ' unplaced (watch list only)' : ''));
       renderWatch();
     })
-    .catch(function (e) { feed('events', false, 0, null, String(e.message || e)); document.getElementById('posture').textContent = 'posture — (travel-intel unreachable)'; });
+    .catch(function (e) { feed('events', false, 0, null, String(e.message || e)); document.getElementById('posture').textContent = 'posture — (desk unreachable)'; });
 }
 function loadIncidents() {
-  return fetch('/api/incidents?section=active&limit=100', { signal: AbortSignal.timeout(15000) })
+  return fetch(DESK + '/desk/items?layer=all&class=incident&exclude=proposed&limit=200', { signal: AbortSignal.timeout(20000) })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     .then(function (d) {
-      var src = sources.incidents; src.entities.removeAll(); var n = 0, top = [];
-      (d.docs || []).forEach(function (p) {
-        var st = String(p.status || '').toLowerCase(); if (st === 'closed' || st === 'resolved' || st === 'proposed' || st === 'dismissed') return;   // proposals have their own (members-only) layer
-        var lat = num(p.location_lat), lon = num(p.location_lon); if (lat == null || lon == null) return;
-        var sev = String(p.sev_level || '').toUpperCase(), col = sev === 'SEV1' ? C_SEVERE : sev === 'SEV2' ? C_MOD : '#94a3b8', id = 'in:' + (p.slug || p.id);
-        lookup[id] = { kind: 'incident', p: p }; n++;
-        src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 13, color: C(col, 0.2), outlineColor: C(col), outlineWidth: 2.5 } });
-        if (sev === 'SEV1' || sev === 'SEV2') top.push({ rank: sev === 'SEV1' ? 85 : 65, kind: 'INCIDENT · ' + sev, color: col, title: p.title || p.slug, sub: (p.region_name || '') + ' · opened ' + ago(p.createdAt || p.opened_at), lon: lon, lat: lat, h: 1500000, id: id });
+      var src = sources.incidents; src.entities.removeAll(); var n = 0, approx = 0, unplaced = 0, top = [];
+      (d.items || []).forEach(function (i) {
+        var st = String(i.status || '').toLowerCase(); if (st === 'closed' || st === 'resolved' || st === 'proposed' || st === 'dismissed') return;
+        var lat = num(i.lat), lon = num(i.lon), sev = String(i.sev_level || '').toUpperCase(), col = sev === 'SEV1' ? C_SEVERE : sev === 'SEV2' ? C_MOD : '#94a3b8', id = 'in:' + i.item_id;
+        lookup[id] = { kind: 'incident', i: i };
+        if (lat == null || lon == null) { unplaced++; }
+        else {
+          n++; var hollow = i.geo === 'approx'; if (hollow) approx++;
+          src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(lon, lat), point: { pixelSize: 13, color: hollow ? C(col, 0.04) : C(col, 0.2), outlineColor: C(col), outlineWidth: hollow ? 1.5 : 2.5 } });
+        }
+        top.push({ rank: sev === 'SEV1' ? 85 : sev === 'SEV2' ? 65 : 40, kind: 'INCIDENT · ' + sev + (i.layer === 2 ? ' · layer 2' : '') + (i.geo === 'approx' ? ' · approx.' : i.geo === 'none' ? ' · unplaced' : ''), color: col, title: i.title,
+          sub: (deskWhere(i) ? deskWhere(i) + ' · ' : '') + 'opened ' + ago(i.onset_at) + ' ago' + (i.why ? ' · ' + i.why : ''), lon: lon, lat: lat, h: 1.6e6, id: id });
       });
       watchItems.incidents = top.sort(function (a, b) { return b.rank - a.rank; }).slice(0, 4);
-      feed('incidents', true, n, null, 'open, with coordinates'); renderWatch();
+      feed('incidents', true, n, d.generated_at, 'open incidents from the desk' + (approx ? ' · ' + approx + ' approximate' : '') + (unplaced ? ' · ' + unplaced + ' unplaced' : '')); renderWatch();
     })
     .catch(function (e) { feed('incidents', false, 0, null, String(e.message || e)); });
 }
 
-/* =========================================================================
- * 6b. LIVE AIRCRAFT — adsb.lol, regional on zoom (gev-002)
- *     Only below FLIGHT_CEIL of camera height; altitude uses the same ×EXAG as the hazard volumes,
- *     so an aircraft sits inside the SIGMET it is flying through. Emergency squawks are ringed and
- *     go to the top of the watch list.
- * ====================================================================== */
-var FLIGHT_CEIL = 2600000, flightTimer = null, lastFlightKey = '';
-var PLANE = (function () {
-  var cv = document.createElement('canvas'); cv.width = cv.height = 32; var g = cv.getContext('2d');
-  g.translate(16, 16); g.fillStyle = '#ffffff';
-  g.beginPath(); g.moveTo(0, -14); g.lineTo(2.2, -4); g.lineTo(13, 3); g.lineTo(13, 6); g.lineTo(2.2, 2); g.lineTo(1.6, 10); g.lineTo(5, 13); g.lineTo(5, 15);
-  g.lineTo(0, 13.5); g.lineTo(-5, 15); g.lineTo(-5, 13); g.lineTo(-1.6, 10); g.lineTo(-2.2, 2); g.lineTo(-13, 6); g.lineTo(-13, 3); g.lineTo(-2.2, -4); g.closePath(); g.fill();
-  return cv;
-})();
-function altColor(a) { return a.emergency ? '#ef4444' : a.ground ? '#64748b' : a.alt_ft == null ? '#94a3b8' : a.alt_ft < 10000 ? '#67e8f9' : a.alt_ft < 30000 ? '#a7f3d0' : '#f8fafc'; }
-function cameraCenter() {
-  var c = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(viewer.canvas.clientWidth / 2, viewer.canvas.clientHeight / 2));
-  if (!c) return null; var g = Cesium.Cartographic.fromCartesian(c);
-  return { lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude), h: viewer.camera.positionCartographic.height };
-}
 function loadFlights(force) {
   if (!layerOn('flights')) return Promise.resolve();
   var c = cameraCenter();
@@ -710,7 +703,7 @@ function enterReplay(i) {
   });
   // events: show only those first seen at or before this hour (and within 6 h of it)
   var tEnd = Date.parse(b.t) + 3600e3;
-  sources.events.entities.values.forEach(function (e) { var x = lookup[String(e.id).replace(/:ring$/, '')]; if (x && x.e) { var ts = Date.parse(x.e.timestamp); e.show = isFinite(ts) ? (ts <= tEnd && ts > tEnd - 6 * 3600e3) : false; } });
+  sources.events.entities.values.forEach(function (e) { var x = lookup[String(e.id).replace(/:ring$/, '')]; if (x && x.i) { var ts = Date.parse(x.i.seen_at); e.show = isFinite(ts) ? (ts <= tEnd && ts > tEnd - 6 * 3600e3) : false; } });
   document.getElementById('scrubts').textContent = 'REPLAY ' + b.t.slice(5, 16).replace('T', ' ') + 'Z · ' + b.airports.length + ' airport(s) with a problem reading';
   document.getElementById('replaybanner').style.display = 'block';
   document.getElementById('scrub').value = String(i); drawSpark();
@@ -1002,12 +995,13 @@ function showCard(x) {
     h = '<div class="h">Tropical cyclone · NHC</div><div class="ct">' + esc(s.name) + (cat ? ' · Category ' + cat : '') + '</div>' + kvs([
       ['intensity', (s.intensity_kt || '?') + ' kt'], ['pressure', (s.pressure_mb || '?') + ' mb'], ['position', s.lat + ', ' + s.lon], ['moving', (s.movement_dir != null ? s.movement_dir + '°' : '?') + ' at ' + (s.movement_kt || '?') + ' kt'],
       ['advisory', ago(s.updated) + ' ago'], ['public advisory', s.advisory_url ? '<a href="' + esc(s.advisory_url) + '" target="_blank" rel="noopener">NHC text</a>' : null, true]]); }
-  else if (x.kind === 'event') { var e = x.e;
-    h = '<div class="h">Live event · ' + esc(e.domain) + ' · sev ' + esc(e.severity) + '</div><div class="ct">' + esc(e.title) + '</div>' + kvs([['where', e.location], ['seen', ago(e.timestamp) + ' ago'], ['source', e.source],
-      ['link', e.url && /^https?:/.test(e.url) ? '<a href="' + esc(e.url) + '" target="_blank" rel="noopener">source</a>' : null, true]]) + (e.detail ? '<pre>' + esc(e.detail) + '</pre>' : ''); }
-  else if (x.kind === 'incident') { var q = x.p;
-    h = '<div class="h">Incident · ' + esc(q.sev_level) + '</div><div class="ct">' + esc(q.title || q.slug) + '</div>' + kvs([['status', q.status], ['region', q.region_name], ['open since', ago(q.createdAt || q.opened_at) + ' ago'],
-      ['record', q.slug ? '<a href="/incidents/' + esc(q.slug) + '" target="_blank">incident page</a>' : null, true]]); }
+  else if (x.kind === 'event') { var e = x.i;
+    h = '<div class="h">' + (e.class === 'hazard' ? 'Hazard' : 'Live event') + ' · ' + esc(e.domain || '') + ' · sev ' + esc(e.severity) + (e.n > 1 ? ' · ' + esc(e.n) + ' sources' : '') + '</div><div class="ct">' + esc(e.title) + '</div>' + kvs([['where', deskWhere(e) || null], ['position', deskGeoNote(e)], ['seen', ago(e.seen_at) + ' ago'],
+      ['severity basis', e.severity_basis + (e.axes ? ' · ' + e.axes : '')], ['source', (e.sources && e.sources.length ? e.sources.join(', ') : e.source) || null],
+      ['link', e.href && /^https?:/.test(e.href) ? '<a href="' + esc(e.href) + '" target="_blank" rel="noopener">source</a>' : null, true]]) + (e.why ? '<pre>' + esc(e.why) + '</pre>' : ''); }
+  else if (x.kind === 'incident') { var q = x.i, qslug = q.href && q.href.indexOf('/incidents/') === 0 ? q.href.slice('/incidents/'.length) : null;
+    h = '<div class="h">Incident · ' + esc(q.sev_level || '') + (q.layer === 2 ? ' · layer 2' : '') + '</div><div class="ct">' + esc(q.title) + '</div>' + kvs([['status', q.status], ['where', deskWhere(q) || null], ['position', deskGeoNote(q)], ['open since', ago(q.onset_at) + ' ago'], ['domain', q.domain],
+      ['record', qslug ? '<a href="/incidents/' + esc(qslug) + '" target="_blank">incident page</a>' : null, true]]) + (q.why ? '<pre>' + esc(q.why) + '</pre>' : ''); }
   else if (x.kind === 'flight') { var f = x.a;
     h = '<div class="h">Aircraft · adsb.lol</div><div class="ct">' + esc(f.flight || f.reg || f.hex) + (f.type ? ' · ' + esc(f.type) : '') + '</div>' + kvs([
       ['altitude', f.ground ? 'on ground' : f.alt_ft != null ? f.alt_ft.toLocaleString() + ' ft (FL' + Math.round(f.alt_ft / 100) + ')' : null], ['ground speed', f.gs_kt != null ? f.gs_kt + ' kt' : null], ['track', f.track != null ? Math.round(f.track) + '°' : null],
@@ -1029,8 +1023,8 @@ function showCard(x) {
     h = '<div class="h">Corridor · both ends degraded</div><div class="ct">' + esc((x.a.iata || x.a.icao) + ' ⇄ ' + (x.b.iata || x.b.icao)) + '</div>' + kvs([
       [x.a.iata || x.a.icao, delaySentence(x.a) || opClassWhy(x.a, x.a._op)], [x.b.iata || x.b.icao, delaySentence(x.b) || opClassWhy(x.b, x.b._op)]])
       + '<pre>A listed high-volume corridor where both airports classify DEGRADED right now. It is not a statement about any single flight; it marks where misconnects and knock-on cancellations concentrate.</pre>'; }
-  var at = x.kind === 'storyAirport' ? [x.a.lon, x.a.lat] : x.kind === 'storyFlight' ? (x.f.pos_lon != null ? [x.f.pos_lon, x.f.pos_lat] : [x.home.lon, x.home.lat]) : x.kind === 'airport' ? [x.a._lon, x.a._lat] : x.kind === 'cyclone' ? [x.s.lon, x.s.lat] : x.kind === 'event' ? [num(x.e.lon), num(x.e.lat)]
-    : x.kind === 'incident' ? [num(x.p.location_lon), num(x.p.location_lat)] : x.kind === 'flight' ? [x.a.lon, x.a.lat] : null;
+  var at = x.kind === 'storyAirport' ? [x.a.lon, x.a.lat] : x.kind === 'storyFlight' ? (x.f.pos_lon != null ? [x.f.pos_lon, x.f.pos_lat] : [x.home.lon, x.home.lat]) : x.kind === 'airport' ? [x.a._lon, x.a._lat] : x.kind === 'cyclone' ? [x.s.lon, x.s.lat] : x.kind === 'event' ? [num(x.i.lon), num(x.i.lat)]
+    : x.kind === 'incident' ? [num(x.i.lon), num(x.i.lat)] : x.kind === 'flight' ? [x.a.lon, x.a.lat] : null;
   finishCard(h, at, x);
 }
 function finishCard(h, at, x) {

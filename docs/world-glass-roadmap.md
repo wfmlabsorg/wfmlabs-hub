@@ -78,3 +78,9 @@ Turn layer conditions into **proposed** incidents that a person confirms. Nothin
   resume, slow/normal/fast dwell, ✕; ← → space Esc work too; touching the globe pauses instead of ending the tour.
 - **Scrollbars** inside the layer list, watch list and card are thin and dark.
 - **Tour zoom** (2026-10-11): on tour, each stop flies two zoom levels higher than its own entry height (×4, capped at 12,000 km) so it reads as a region.
+
+## 2026-10-11 — World Glass reads the desk (api-074 / hub)
+- `loadEvents` and `loadIncidents` now read desk-api `/desk/items` (layer 1 events + hazards sev ≥ 5; open incidents, proposals excluded — they have their own layer) and `/desk/posture` for the travel level. Same clustered, re-scored items the alerts and proposals use.
+- `geo` from the desk: `exact` drawn solid; `approx` (desk-api placed it at a monitored city or a country's main airport) drawn HOLLOW with "APPROXIMATE" on the card and the watch entry; `none` stays off the globe, watch list only. The feed line counts both.
+- Cards for events/incidents show `n sources`, severity basis + axes, and the desk's plain-words `why`.
+- Still reading their own feeds: airports/sweep, hazards (SIGMET), cyclones, radar, story flights, aircraft — those are layers, not stories.
