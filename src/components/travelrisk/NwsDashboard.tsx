@@ -42,9 +42,20 @@ function left(v: string | null, now: number | null): string {
   return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h left` : h > 0 ? `${h}h ${m}m left` : `${m}m left`
 }
 
+/** Popup built from DOM text nodes — API strings never become markup. */
+function popup(a: AirportStatus): HTMLElement {
+  const box = document.createElement('div')
+  const head = document.createElement('b')
+  head.textContent = `${a.iata} · ${a.city}`
+  box.appendChild(head)
+  const lines = !a.reachable ? ['NWS did not answer for this point'] : a.alerts.length ? a.alerts.map((x) => x.event) : ['No NWS product at the field']
+  for (const t of lines) { const d = document.createElement('div'); d.textContent = t; box.appendChild(d) }
+  return box
+}
+
 // ── Map ────────────────────────────────────────────────────────────────────
 
-function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbox: NwsPanel['node']['bbox']; focus: string | null }) {
+function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbox: NwsPanel['node']['bbox']; focus: { iata: string; n: number } | null }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<LMap | null>(null)
   const pins = useRef<LayerGroup | null>(null)
@@ -77,7 +88,7 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
       const c = IMPACT[a.reachable ? a.impact : 'clear'].color
       const mk = L.circleMarker([a.lat, a.lon], { radius: a.impact === 'clear' ? 6 : 9, color: '#0b1220', weight: 2, fillColor: a.reachable ? c : '#64748b', fillOpacity: 0.95 })
         .bindTooltip(a.iata, { permanent: true, direction: 'right', className: 'nwsd-tip', offset: [8, 0] })
-        .bindPopup(`<b>${a.iata}</b> · ${a.city}<br>${a.reachable ? (a.alerts.length ? a.alerts.map((x) => `${x.event}`).join('<br>') : 'No NWS product at the field') : 'NWS did not answer for this point'}`)
+        .bindPopup(() => popup(a))
       mk.addTo(pins.current)
       markers.current.set(a.iata, mk)
     }
@@ -90,7 +101,7 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
 
   useEffect(() => {
     if (!focus || !map.current) return
-    const mk = markers.current.get(focus)
+    const mk = markers.current.get(focus.iata)
     if (mk) { map.current.flyTo(mk.getLatLng(), 8, { duration: 0.8 }); mk.openPopup() }
   }, [focus])
 
@@ -167,7 +178,8 @@ export function NwsDashboard({ d, weather, regionHref }: {
   regionHref: string
 }) {
   const [now, setNow] = useState<number | null>(null)
-  const [focus, setFocus] = useState<string | null>(null)
+  const [focus, setFocus] = useState<{ iata: string; n: number } | null>(null) // n: re-picking the same card flies again
+  const pick = (iata: string) => setFocus((f) => ({ iata, n: (f?.n ?? 0) + 1 }))
   useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
 
   const alerts = d.alerts ?? []
@@ -216,7 +228,7 @@ export function NwsDashboard({ d, weather, regionHref }: {
           <div className="nwsd-grid">
             {airports.length === 0
               ? <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>Airport status unavailable on this read.</div>
-              : airports.map((a) => <AirportCard key={a.iata} a={a} now={now} onPick={setFocus} />)}
+              : airports.map((a) => <AirportCard key={a.iata} a={a} now={now} onPick={pick} />)}
           </div>
         </div>
       </div>
