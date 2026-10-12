@@ -38,6 +38,14 @@ export interface NwsPanel {
   reports?: { type: string; title: string; area: string; detail: string | null; at: string }[]
   truncated?: { alerts: number; reports: number }
   airports?: AirportStatus[]
+  regions?: RegionChip[]
+}
+
+export interface RegionChip {
+  id: string; name: string; short: string; bbox: [number, number, number, number] | null
+  weather: { score: number; level: string; available: boolean; floored: boolean; updated: string | null } | null
+  nws: { alerts: number; extreme: number; severe: number }
+  floor: { floor: number; rule: string } | null
 }
 
 export type AviationImpact = 'disrupt' | 'delay' | 'advisory' | 'clear'
