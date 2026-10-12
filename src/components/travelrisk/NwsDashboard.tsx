@@ -4,7 +4,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import 'leaflet/dist/leaflet.css'
 import type { Map as LMap, LayerGroup, TileLayer } from 'leaflet'
-import type { AirportStatus, AviationImpact, NwsAlert, NwsPanel } from '@/lib/travelrisk/panels'
+import type { AirportStatus, AviationImpact, NwsAlert, NwsPanel, RegionChip } from '@/lib/travelrisk/panels'
 
 /**
  * NWS ACTIVE WARNINGS — the tier-2 weather window (rebuilt from ovix6's NWSWarningsPanel, 2026-10-12).
@@ -43,6 +43,36 @@ function left(v: string | null, now: number | null): string {
   return h > 24 ? `${Math.floor(h / 24)}d ${h % 24}h left` : h > 0 ? `${h}h ${m}m left` : `${m}m left`
 }
 
+const REGION_HUE = '#22d3ee'
+function chipText(r: RegionChip): string {
+  const w = r.weather && r.weather.available ? `${r.weather.score.toFixed(1)} ${r.weather.level}` : 'no reading'
+  return `${r.name} · OVIX weather ${w}${r.weather?.floored ? ' (official floor)' : ''} · NWS ${r.nws.extreme} extreme, ${r.nws.severe} severe`
+}
+
+function RegionStrip({ regions, current }: { regions: RegionChip[]; current: string }) {
+  if (!regions.length) return null
+  return (
+    <nav className="nwsd-strip" aria-label="Regions">
+      {regions.map((r) => {
+        const on = r.id === current
+        const w = r.weather && r.weather.available ? r.weather.score : null
+        return (
+          <a key={r.id} href={`/travelrisk/region/${r.id}/nws`} title={chipText(r)} className="nwsd-chip"
+            style={{ borderColor: on ? '#e2e8f0' : '#1e293b', background: on ? '#13203a' : '#0b1220' }}>
+            <span style={{ fontWeight: 800, color: on ? '#f1f5f9' : '#cbd5e1' }}>{r.id === 'global' ? 'NATIONAL' : r.short}</span>
+            <span style={{ color: REGION_HUE, fontWeight: 700 }}>{w == null ? '—' : w.toFixed(1)}</span>
+            {r.weather?.floored && <span title="OVIX weather held up by official NWS warnings" style={{ color: '#eab308' }}>▲</span>}
+            <span style={{ color: r.nws.extreme ? SEV_COLOR.Extreme : r.nws.severe ? SEV_COLOR.Severe : '#475569' }}>
+              {r.nws.extreme ? `E${r.nws.extreme} ` : ''}{r.nws.severe ? `S${r.nws.severe}` : r.nws.extreme ? '' : 'quiet'}
+            </span>
+          </a>
+        )
+      })}
+      <span style={{ marginLeft: 'auto', color: '#475569' }}>OVIX weather by region · ▲ official floor · E/S = NWS extreme/severe</span>
+    </nav>
+  )
+}
+
 /** Popup built from DOM text nodes — API strings never become markup. */
 function popup(a: AirportStatus): HTMLElement {
   const box = document.createElement('div')
@@ -56,10 +86,14 @@ function popup(a: AirportStatus): HTMLElement {
 
 // ── Map ────────────────────────────────────────────────────────────────────
 
-function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbox: NwsPanel['node']['bbox']; focus: { iata: string; n: number } | null }) {
+function WarningsMap({ airports, bbox, focus, regions, current }: {
+  airports: AirportStatus[]; bbox: NwsPanel['node']['bbox']; focus: { iata: string; n: number } | null
+  regions: RegionChip[]; current: string
+}) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<LMap | null>(null)
   const pins = useRef<LayerGroup | null>(null)
+  const boxes = useRef<LayerGroup | null>(null)
   const wms = useRef<TileLayer.WMS | null>(null)
   const markers = useRef(new Map<string, import('leaflet').CircleMarker>())
 
@@ -75,6 +109,7 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
       }).addTo(m)
       wms.current = L.tileLayer.wms(WMS, { layers: '0', format: 'image/png', transparent: true, opacity: 0.62, version: '1.3.0' } as L.WMSOptions).addTo(m)
       L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 12, pane: 'overlayPane' }).addTo(m)
+      boxes.current = L.layerGroup().addTo(m)
       pins.current = L.layerGroup().addTo(m)
       const b = bbox ?? null
       m.fitBounds(b ? [[b[0], b[1]], [b[2], b[3]]] : CONUS, { padding: [8, 8] })
@@ -86,6 +121,23 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
 
   function draw(L: typeof import('leaflet')) {
     if (!pins.current) return
+    // OVIX US regions: outline + label, fill in one hue by the region's OVIX weather (magnitude, not alarm).
+    boxes.current?.clearLayers()
+    for (const r of regions) {
+      if (!r.bbox) continue
+      const w = r.weather && r.weather.available ? r.weather.score : null
+      const on = r.id === current
+      const rect = L.rectangle([[r.bbox[0], r.bbox[1]], [r.bbox[2], r.bbox[3]]], {
+        color: on ? '#e2e8f0' : REGION_HUE, weight: on ? 2 : 1, dashArray: on ? undefined : '4 4', opacity: on ? 0.9 : 0.55,
+        fillColor: REGION_HUE, fillOpacity: w == null ? 0 : 0.03 + (w / 10) * 0.16, interactive: true,
+      })
+      rect.bindTooltip(chipText(r), { sticky: true, className: 'nwsd-tip' })
+      rect.on('click', () => { if (!on) window.location.href = `/travelrisk/region/${r.id}/nws` })
+      rect.addTo(boxes.current!)
+      L.marker([r.bbox[2], r.bbox[1]], { interactive: false, icon: L.divIcon({ className: 'nwsd-boxlbl', html: '', iconSize: [0, 0] }) })
+        .bindTooltip(`${r.short} ${w == null ? '—' : w.toFixed(1)}${r.weather?.floored ? ' ▲' : ''}`, { permanent: true, direction: 'bottom', offset: [18, 4], className: 'nwsd-tip nwsd-boxtip' })
+        .addTo(boxes.current!)
+    }
     pins.current.clearLayers()
     markers.current.clear()
     for (const a of airports) {
@@ -101,7 +153,7 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
   // Refresh pins + polygons when the server sends a new reading.
   useEffect(() => {
     import('leaflet').then((L) => { draw(L); wms.current?.setParams({ t: Date.now() } as never) })
-  }, [airports])
+  }, [airports, regions])
 
   useEffect(() => {
     if (!focus || !map.current) return
@@ -217,11 +269,12 @@ export function NwsDashboard({ d, weather, regionHref }: {
         </span>
         <a href="https://www.weather.gov/" target="_blank" rel="noopener" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>weather.gov ↗</a>
       </header>
+      <RegionStrip regions={d.regions ?? []} current={d.node.id} />
       {d.coverage === 'partial' && d.note && <div className="nwsd-note">{d.note}</div>}
 
       <div className="nwsd-upper">
         <div className="nwsd-map">
-          <WarningsMap airports={airports} bbox={d.node.bbox} focus={focus} />
+          <WarningsMap airports={airports} bbox={d.node.bbox} focus={focus} regions={d.regions ?? []} current={d.node.id} />
           <div className="nwsd-legend">
             {(['disrupt', 'delay', 'advisory', 'clear'] as const).map((k) => (
               <div key={k} title={IMPACT[k].note}><span style={{ background: IMPACT[k].color }} />{IMPACT[k].label.toLowerCase()}</div>
@@ -253,6 +306,10 @@ export function NwsDashboard({ d, weather, regionHref }: {
 const CSS = `
 .nwsd-root{position:fixed;inset:0;z-index:2147483000;background:#060b16;color:#e2e8f0;display:flex;flex-direction:column;font-family:Inter,system-ui,sans-serif}
 .nwsd-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid #1e293b;background:#0b1220}
+.nwsd-strip{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 14px;border-bottom:1px solid #1e293b;background:#081020;font-family:${MONO};font-size:11px}
+.nwsd-chip{display:inline-flex;gap:7px;align-items:baseline;padding:3px 9px;border:1px solid;border-radius:4px;text-decoration:none}
+.nwsd-chip:hover{background:#13203a!important}
+.nwsd-boxtip{color:#67e8f9!important}
 .nwsd-note{padding:4px 14px;font-size:11px;color:#94a3b8;background:#0b1220;border-bottom:1px solid #1e293b}
 .nwsd-upper{flex:0 0 52%;display:flex;min-height:0;border-bottom:1px solid #1e293b}
 .nwsd-map{position:relative;flex:1 1 60%;min-width:0}
