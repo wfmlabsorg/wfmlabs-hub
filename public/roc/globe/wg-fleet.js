@@ -171,17 +171,20 @@ function loadRail(src) {
 /* =========================================================================
  * REGIONAL OPERATIONAL RISK (ovix op-risk index, 43 nodes)
  * ====================================================================== */
-function slug(d) { return String(d || '').replace(/_/g, '-'); }
 WG.card('fleetRegion', function (x) {
   var n = x.n, read = (n.domains || []).length, b = n.basis || {};
-  var head = '<div class="h" style="color:' + INDEX_HUE + '">Op-risk index · ' + esc(n.tier === 'macro' ? 'macro region' : 'sub-region') + '</div><div class="ct">' + esc(n.name) + '</div>';
+  // Tier 2 (2026-10-12): the region window opens in a new tab — domains, official floors and the panels
+  // (NWS warnings, …) that explain them. World Glass itself stays uncrowded.
+  var win = '/travelrisk/region/' + encodeURIComponent(n.id);
+  var head = '<div class="h" style="color:' + INDEX_HUE + '">Op-risk index · ' + esc(n.tier === 'macro' ? 'macro region' : 'sub-region') + '</div><div class="ct">' + esc(n.name) + '</div>'
+    + '<div style="margin:4px 0 6px"><a href="' + win + '" target="_blank" rel="noopener" style="color:' + INDEX_HUE + ';font-weight:700">Open region window ↗</a></div>';
   if (!n.reachable) return { html: head + '<pre>No answer from ovix-api for this region on the last read. This is a gap, not a calm region.</pre>', at: [n.lon, n.lat] };
   var html = head + WG.kvs([
     ['composite', n.composite != null ? bar(n.composite) + esc(n.composite.toFixed(1)) + ' / 10 · ' + esc(n.level || '') : 'NO READING — no domain has events in this region', true],
     ['confidence', 'reading on ' + read + ' of 12 domains' + (b.settled != null ? ' (settled ' + b.settled + ', provisional ' + (b.provisional || 0) + ')' : '') + ' · state ' + (n.state || '?')],
     ['no reading', (n.noReading || []).join(', ') || null], ['updated', when(n.updated)]])
     + (read ? '<div class="h" style="margin-top:8px">Domains with a reading · drivers</div>' + n.domains.map(function (d) {
-      return '<div style="margin:4px 0">' + bar(d.score) + '<a href="/travelrisk/risk/' + esc(slug(d.domain)) + '" target="_blank">' + esc(d.domain) + '</a> ' + esc((d.score != null ? d.score.toFixed(1) : '?') + ' ' + (d.level || '') + (d.state === 'PROVISIONAL' ? ' · provisional' : '') + (d.events != null ? ' · ' + d.events + ' events' : ''))
+      return '<div style="margin:4px 0">' + bar(d.score) + '<a href="' + win + '#d-' + esc(d.domain) + '" target="_blank" rel="noopener">' + esc(d.domain) + '</a> ' + esc((d.score != null ? d.score.toFixed(1) : '?') + ' ' + (d.level || '') + (d.state === 'PROVISIONAL' ? ' · provisional' : '') + (d.events != null ? ' · ' + d.events + ' events' : ''))
         + (d.top ? '<div style="color:' + SLATE + ';margin-left:96px">' + esc(d.top) + (d.topSource ? ' — ' + esc(d.topSource) : '') + '</div>' : '') + '</div>'; }).join('') : '')
     + '<pre>A provisional index ranked from event volume, not a checked operational state: magnitude is drawn as column height in one hue, and red/amber stay reserved for things checked and found impaired. A region with few domains reading can score high on one driver. Regions are a business taxonomy, not a partition of the map: empty ground is unscored, not safe.</pre>';
   return { html: html, at: [n.lon, n.lat] };
