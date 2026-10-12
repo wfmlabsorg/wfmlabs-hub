@@ -210,7 +210,10 @@ async function loadWatching(open: OpenIncident[]): Promise<DeskItem[] | null> {
     const covered = new Set<string>()
     for (const inc of open) {
       for (const id of inc.item_ids ?? []) covered.add(String(id))
-      for (const n of inc.signal_ids ?? []) covered.add(`signal:${n}`)
+      // Desk incidents are covered by their OWN items only: Watchkeeper's refresh pass attaches same-domain
+      // neighbours to related_signal_ids (a hurricane and a Panama quake rode on the Riyadh attack), and those
+      // must stay visible here. Watchkeeper-declared incidents have no item_ids, so their signals count.
+      if (!inc.declared_by?.startsWith('desk-rules')) for (const n of inc.signal_ids ?? []) covered.add(`signal:${n}`)
     }
     const coveredTitles = new Set(open.map((i) => i.title.trim().toLowerCase()))
     return items
