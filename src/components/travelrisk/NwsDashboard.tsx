@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import 'leaflet/dist/leaflet.css'
 import type { Map as LMap, LayerGroup, TileLayer } from 'leaflet'
 import type { AirportStatus, AviationImpact, NwsAlert, NwsPanel } from '@/lib/travelrisk/panels'
@@ -67,10 +68,13 @@ function WarningsMap({ airports, bbox, focus }: { airports: AirportStatus[]; bbo
     import('leaflet').then((L) => {
       if (dead || !el.current || map.current) return
       const m = L.map(el.current, { zoomControl: true, attributionControl: true, worldCopyJump: false })
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© OpenStreetMap © CARTO · warnings © NOAA/NWS', subdomains: 'abcd', maxZoom: 12,
+      // Keyless basemap (CARTO now wants a key): Esri dark-gray canvas, warnings, then Esri's labels on top.
+      const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas'
+      L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, {
+        attribution: 'Esri, HERE, Garmin, © OpenStreetMap · warnings © NOAA/NWS', maxZoom: 12,
       }).addTo(m)
       wms.current = L.tileLayer.wms(WMS, { layers: '0', format: 'image/png', transparent: true, opacity: 0.62, version: '1.3.0' } as L.WMSOptions).addTo(m)
+      L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 12, pane: 'overlayPane' }).addTo(m)
       pins.current = L.layerGroup().addTo(m)
       const b = bbox ?? null
       m.fitBounds(b ? [[b[0], b[1]], [b[2], b[3]]] : CONUS, { padding: [8, 8] })
@@ -188,7 +192,12 @@ export function NwsDashboard({ d, weather, regionHref }: {
   const bySev = Object.fromEntries(SEV.map((k) => [k, alerts.filter((a) => a.severityLabel === k)])) as Record<string, NwsAlert[]>
   const hit = airports.filter((a) => a.impact === 'disrupt' || a.impact === 'delay').length
 
-  return (
+  // Portal to <body>: the site layout wraps pages in a containing block that traps position:fixed, so
+  // rendered in place the nav and footer paint over the dashboard. Mounted only on the client.
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  useEffect(() => { setHost(document.body) }, [])
+  if (!host) return <div style={{ minHeight: '100vh', background: '#060b16' }} />
+  return createPortal(
     <div className="nwsd-root">
       <style>{CSS}</style>
       <header className="nwsd-head">
@@ -236,12 +245,13 @@ export function NwsDashboard({ d, weather, regionHref }: {
       <div className="nwsd-lower">
         {SEV.map((k) => <Column key={k} sev={k} items={bySev[k]} now={now} />)}
       </div>
-    </div>
+    </div>,
+    host,
   )
 }
 
 const CSS = `
-.nwsd-root{position:fixed;inset:0;z-index:1000;background:#060b16;color:#e2e8f0;display:flex;flex-direction:column;font-family:Inter,system-ui,sans-serif}
+.nwsd-root{position:fixed;inset:0;z-index:2147483000;background:#060b16;color:#e2e8f0;display:flex;flex-direction:column;font-family:Inter,system-ui,sans-serif}
 .nwsd-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid #1e293b;background:#0b1220}
 .nwsd-note{padding:4px 14px;font-size:11px;color:#94a3b8;background:#0b1220;border-bottom:1px solid #1e293b}
 .nwsd-upper{flex:0 0 52%;display:flex;min-height:0;border-bottom:1px solid #1e293b}
@@ -263,7 +273,8 @@ const CSS = `
 .nwsd-tip{background:rgba(6,11,22,.8)!important;border:0!important;color:#e2e8f0!important;font:700 10px ${MONO}!important;box-shadow:none!important;padding:0 3px!important}
 .nwsd-tip:before{display:none}
 @media (max-width:900px){
-  .nwsd-root{position:static;min-height:100vh}
+  .nwsd-root{overflow-y:auto}
+  .nwsd-root>*{flex:none}
   .nwsd-upper{flex:none;flex-direction:column}
   .nwsd-map{height:55vh;flex:none}
   .nwsd-airports{max-width:none;border-left:0;border-top:1px solid #1e293b}
