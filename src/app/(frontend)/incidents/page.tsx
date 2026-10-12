@@ -1,380 +1,242 @@
 import React from 'react'
 import { isMobile } from '@/lib/mobile'
 import { neonQuery } from '@/lib/neon'
+import { DESK_API_BASE } from '@/lib/desk'
 import { AutoRefresh } from '@/components/AutoRefresh'
 import { DataUnavailable } from '@/components/DataUnavailable'
-import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
-import type { DistroItem } from '@/components/incidents/CoveragePanel'
 
 export const metadata = { title: 'Incidents — WFM Labs Hub' }
 export const dynamic = 'force-dynamic'
 
+/**
+ * The incidents page is the desk page: one list, each row labelled by its rung on the ladder.
+ *
+ *   WATCHING  a layer-1 desk item at severity ≥ 6 that no open incident covers (rung 2, desk-api /desk/items)
+ *   OPEN      an incident is open — a desk rule fired at severity ≥ 5, or Watchkeeper declared it (rung 4)
+ *   ALERTED   the incident reached Ted by push or email (rung 5, incident_timeline action 'alerted')
+ *
+ * Open incidents sort by SEV, then latest activity. Recently closed sits below for 72 h.
+ */
+
 // ── Types ──
 
-interface Incident {
+interface OpenIncident {
   id: number
   title: string
   slug: string
-  description: string | null
-  domain: string
-  severity: number
-  severity_level: string
-  sev_level: string
+  sev_level: string | null
   status: string
-  declared_by: string
+  declared_by: string | null
   declared_at: string
-  escalated_at: string | null
-  resolved_at: string | null
-  closed_at: string | null
+  last_at: string
   location_name: string | null
   location_country: string | null
-  affected_regions: string[] | null
-  related_event_uris: string[] | null
-  related_signal_ids: number[] | null
-  notes: string | null
   impact_summary: string | null
-  is_persistent: boolean
-  event_count: number
-  article_count: number
-  validation_status: string
-  community_confirmations: number
-  community_denials: number
-  corroboration: unknown
+  description: string | null
+  proposal_rule: string | null
+  item_ids: string[] | null
+  signal_ids: number[] | null
+  alerted_at: string | null
+  alerted_via: string | null
+}
+
+interface ClosedIncident {
+  id: number
+  title: string
+  slug: string
+  sev_level: string | null
+  closed_at: string
+  close_reason: string | null
+}
+
+interface DeskItem {
+  item_id: string
+  class: string
+  layer: number
+  severity: number
+  title: string
+  why: string | null
+  place: string | null
+  seen_at: string | null
+  href: string | null
+  members?: string[] | null
+  source: string | null
 }
 
 // ── Design tokens ──
 
-const sevConfig: Record<string, { label: string; color: string; bg: string; borderColor: string; pulse?: boolean }> = {
-  SEV1: { label: 'SEV1', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', borderColor: '#ef4444', pulse: true },
-  SEV2: { label: 'SEV2', color: '#f97316', bg: 'rgba(249,115,22,0.1)', borderColor: '#f97316' },
-  SEV3: { label: 'SEV3', color: '#eab308', bg: 'transparent', borderColor: '#eab308' },
-  SEV4: { label: 'SEV4', color: '#64748b', bg: 'transparent', borderColor: '#475569' },
+const sevConfig: Record<string, { color: string; bg: string; pulse?: boolean }> = {
+  SEV1: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', pulse: true },
+  SEV2: { color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
+  SEV3: { color: '#eab308', bg: 'rgba(234,179,8,0.08)' },
+  SEV4: { color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
 }
 
-const domainColors: Record<string, { bg: string; fg: string; border: string }> = {
-  weather: { bg: 'rgba(59,130,246,0.08)', fg: '#60a5fa', border: '#3b82f6' },
-  seismic: { bg: 'rgba(239,68,68,0.08)', fg: '#f87171', border: '#ef4444' },
-  disaster: { bg: 'rgba(249,115,22,0.08)', fg: '#fb923c', border: '#f97316' },
-  cyber: { bg: 'rgba(34,197,94,0.08)', fg: '#4ade80', border: '#22c55e' },
-  health: { bg: 'rgba(236,72,153,0.08)', fg: '#f472b6', border: '#ec4899' },
-  infrastructure: { bg: 'rgba(139,92,246,0.08)', fg: '#a78bfa', border: '#8b5cf6' },
-  financial: { bg: 'rgba(245,158,11,0.08)', fg: '#fbbf24', border: '#f59e0b' },
-  environmental: { bg: 'rgba(20,184,166,0.08)', fg: '#2dd4bf', border: '#14b8a6' },
-  geopolitical: { bg: 'rgba(99,102,241,0.08)', fg: '#818cf8', border: '#6366f1' },
-  labor: { bg: 'rgba(168,85,247,0.08)', fg: '#c084fc', border: '#a855f7' },
-  supply_chain: { bg: 'rgba(234,179,8,0.08)', fg: '#facc15', border: '#eab308' },
-  travel: { bg: 'rgba(6,182,212,0.08)', fg: '#22d3ee', border: '#06b6d4' },
-  general: { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' },
-}
-const defaultDomain = { bg: 'rgba(148,163,184,0.08)', fg: '#94a3b8', border: '#64748b' }
+const rungConfig = {
+  alerted: { label: 'ALERTED', color: '#ef4444', bg: 'rgba(239,68,68,0.1)', note: 'reached you by push or email' },
+  open: { label: 'OPEN', color: '#22d3ee', bg: 'rgba(34,211,238,0.1)', note: 'opened, no alert sent' },
+  watching: { label: 'WATCHING', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', note: 'strong signal, no incident' },
+} as const
 
-const statusConfig: Record<string, { label: string; color: string; bg: string; pulse?: boolean }> = {
-  detected: { label: 'DETECTED', color: '#94a3b8', bg: 'rgba(148,163,184,0.08)' },
-  declared: { label: 'DECLARED', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-  open: { label: 'OPEN', color: '#22d3ee', bg: 'rgba(34,211,238,0.1)', pulse: true },
-  validated: { label: 'VALIDATED', color: '#22d3ee', bg: 'rgba(34,211,238,0.1)' },
-  escalated: { label: 'ESCALATED', color: '#ef4444', bg: 'rgba(239,68,68,0.12)', pulse: true },
-  'de-escalated': { label: 'DE-ESCALATED', color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  resolving: { label: 'RESOLVING', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' },
-  closed: { label: 'CLOSED', color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
-  reopened: { label: 'REOPENED', color: '#f97316', bg: 'rgba(249,115,22,0.1)', pulse: true },
+const mono = "'IBM Plex Mono', monospace"
+const WATCH_MIN_SEV = 6
+const WATCH_LIMIT = 15
+const CLOSED_WINDOW_H = 72
+/** A hung desk-api must not hang the page: on timeout the Watching section says the feed is unreachable. */
+const DESK_TIMEOUT_MS = 5000
+
+// ── Helpers ──
+
+function ago(ts: string | null): string {
+  if (!ts) return ''
+  const m = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000))
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.round(m / 60)
+  if (h < 48) return `${h}h ago`
+  return `${Math.round(h / 24)}d ago`
 }
 
-const domainList = [
-  'weather', 'seismic', 'disaster', 'cyber', 'health',
-  'infrastructure', 'financial', 'environmental', 'geopolitical', 'general',
-]
-
-// Corroboration triage filter — keys map to a SQL predicate on incidents.corroboration.
-// 'uncorroborated' deliberately also captures null/absent corroboration (legacy incidents
-// + Exa failures) so the triage queue surfaces everything lacking external confirmation.
-const corrobConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  corroborated: { label: 'Corroborated', color: '#10b981', bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' },
-  'single-source': { label: 'Single source', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' },
-  uncorroborated: { label: 'Uncorroborated', color: '#94a3b8', bg: 'rgba(148,163,184,0.08)', border: 'var(--border-hover)' },
-}
-const corrobList = ['corroborated', 'single-source', 'uncorroborated']
-
-function corrobPredicate(key: string): string {
-  if (key === 'corroborated') return "corroboration->>'status' = 'corroborated'"
-  if (key === 'single-source') return "corroboration->>'status' = 'single-source'"
-  // uncorroborated bucket = explicit 'uncorroborated' OR no corroboration on record
-  return "(corroboration IS NULL OR corroboration->>'status' IS NULL OR corroboration->>'status' NOT IN ('corroborated','single-source'))"
+function ruleLabel(inc: OpenIncident): string {
+  if (inc.declared_by?.startsWith('desk-rules') && inc.proposal_rule) return inc.proposal_rule.split(':')[0].replace(/_/g, ' ')
+  if (inc.declared_by?.startsWith('desk-rules')) return 'desk rule'
+  return inc.declared_by || 'watchkeeper'
 }
 
-// Region bucket (US / non-US / global) as a SQL CASE over a free-text location column.
-// Heuristic by design — the goal is at-a-glance skew, not precise geocoding.
-function regionBucketCase(col: string): string {
-  return `CASE
-    WHEN ${col} IS NULL OR btrim(${col}) = '' OR lower(btrim(${col})) IN ('global','worldwide','international','multiple','various') THEN 'global'
-    WHEN ${col} ILIKE '%united states%' OR upper(btrim(${col})) IN ('US','USA','U.S.','U.S.A.') OR ${col} ILIKE '%, us' OR ${col} ILIKE '%, usa' THEN 'US'
-    ELSE 'non-US'
-  END`
+function place(inc: OpenIncident): string | null {
+  const parts = [inc.location_name, inc.location_country].filter((x): x is string => !!x && x.trim() !== '')
+  if (parts.length === 2 && parts[0].includes(parts[1])) return parts[0]
+  return parts.length ? parts.join(', ') : null
 }
 
-const regionColors: Record<string, string> = {
-  US: '#22d3ee',
-  'non-US': '#3b82f6',
-  global: '#64748b',
+function sevRank(s: string | null): number {
+  return s === 'SEV1' ? 1 : s === 'SEV2' ? 2 : s === 'SEV3' ? 3 : s === 'SEV4' ? 4 : 5
 }
 
-interface CoverageData {
-  totalSignals: number
-  totalOpenIncidents: number
-  needsValidation: number
-  signalsByRegion: DistroItem[]
-  signalsByCategory: DistroItem[]
-  incidentsByDomain: DistroItem[]
-  incidentsByRegion: DistroItem[]
-  corroboration: DistroItem[]
+function alertLine(inc: OpenIncident): string {
+  if (!inc.alerted_at) return 'no alert sent'
+  // Backfilled rows (schema/062) carry no real send time, so they show no time.
+  if (!(inc.alerted_via || '').startsWith('Alerted by ')) return 'alert sent'
+  return `${(inc.alerted_via || '').slice('Alerted by '.length)} · ${ago(inc.alerted_at)}`
 }
 
-const COVERAGE_WINDOW_DAYS = 7
+function Chip({ label, color, bg, pulse }: { label: string; color: string; bg: string; pulse?: boolean }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.25rem',
+        fontSize: '0.6875rem',
+        fontWeight: 700,
+        fontFamily: mono,
+        letterSpacing: '0.05em',
+        padding: '0.175rem 0.5rem',
+        borderRadius: '4px',
+        background: bg,
+        border: `1px solid ${color}55`,
+        color,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {pulse && (
+        <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: color, animation: 'pulse 2s ease-in-out infinite' }} />
+      )}
+      {label}
+    </span>
+  )
+}
 
-/**
- * Loads the coverage/balance distributions. Wrapped so a query failure degrades to a
- * hidden panel (returns null) instead of breaking the whole incidents page.
- */
-async function loadCoverage(): Promise<CoverageData | null> {
+function SectionTitle({ children, count }: { children: React.ReactNode; count: number }) {
+  return (
+    <h2
+      style={{
+        fontSize: '0.8125rem',
+        fontWeight: 700,
+        fontFamily: mono,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        color: 'var(--fg-muted)',
+        margin: '2rem 0 0.75rem',
+      }}
+    >
+      {children} <span style={{ opacity: 0.7 }}>({count})</span>
+    </h2>
+  )
+}
+
+// ── Data ──
+
+async function loadOpen(): Promise<OpenIncident[]> {
+  const { rows } = await neonQuery<OpenIncident>(
+    `SELECT i.id, i.title, i.slug, i.sev_level, i.status, i.declared_by, i.declared_at::text AS declared_at,
+            coalesce(i.last_material_event_at, i.declared_at)::text AS last_at,
+            i.location_name, i.location_country, i.impact_summary, i.description, i.proposal_rule,
+            CASE WHEN jsonb_typeof(i.proposal_payload->'item_ids') = 'array' THEN i.proposal_payload->'item_ids' END AS item_ids,
+            to_jsonb(i.related_signal_ids) AS signal_ids,
+            a.created_at::text AS alerted_at, a.details AS alerted_via
+       FROM incidents i
+       LEFT JOIN LATERAL (
+         SELECT t.created_at, t.details FROM incident_timeline t
+          WHERE t.incident_id = i.id AND t.action = 'alerted'
+          ORDER BY t.created_at ASC LIMIT 1
+       ) a ON true
+      WHERE i.status NOT IN ('closed', 'resolved', 'proposed', 'dismissed')
+      ORDER BY coalesce(i.last_material_event_at, i.declared_at) DESC`,
+  )
+  return rows.sort((a, b) => sevRank(a.sev_level) - sevRank(b.sev_level) || b.last_at.localeCompare(a.last_at))
+}
+
+async function loadClosed(): Promise<ClosedIncident[]> {
+  const { rows } = await neonQuery<ClosedIncident>(
+    `SELECT id, title, slug, sev_level, closed_at::text AS closed_at, close_reason
+       FROM incidents
+      WHERE status = 'closed' AND closed_at > now() - interval '${CLOSED_WINDOW_H} hours'
+        AND coalesce(close_reason, '') <> 'duplicate'
+      ORDER BY closed_at DESC LIMIT 15`,
+  )
+  return rows
+}
+
+/** Rung 2: strong layer-1 desk items that no open incident covers. Null when desk-api is unreachable. */
+async function loadWatching(open: OpenIncident[]): Promise<DeskItem[] | null> {
   try {
-    const win = `created_at > now() - interval '${COVERAGE_WINDOW_DAYS} days'`
-    const [
-      { rows: sigRegion },
-      { rows: sigCategory },
-      { rows: incDomain },
-      { rows: incRegion },
-      { rows: incCorrob },
-    ] = await Promise.all([
-      neonQuery<{ bucket: string; cnt: string }>(
-        `SELECT ${regionBucketCase('region_name')} AS bucket, COUNT(*) AS cnt
-           FROM signals WHERE ${win} GROUP BY 1`,
-      ),
-      neonQuery<{ category: string; cnt: string }>(
-        `SELECT category::text AS category, COUNT(*) AS cnt
-           FROM signals WHERE ${win} GROUP BY 1 ORDER BY 2 DESC LIMIT 8`,
-      ),
-      neonQuery<{ domain: string; cnt: string }>(
-        "SELECT domain, COUNT(*) AS cnt FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1 ORDER BY 2 DESC LIMIT 8",
-      ),
-      neonQuery<{ bucket: string; cnt: string }>(
-        `SELECT ${regionBucketCase('location_country')} AS bucket, COUNT(*) AS cnt
-           FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1`,
-      ),
-      neonQuery<{ bucket: string; cnt: string }>(
-        `SELECT CASE
-            WHEN corroboration->>'status' = 'corroborated' THEN 'corroborated'
-            WHEN corroboration->>'status' = 'single-source' THEN 'single-source'
-            ELSE 'uncorroborated'
-          END AS bucket, COUNT(*) AS cnt
-           FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY 1`,
-      ),
-    ])
-
-    // Region buckets render in a fixed, meaningful order (always show all three).
-    const regionOrder = ['US', 'non-US', 'global']
-    const mapRegion = (rows: { bucket: string; cnt: string }[], hrefFor?: (b: string) => string): DistroItem[] => {
-      const counts: Record<string, number> = {}
-      for (const r of rows) counts[r.bucket] = parseInt(r.cnt) || 0
-      return regionOrder.map((b) => ({
-        label: b,
-        count: counts[b] || 0,
-        color: regionColors[b] || '#64748b',
-        href: hrefFor ? hrefFor(b) : undefined,
-      }))
+    const res = await fetch(
+      `${DESK_API_BASE}/desk/items?class=event,hazard,delay&min_sev=${WATCH_MIN_SEV}&hours=24&limit=100`,
+      { cache: 'no-store', signal: AbortSignal.timeout(DESK_TIMEOUT_MS) },
+    )
+    if (!res.ok) return null
+    const { items } = (await res.json()) as { items: DeskItem[] }
+    const covered = new Set<string>()
+    for (const inc of open) {
+      for (const id of inc.item_ids ?? []) covered.add(String(id))
+      for (const n of inc.signal_ids ?? []) covered.add(`signal:${n}`)
     }
-
-    const signalsByRegion = mapRegion(sigRegion)
-    const totalSignals = signalsByRegion.reduce((a, b) => a + b.count, 0)
-
-    const signalsByCategory: DistroItem[] = sigCategory.map((r) => ({
-      label: domainLabel(r.category || 'general'),
-      count: parseInt(r.cnt) || 0,
-      color: (domainColors[r.category] || defaultDomain).fg,
-    }))
-
-    const incidentsByDomain: DistroItem[] = incDomain.map((r) => ({
-      label: domainLabel(r.domain || 'general'),
-      count: parseInt(r.cnt) || 0,
-      color: (domainColors[r.domain] || defaultDomain).fg,
-      href: `/incidents?domain=${encodeURIComponent(r.domain)}`,
-    }))
-
-    const incidentsByRegion = mapRegion(incRegion)
-
-    const corrobCounts: Record<string, number> = {}
-    for (const r of incCorrob) corrobCounts[r.bucket] = parseInt(r.cnt) || 0
-    const corroboration: DistroItem[] = corrobList.map((k) => ({
-      label: corrobConfig[k].label,
-      count: corrobCounts[k] || 0,
-      color: corrobConfig[k].color,
-      href: `/incidents?corrob=${k}`,
-    }))
-
-    const totalOpenIncidents = incidentsByDomain.reduce((a, b) => a + b.count, 0)
-    const needsValidation = (corrobCounts['uncorroborated'] || 0) + (corrobCounts['single-source'] || 0)
-
-    return {
-      totalSignals,
-      totalOpenIncidents,
-      needsValidation,
-      signalsByRegion,
-      signalsByCategory,
-      incidentsByDomain,
-      incidentsByRegion,
-      corroboration,
-    }
-  } catch (e) {
-    console.error('coverage load failed:', e)
+    const coveredTitles = new Set(open.map((i) => i.title.trim().toLowerCase()))
+    return items
+      .filter((d) => d.layer === 1)
+      .filter((d) => ![d.item_id, ...(d.members ?? [])].some((id) => covered.has(id)))
+      .filter((d) => !coveredTitles.has(d.title.trim().toLowerCase()))
+      .slice(0, WATCH_LIMIT)
+  } catch {
     return null
   }
 }
 
-function domainLabel(domain: string): string {
-  return domain.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-}
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (seconds < 60) return 'just now'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return `${Math.floor(seconds / 86400)}d ago`
-}
-
-function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  }) + ' UTC'
-}
-
-function buildHref(base: Record<string, string | null>, overrides: Record<string, string | null>): string {
-  const merged = { ...base, ...overrides }
-  const params = new URLSearchParams()
-  for (const [k, v] of Object.entries(merged)) {
-    if (v) params.set(k, v)
-  }
-  const qs = params.toString()
-  return `/incidents${qs ? `?${qs}` : ''}`
-}
-
 // ── Page ──
 
-export default async function IncidentsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ status?: string; sev?: string; domain?: string; corrob?: string; page?: string }>
-}) {
-  const params = await searchParams
+export default async function IncidentsPage() {
   const mobile = await isMobile()
-  const activeSev = params.sev || null
-  const activeDomain = params.domain || null
-  const activeStatus = params.status || null
-  const activeCorrob = params.corrob && corrobList.includes(params.corrob) ? params.corrob : null
-  const page = parseInt(params.page || '1')
-  const limit = 25
-  const offset = (page - 1) * limit
 
-  const filterState = {
-    sev: activeSev,
-    domain: activeDomain,
-    status: activeStatus,
-    corrob: activeCorrob,
-    page: null as string | null,
-  }
-
-  // Build query conditions
-  const conditions: string[] = []
-  const queryParams: unknown[] = []
-  let paramIdx = 1
-
-  // Legacy 'proposed' / 'dismissed' rows (before api-075 — rules now open incidents directly) never list.
-  conditions.push("status NOT IN ('proposed', 'dismissed')")
-  // Default: show non-closed incidents (unless specifically filtering for closed)
-  if (activeStatus === 'closed') {
-    conditions.push("status = 'closed'")
-  } else if (activeStatus && Object.keys(statusConfig).includes(activeStatus)) {
-    conditions.push(`status = $${paramIdx++}`)
-    queryParams.push(activeStatus)
-  } else {
-    conditions.push("status != 'closed'")
-  }
-
-  if (activeSev && ['SEV1', 'SEV2', 'SEV3', 'SEV4'].includes(activeSev)) {
-    conditions.push(`sev_level = $${paramIdx++}`)
-    queryParams.push(activeSev)
-  }
-  if (activeDomain && domainList.includes(activeDomain)) {
-    conditions.push(`domain = $${paramIdx++}`)
-    queryParams.push(activeDomain)
-  }
-  if (activeCorrob) {
-    conditions.push(corrobPredicate(activeCorrob))
-  }
-
-  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const sortOrder = activeStatus === 'closed'
-    ? 'closed_at DESC NULLS LAST, declared_at DESC'
-    : "CASE sev_level WHEN 'SEV1' THEN 1 WHEN 'SEV2' THEN 2 WHEN 'SEV3' THEN 3 WHEN 'SEV4' THEN 4 ELSE 5 END, declared_at DESC"
-
-  // A transient Neon failure degrades to a visible "feed down" state instead of
-  // erroring the whole page (and instead of silently rendering "no incidents").
-  let pageData: {
-    incidents: Incident[]
-    countRow: { cnt: string } | undefined
-    sevRows: { sev_level: string; cnt: string }[]
-    persistentIncidents: Incident[]
-    recentlyClosed: Incident[]
-    coverage: CoverageData | null
-  } | null = null
+  let open: OpenIncident[]
+  let closed: ClosedIncident[]
   try {
-    const [
-      { rows: incidents },
-      { rows: [countRow] },
-      { rows: sevRows },
-      { rows: persistentIncidents },
-      { rows: recentlyClosed },
-      coverage,
-    ] = await Promise.all([
-      neonQuery<Incident>(
-        `SELECT * FROM incidents ${whereClause} ORDER BY ${sortOrder} LIMIT ${limit} OFFSET ${offset}`,
-        queryParams,
-      ),
-      neonQuery<{ cnt: string }>(
-        `SELECT COUNT(*) as cnt FROM incidents ${whereClause}`,
-        queryParams,
-      ),
-      neonQuery<{ sev_level: string; cnt: string }>(
-        "SELECT sev_level, COUNT(*) as cnt FROM incidents WHERE status NOT IN ('closed', 'proposed', 'dismissed') GROUP BY sev_level",
-      ),
-      neonQuery<Incident>(
-        "SELECT * FROM incidents WHERE is_persistent = true AND status NOT IN ('closed', 'proposed', 'dismissed') ORDER BY declared_at DESC LIMIT 5",
-      ),
-      activeStatus !== 'closed'
-        ? neonQuery<Incident>(
-            "SELECT * FROM incidents WHERE status = 'closed' ORDER BY closed_at DESC NULLS LAST LIMIT 10",
-          )
-        : Promise.resolve({ rows: [] as Incident[], rowCount: 0 }),
-      Promise.resolve(null as CoverageData | null),   // coverage panel removed from this page 2026-10-11
-    ])
-    pageData = { incidents, countRow, sevRows, persistentIncidents, recentlyClosed, coverage }
-  } catch (e) {
-    console.error('incidents page: live data fetch failed:', e)
-  }
-
-  if (!pageData) {
+    ;[open, closed] = await Promise.all([loadOpen(), loadClosed()])
+  } catch {
     return (
       <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
         <AutoRefresh />
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>Incidents</h1>
-          <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
-            Open incidents the desk graded for business travel — air, hotel, rail and ground
-          </p>
-        </div>
+        <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 1rem' }}>Incidents</h1>
         <DataUnavailable
           title="Incident data temporarily unavailable"
           detail="The incident feed could not be reached just now. This is a connection issue, not an all-clear — incidents may still be active. Please refresh in a moment."
@@ -382,651 +244,111 @@ export default async function IncidentsPage({
       </div>
     )
   }
+  const watching = await loadWatching(open)
 
-  const { incidents, countRow, sevRows, persistentIncidents, recentlyClosed } = pageData
-
-
-  const totalDocs = parseInt(countRow?.cnt || '0')
-  const totalPages = Math.ceil(totalDocs / limit)
-  const hasPrev = page > 1
-  const hasNext = page < totalPages
-
-  const sevCounts: Record<string, number> = { SEV1: 0, SEV2: 0, SEV3: 0, SEV4: 0 }
-  for (const row of sevRows) {
-    if (row.sev_level) sevCounts[row.sev_level] = parseInt(row.cnt)
-  }
-  const totalActive = Object.values(sevCounts).reduce((a, b) => a + b, 0)
+  const alertedCount = open.filter((i) => i.alerted_at).length
+  const counts = { alerted: alertedCount, open: open.length - alertedCount, watching: watching?.length ?? 0 }
 
   return (
     <div style={{ maxWidth: '72rem', margin: '0 auto', padding: mobile ? '1rem 0.75rem 3rem' : '2rem 1rem 4rem' }}>
       <AutoRefresh />
+
       {/* Header */}
-      <div style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <h1
-            style={{
-              fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-              fontWeight: 800,
-              margin: 0,
-            }}
-          >
-            Incidents
-          </h1>
-          {totalActive > 0 && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                fontSize: '0.6875rem',
-                fontWeight: 600,
-                padding: '0.25rem 0.625rem',
-                borderRadius: '9999px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.2)',
-                color: '#f87171',
-                fontFamily: "'IBM Plex Mono', monospace",
-              }}
-            >
-              <span
-                style={{
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  background: '#ef4444',
-                  animation: 'pulse 2s ease-in-out infinite',
-                }}
-              />
-              {totalActive} ACTIVE
-            </span>
-          )}
-        </div>
+      <div style={{ marginBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 800, margin: '0 0 0.5rem' }}>Incidents</h1>
         <p style={{ fontSize: '0.9375rem', color: 'var(--fg-muted)', margin: 0 }}>
-          Open incidents the desk graded for business travel — air, hotel, rail and ground
+          What could disrupt business travel right now — air, hotel, rail and ground — labelled by how far up the ladder it
+          has climbed. <a href="/incidents/rules" style={{ color: '#22d3ee' }}>How incidents open</a>
         </p>
       </div>
 
-      {/* Severity count bar */}
+      {/* Rung strip */}
       <div
         style={{
-          display: 'flex',
-          gap: '0',
-          marginBottom: '1.5rem',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           background: 'var(--bg-secondary)',
-          borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)',
           overflow: 'hidden',
         }}
       >
-        {(['SEV1', 'SEV2', 'SEV3', 'SEV4'] as const).map((sev) => {
-          const cfg = sevConfig[sev]
-          const count = sevCounts[sev] || 0
-          const isActive = activeSev === sev
+        {(['alerted', 'open', 'watching'] as const).map((k, i) => {
+          const cfg = rungConfig[k]
           return (
             <a
-              key={sev}
-              href={buildHref(filterState, { sev: isActive ? null : sev, page: null })}
+              key={k}
+              href={k === 'watching' ? '#watching' : '#open'}
               style={{
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                padding: '0.75rem 0.5rem',
+                padding: mobile ? '0.75rem 0.5rem' : '0.875rem 1rem',
+                borderLeft: i ? '1px solid var(--border)' : 'none',
                 textDecoration: 'none',
-                borderRight: sev !== 'SEV4' ? '1px solid var(--border)' : 'none',
-                background: isActive ? cfg.bg : 'transparent',
-                transition: 'background 0.15s',
+                color: 'inherit',
               }}
             >
-              <span
-                style={{
-                  fontSize: '1.25rem',
-                  fontWeight: 700,
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  color: count > 0 ? cfg.color : 'var(--fg-faint)',
-                }}
-              >
-                {count}
-              </span>
-              <span
-                style={{
-                  fontSize: '0.625rem',
-                  fontWeight: 600,
-                  fontFamily: "'IBM Plex Mono', monospace",
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: isActive ? cfg.color : 'var(--fg-faint)',
-                }}
-              >
+              <div style={{ fontSize: mobile ? '1.375rem' : '1.75rem', fontWeight: 800, fontFamily: mono, color: cfg.color }}>
+                {k === 'watching' && watching === null ? '–' : counts[k]}
+              </div>
+              <div style={{ fontSize: '0.6875rem', fontWeight: 700, fontFamily: mono, letterSpacing: '0.08em', color: cfg.color }}>
                 {cfg.label}
-              </span>
+              </div>
+              {!mobile && <div style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', marginTop: '0.125rem' }}>{cfg.note}</div>}
             </a>
           )
         })}
       </div>
 
-      {/* 2026-10-11 (Ted): the coverage / signals-by-category box is gone from here — incidents come first.
-          Signals have their own page (/signals), now public. */}
-      {/* Filters: domain + status + corroboration */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        {/* Domain filter */}
-        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginRight: '0.25rem',
-            }}
-          >
-            Domain
-          </span>
-          {domainList.map((d) => {
-            const dc = domainColors[d] || defaultDomain
-            const isActive = activeDomain === d
-            return (
-              <a
-                key={d}
-                href={buildHref(filterState, { domain: isActive ? null : d, page: null })}
-                style={{
-                  padding: '0.25rem 0.625rem',
-                  borderRadius: '9999px',
-                  border: `1px solid ${isActive ? dc.border : 'var(--border)'}`,
-                  background: isActive ? dc.bg : 'transparent',
-                  color: isActive ? dc.fg : 'var(--fg-muted)',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                }}
-              >
-                <span
-                  style={{
-                    width: '0.375rem',
-                    height: '0.375rem',
-                    borderRadius: '50%',
-                    background: dc.border,
-                    flexShrink: 0,
-                  }}
-                />
-                {domainLabel(d)}
-              </a>
-            )
-          })}
-        </div>
-
-        {/* Status filter */}
-        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginRight: '0.25rem',
-            }}
-          >
-            Status
-          </span>
-          <a
-            href={buildHref(filterState, { status: null, page: null })}
-            style={{
-              padding: '0.25rem 0.625rem',
-              borderRadius: '9999px',
-              border: '1px solid var(--border)',
-              background: !activeStatus ? 'var(--fg)' : 'transparent',
-              color: !activeStatus ? 'var(--bg)' : 'var(--fg-muted)',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              textDecoration: 'none',
-            }}
-          >
-            Active
-          </a>
-          {Object.entries(statusConfig).map(([key, cfg]) => {
-            const isActive = activeStatus === key
-            return (
-              <a
-                key={key}
-                href={buildHref(filterState, { status: isActive ? null : key, page: null })}
-                style={{
-                  padding: '0.25rem 0.625rem',
-                  borderRadius: '9999px',
-                  border: `1px solid ${isActive ? cfg.color : 'var(--border)'}`,
-                  background: isActive ? cfg.bg : 'transparent',
-                  color: isActive ? cfg.color : 'var(--fg-muted)',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                }}
-              >
-                {cfg.label}
-              </a>
-            )
-          })}
-        </div>
-
-        {/* Corroboration triage filter */}
-        <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span
-            style={{
-              fontSize: '0.6875rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginRight: '0.25rem',
-            }}
-          >
-            Corroboration
-          </span>
-          <a
-            href={buildHref(filterState, { corrob: null, page: null })}
-            style={{
-              padding: '0.25rem 0.625rem',
-              borderRadius: '9999px',
-              border: '1px solid var(--border)',
-              background: !activeCorrob ? 'var(--fg)' : 'transparent',
-              color: !activeCorrob ? 'var(--bg)' : 'var(--fg-muted)',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              textDecoration: 'none',
-            }}
-          >
-            All
-          </a>
-          {corrobList.map((key) => {
-            const cfg = corrobConfig[key]
-            const isActive = activeCorrob === key
-            return (
-              <a
-                key={key}
-                href={buildHref(filterState, { corrob: isActive ? null : key, page: null })}
-                title={
-                  key === 'uncorroborated'
-                    ? 'Incidents lacking external corroboration — the triage queue to validate'
-                    : key === 'single-source'
-                      ? 'Only a single external source found'
-                      : 'Independently corroborated by reputable external sources'
-                }
-                style={{
-                  padding: '0.25rem 0.625rem',
-                  borderRadius: '9999px',
-                  border: `1px solid ${isActive ? cfg.border : 'var(--border)'}`,
-                  background: isActive ? cfg.bg : 'transparent',
-                  color: isActive ? cfg.color : 'var(--fg-muted)',
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  textDecoration: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.3rem',
-                }}
-              >
-                <span
-                  style={{
-                    width: '0.375rem',
-                    height: '0.375rem',
-                    borderRadius: '50%',
-                    background: cfg.color,
-                    flexShrink: 0,
-                  }}
-                />
-                {cfg.label}
-              </a>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Persistent Situations */}
-      {persistentIncidents.length > 0 && !activeStatus && !activeSev && !activeDomain && !activeCorrob && (
-        <div style={{ marginBottom: '2rem' }}>
-          <h2
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '0.75rem',
-            }}
-          >
-            Ongoing Situations
-          </h2>
-          <div
-            style={{
-              display: 'flex',
-              gap: '0.75rem',
-              overflowX: 'auto',
-              paddingBottom: '0.5rem',
-            }}
-          >
-            {persistentIncidents.map((inc) => {
-              const dc = domainColors[inc.domain] || defaultDomain
-              const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
+      {/* Open incidents — one list, rung on every row */}
+      <div id="open">
+        <SectionTitle count={open.length}>Open incidents</SectionTitle>
+        {open.length === 0 ? (
+          <div className="card" style={{ padding: '1.5rem', color: 'var(--fg-muted)', fontSize: '0.875rem' }}>
+            No open incidents. The desk opens one when a rule fires at severity 5 or above.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {open.map((inc) => {
+              const sc = sevConfig[inc.sev_level ?? ''] ?? sevConfig.SEV4
+              const rung = inc.alerted_at ? rungConfig.alerted : rungConfig.open
+              const where = place(inc)
+              const summary = inc.impact_summary || inc.description
               return (
                 <a
                   key={inc.id}
                   href={`/incidents/${inc.slug}`}
                   className="card"
-                  style={{
-                    minWidth: '16rem',
-                    maxWidth: '20rem',
-                    padding: '1rem',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    borderLeft: `3px solid ${dc.border}`,
-                    flexShrink: 0,
-                  }}
+                  style={{ display: 'flex', overflow: 'hidden', borderRadius: 'var(--radius-lg)', textDecoration: 'none', color: 'inherit' }}
                 >
-                  <div style={{ display: 'flex', gap: '0.375rem', marginBottom: '0.5rem', alignItems: 'center' }}>
-                    <span
-                      style={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        fontFamily: "'IBM Plex Mono', monospace",
-                        padding: '0.125rem 0.375rem',
-                        borderRadius: '4px',
-                        border: `1px solid ${sc.borderColor}`,
-                        background: sc.bg,
-                        color: sc.color,
-                      }}
-                    >
-                      {sc.label}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 600,
-                        fontFamily: "'IBM Plex Mono', monospace",
-                        textTransform: 'uppercase',
-                        color: dc.fg,
-                      }}
-                    >
-                      {domainLabel(inc.domain)}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 600, lineHeight: 1.3, marginBottom: '0.375rem' }}>
-                    {inc.title}
-                  </div>
-                  <div style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
-                    Since {timeAgo(inc.declared_at)} · {inc.event_count || 1} events
-                  </div>
-                </a>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Active Incidents */}
-      <div style={{ marginBottom: '2rem' }}>
-        {activeStatus || activeSev || activeDomain || activeCorrob ? (
-          <h2
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '0.75rem',
-            }}
-          >
-            {activeStatus === 'closed' ? 'Closed' : 'Filtered'} Incidents
-            <span style={{ fontWeight: 400, marginLeft: '0.5rem' }}>{totalDocs}</span>
-          </h2>
-        ) : (
-          <h2
-            style={{
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              color: 'var(--fg-faint)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              marginBottom: '0.75rem',
-            }}
-          >
-            Active Incidents
-            <span style={{ fontWeight: 400, marginLeft: '0.5rem' }}>{totalDocs}</span>
-          </h2>
-        )}
-
-        {incidents.length === 0 ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '3rem 2rem',
-              border: '1px dashed var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              color: 'var(--fg-muted)',
-            }}
-          >
-            <p style={{ fontSize: '1rem', fontWeight: 500, marginBottom: '0.5rem' }}>
-              {activeStatus || activeSev || activeDomain || activeCorrob
-                ? 'No incidents matching filters'
-                : 'No active incidents'}
-            </p>
-            <p style={{ fontSize: '0.875rem' }}>
-              {activeStatus || activeSev || activeDomain || activeCorrob
-                ? 'Try adjusting your filters.'
-                : 'The desk opens an incident when a rule fires at severity 5 or above. Nothing qualifies right now.'}
-            </p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {incidents.map((incident) => {
-              const dc = domainColors[incident.domain] || defaultDomain
-              const st = statusConfig[incident.status] || statusConfig.declared
-              const sc = sevConfig[incident.sev_level] || sevConfig.SEV4
-              const isClosed = incident.status === 'closed'
-
-              return (
-                <a
-                  key={incident.id}
-                  href={`/incidents/${incident.slug}`}
-                  className="card"
-                  style={{
-                    display: 'flex',
-                    overflow: 'hidden',
-                    borderRadius: 'var(--radius-lg)',
-                    opacity: isClosed ? 0.6 : 1,
-                    textDecoration: 'none',
-                    color: 'inherit',
-                  }}
-                >
-                  {/* Severity color band */}
-                  <div
-                    style={{
-                      width: '4px',
-                      background: sc.color,
-                      flexShrink: 0,
-                    }}
-                  />
-
-                  <div style={{ flex: 1, padding: '1rem 1.25rem' }}>
-                    {/* Badges row */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        marginBottom: '0.5rem',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      {/* Severity badge */}
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          fontSize: '0.6875rem',
-                          fontWeight: 700,
-                          fontFamily: "'IBM Plex Mono', monospace",
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          padding: '0.175rem 0.5rem',
-                          borderRadius: '4px',
-                          background: sc.bg,
-                          border: `1px solid ${sc.borderColor}`,
-                          color: sc.color,
-                        }}
-                      >
-                        {sc.pulse && (
-                          <span
-                            style={{
-                              width: '5px',
-                              height: '5px',
-                              borderRadius: '50%',
-                              background: sc.color,
-                              animation: 'pulse 2s ease-in-out infinite',
-                            }}
-                          />
-                        )}
-                        {sc.label}
-                      </span>
-
-                      {/* Status badge */}
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.25rem',
-                          fontSize: '0.6875rem',
-                          fontWeight: 700,
-                          fontFamily: "'IBM Plex Mono', monospace",
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          padding: '0.175rem 0.5rem',
-                          borderRadius: '4px',
-                          background: st.bg,
-                          border: `1px solid ${st.color}25`,
-                          color: st.color,
-                        }}
-                      >
-                        {st.pulse && (
-                          <span
-                            style={{
-                              width: '5px',
-                              height: '5px',
-                              borderRadius: '50%',
-                              background: st.color,
-                              animation: 'pulse 2s ease-in-out infinite',
-                            }}
-                          />
-                        )}
-                        {st.label}
-                      </span>
-
-                      {/* Domain badge */}
-                      <span
-                        style={{
-                          fontSize: '0.6875rem',
-                          fontWeight: 600,
-                          fontFamily: "'IBM Plex Mono', monospace",
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.05em',
-                          padding: '0.175rem 0.5rem',
-                          borderRadius: '4px',
-                          background: dc.bg,
-                          color: dc.fg,
-                        }}
-                      >
-                        {domainLabel(incident.domain)}
-                      </span>
-
-                      {/* Persistent flag */}
-                      {incident.is_persistent && (
-                        <span
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: 600,
-                            fontFamily: "'IBM Plex Mono', monospace",
-                            padding: '0.175rem 0.5rem',
-                            borderRadius: '4px',
-                            background: 'rgba(245,158,11,0.08)',
-                            color: '#f59e0b',
-                            border: '1px solid rgba(245,158,11,0.15)',
-                          }}
-                        >
-                          ONGOING
-                        </span>
-                      )}
-
-                      {/* Corroboration badge */}
-                      <CorroborationBadge corroboration={incident.corroboration} />
-
-                      {/* Timestamp */}
-                      <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)', marginLeft: 'auto' }}>
-                        {timeAgo(incident.declared_at)}
+                  <div style={{ width: '4px', background: sc.color, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0, padding: mobile ? '0.75rem 0.875rem' : '0.875rem 1.25rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.375rem' }}>
+                      <Chip label={inc.sev_level ?? 'SEV?'} color={sc.color} bg={sc.bg} pulse={sc.pulse} />
+                      <Chip label={rung.label} color={rung.color} bg={rung.bg} />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', fontFamily: mono }}>{alertLine(inc)}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: '0.75rem', color: 'var(--fg-muted)' }}>
+                        opened {ago(inc.declared_at)}
+                        {inc.last_at !== inc.declared_at ? ` · active ${ago(inc.last_at)}` : ''}
                       </span>
                     </div>
-
-                    {/* Title */}
-                    <h3
-                      style={{
-                        fontSize: '0.9375rem',
-                        fontWeight: 700,
-                        marginBottom: '0.375rem',
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {incident.title}
-                    </h3>
-
-                    {/* Impact summary or description */}
-                    {(incident.impact_summary || incident.description) && (
-                      <p
+                    <div style={{ fontSize: '1rem', fontWeight: 700, lineHeight: 1.35, marginBottom: '0.25rem' }}>{inc.title}</div>
+                    {summary && (
+                      <div
                         style={{
                           fontSize: '0.8125rem',
                           color: 'var(--fg-muted)',
-                          lineHeight: 1.5,
-                          marginBottom: '0.5rem',
+                          lineHeight: 1.45,
+                          overflow: 'hidden',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
                         }}
                       >
-                        {(() => {
-                          const text = incident.impact_summary || incident.description || ''
-                          return text.length > 180 ? text.slice(0, 180) + '...' : text
-                        })()}
-                      </p>
+                        {summary}
+                      </div>
                     )}
-
-                    {/* Footer meta */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '0.75rem',
-                        fontSize: '0.6875rem',
-                        color: 'var(--fg-faint)',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      {(incident.location_name || incident.location_country) && (
-                        <span>
-                          {[incident.location_name, incident.location_country].filter(Boolean).join(', ')}
-                        </span>
-                      )}
-                      {(incident.event_count || 0) > 1 && (
-                        <span>
-                          {incident.event_count} events
-                          {(incident.article_count || 0) > 0 && `, ${incident.article_count} articles`}
-                        </span>
-                      )}
-                      {incident.community_confirmations > 0 && (
-                        <span style={{ color: '#10b981' }}>
-                          {incident.community_confirmations} confirmed
-                        </span>
-                      )}
-                      <span>
-                        Declared {formatDate(incident.declared_at)}
-                      </span>
+                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.375rem', fontSize: '0.75rem', color: 'var(--fg-muted)', fontFamily: mono }}>
+                      {where && <span>{where}</span>}
+                      <span>rule: {ruleLabel(inc)}</span>
                     </div>
                   </div>
                 </a>
@@ -1036,134 +358,99 @@ export default async function IncidentsPage({
         )}
       </div>
 
-      {/* Pagination */}
-      {(hasPrev || hasNext) && (
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            gap: '1rem',
-            marginTop: '1rem',
-            paddingTop: '1rem',
-            borderTop: '1px solid var(--border)',
-          }}
-        >
-          {hasPrev ? (
-            <a
-              href={buildHref(filterState, { page: String(page - 1) })}
-              style={{
-                padding: '0.5rem 1rem',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-secondary)',
-                color: 'var(--fg)',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                textDecoration: 'none',
-              }}
-            >
-              {'\u2190'} Newer
-            </a>
-          ) : (
-            <span />
-          )}
-          <span style={{ fontSize: '0.75rem', color: 'var(--fg-faint)' }}>
-            Page {page} of {totalPages}
-          </span>
-          {hasNext ? (
-            <a
-              href={buildHref(filterState, { page: String(page + 1) })}
-              style={{
-                padding: '0.5rem 1rem',
-                borderRadius: 'var(--radius-lg)',
-                border: '1px solid var(--border)',
-                background: 'var(--bg-secondary)',
-                color: 'var(--fg)',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                textDecoration: 'none',
-              }}
-            >
-              Older {'\u2192'}
-            </a>
-          ) : (
-            <span />
-          )}
-        </div>
-      )}
-
-      {/* Recently Closed (only when not filtering) */}
-      {!activeStatus && !activeSev && !activeDomain && !activeCorrob && recentlyClosed.length > 0 && (
-        <div style={{ marginTop: '2rem' }}>
-          <details>
-            <summary
-              style={{
-                fontSize: '0.8125rem',
-                fontWeight: 600,
-                color: 'var(--fg-faint)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                cursor: 'pointer',
-                marginBottom: '0.75rem',
-              }}
-            >
-              Recently Closed ({recentlyClosed.length})
-            </summary>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', marginTop: '0.75rem' }}>
-              {recentlyClosed.map((inc) => {
-                const dc = domainColors[inc.domain] || defaultDomain
-                const sc = sevConfig[inc.sev_level] || sevConfig.SEV4
-                return (
-                  <a
-                    key={inc.id}
-                    href={`/incidents/${inc.slug}`}
+      {/* Watching — rung 2 */}
+      <div id="watching">
+        <SectionTitle count={watching?.length ?? 0}>Watching</SectionTitle>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)', margin: '-0.25rem 0 0.75rem' }}>
+          Travel signals at severity {WATCH_MIN_SEV}+ in the last 24 hours that no open incident covers. None of these has met
+          an opening rule.
+        </p>
+        {watching === null ? (
+          <div className="card" style={{ padding: '1rem 1.25rem', color: 'var(--fg-muted)', fontSize: '0.8125rem' }}>
+            The desk feed could not be reached just now, so the watch list is not shown. This is not an all-clear.
+          </div>
+        ) : watching.length === 0 ? (
+          <div className="card" style={{ padding: '1rem 1.25rem', color: 'var(--fg-muted)', fontSize: '0.8125rem' }}>
+            Nothing strong outside the open incidents.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem' }}>
+            {watching.map((d) => {
+              const body = (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.625rem', flexWrap: mobile ? 'wrap' : 'nowrap', padding: '0.625rem 1rem' }}>
+                  <Chip label={rungConfig.watching.label} color={rungConfig.watching.color} bg={rungConfig.watching.bg} />
+                  <span style={{ fontFamily: mono, fontSize: '0.75rem', fontWeight: 700, color: d.severity >= 8 ? '#f97316' : '#eab308' }}>
+                    {Number(d.severity).toFixed(1)}
+                  </span>
+                  <span
                     style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.75rem',
-                      padding: '0.625rem 1rem',
-                      background: 'var(--bg-card)',
-                      borderRadius: 'var(--radius)',
-                      border: '1px solid var(--border)',
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      opacity: 0.6,
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: mobile ? 'normal' : 'nowrap',
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: '0.6875rem',
-                        fontWeight: 700,
-                        fontFamily: "'IBM Plex Mono', monospace",
-                        color: sc.color,
-                        minWidth: '2.5rem',
-                      }}
-                    >
-                      {sc.label}
-                    </span>
-                    <span
-                      style={{
-                        width: '0.375rem',
-                        height: '0.375rem',
-                        borderRadius: '50%',
-                        background: dc.border,
-                        flexShrink: 0,
-                      }}
-                    />
-                    <span style={{ fontSize: '0.8125rem', fontWeight: 500, flex: 1 }}>
-                      {inc.title}
-                    </span>
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--fg-faint)' }}>
-                      Closed {inc.closed_at ? timeAgo(inc.closed_at) : timeAgo(inc.resolved_at || inc.declared_at)}
-                    </span>
-                  </a>
-                )
-              })}
-            </div>
-          </details>
-        </div>
-      )}
+                    {d.title}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
+                    {[d.place, d.class, ago(d.seen_at)].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              )
+              return d.href ? (
+                <a key={d.item_id} href={d.href} className="card" style={{ textDecoration: 'none', color: 'inherit', borderRadius: 'var(--radius-lg)' }}>
+                  {body}
+                </a>
+              ) : (
+                <div key={d.item_id} className="card" style={{ borderRadius: 'var(--radius-lg)' }}>
+                  {body}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Recently closed */}
+      <div id="closed">
+        <SectionTitle count={closed.length}>Closed in the last {CLOSED_WINDOW_H} hours</SectionTitle>
+        {closed.length === 0 ? (
+          <div style={{ fontSize: '0.8125rem', color: 'var(--fg-muted)' }}>None.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            {closed.map((c) => {
+              const sc = sevConfig[c.sev_level ?? ''] ?? sevConfig.SEV4
+              return (
+                <a
+                  key={c.id}
+                  href={`/incidents/${c.slug}`}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    gap: '0.625rem',
+                    padding: '0.375rem 0',
+                    textDecoration: 'none',
+                    color: 'inherit',
+                    opacity: 0.7,
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <span style={{ fontFamily: mono, fontSize: '0.6875rem', fontWeight: 700, color: sc.color }}>{c.sev_level ?? '—'}</span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.title}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--fg-muted)', whiteSpace: 'nowrap' }}>
+                    {[c.close_reason?.replace(/-/g, ' '), ago(c.closed_at)].filter(Boolean).join(' · ')}
+                  </span>
+                </a>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
