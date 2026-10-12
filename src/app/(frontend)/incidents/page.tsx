@@ -82,6 +82,8 @@ const mono = "'IBM Plex Mono', monospace"
 const WATCH_MIN_SEV = 6
 const WATCH_LIMIT = 15
 const CLOSED_WINDOW_H = 72
+/** A hung desk-api must not hang the page: on timeout the Watching section says the feed is unreachable. */
+const DESK_TIMEOUT_MS = 5000
 
 // ── Helpers ──
 
@@ -113,8 +115,9 @@ function sevRank(s: string | null): number {
 
 function alertLine(inc: OpenIncident): string {
   if (!inc.alerted_at) return 'no alert sent'
-  const via = (inc.alerted_via || '').startsWith('Alerted by ') ? (inc.alerted_via || '').slice('Alerted by '.length) : 'alert sent'
-  return `${via} · ${ago(inc.alerted_at)}`
+  // Backfilled rows (schema/062) carry no real send time, so they show no time.
+  if (!(inc.alerted_via || '').startsWith('Alerted by ')) return 'alert sent'
+  return `${(inc.alerted_via || '').slice('Alerted by '.length)} · ${ago(inc.alerted_at)}`
 }
 
 function Chip({ label, color, bg, pulse }: { label: string; color: string; bg: string; pulse?: boolean }) {
@@ -179,8 +182,7 @@ async function loadOpen(): Promise<OpenIncident[]> {
           ORDER BY t.created_at ASC LIMIT 1
        ) a ON true
       WHERE i.status NOT IN ('closed', 'resolved', 'proposed', 'dismissed')
-      ORDER BY coalesce(i.last_material_event_at, i.declared_at) DESC
-      LIMIT 200`,
+      ORDER BY coalesce(i.last_material_event_at, i.declared_at) DESC`,
   )
   return rows.sort((a, b) => sevRank(a.sev_level) - sevRank(b.sev_level) || b.last_at.localeCompare(a.last_at))
 }
@@ -201,7 +203,7 @@ async function loadWatching(open: OpenIncident[]): Promise<DeskItem[] | null> {
   try {
     const res = await fetch(
       `${DESK_API_BASE}/desk/items?class=event,hazard,delay&min_sev=${WATCH_MIN_SEV}&hours=24&limit=100`,
-      { cache: 'no-store' },
+      { cache: 'no-store', signal: AbortSignal.timeout(DESK_TIMEOUT_MS) },
     )
     if (!res.ok) return null
     const { items } = (await res.json()) as { items: DeskItem[] }
