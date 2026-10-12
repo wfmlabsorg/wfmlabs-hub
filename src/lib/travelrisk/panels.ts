@@ -14,6 +14,7 @@ const OVIX_API = 'https://ovix-api.tedlango.workers.dev'
 export interface PanelNode {
   id: string; name: string; tier: 'global' | 'macro' | 'sub' | 'metro'
   parent: string | null; isUS: boolean; nwsStates: string[] | null
+  bbox: [number, number, number, number] | null // [south, west, north, east]
 }
 export interface PanelDef { id: string; title: string; domain: string; coverage: 'us' | 'global'; status: 'live' | 'planned'; blurb: string; sources: string[] }
 export interface OpRiskDomainFull {
@@ -36,6 +37,14 @@ export interface NwsPanel {
   alerts?: NwsAlert[]
   reports?: { type: string; title: string; area: string; detail: string | null; at: string }[]
   truncated?: { alerts: number; reports: number }
+  airports?: AirportStatus[]
+}
+
+export type AviationImpact = 'disrupt' | 'delay' | 'advisory' | 'clear'
+export interface AirportStatus {
+  iata: string; name: string; city: string; state: string; lat: number; lon: number; rank: number
+  impact: AviationImpact; reachable: boolean; inNode: boolean
+  alerts: { event: string; severity: string; impact: AviationImpact; ends: string | null; headline: string | null; url: string | null }[]
 }
 
 export type Fetched<T> = { ok: true; data: T } | { ok: false; status: number | null }
