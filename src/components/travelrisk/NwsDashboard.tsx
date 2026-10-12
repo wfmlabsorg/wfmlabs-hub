@@ -73,6 +73,9 @@ function RegionStrip({ regions, current }: { regions: RegionChip[]; current: str
   )
 }
 
+/** Leaflet treats string content as HTML; API strings always go in as text nodes. */
+function textEl(t: string): HTMLElement { const e = document.createElement('span'); e.textContent = t; return e }
+
 /** Popup built from DOM text nodes — API strings never become markup. */
 function popup(a: AirportStatus): HTMLElement {
   const box = document.createElement('div')
@@ -131,11 +134,11 @@ function WarningsMap({ airports, bbox, focus, regions, current }: {
         color: on ? '#e2e8f0' : REGION_HUE, weight: on ? 2 : 1, dashArray: on ? undefined : '4 4', opacity: on ? 0.9 : 0.55,
         fillColor: REGION_HUE, fillOpacity: w == null ? 0 : 0.03 + (w / 10) * 0.16, interactive: true,
       })
-      rect.bindTooltip(chipText(r), { sticky: true, className: 'nwsd-tip' })
+      rect.bindTooltip(textEl(chipText(r)), { sticky: true, className: 'nwsd-tip' })
       rect.on('click', () => { if (!on) window.location.href = `/travelrisk/region/${r.id}/nws` })
       rect.addTo(boxes.current!)
       L.marker([r.bbox[2], r.bbox[1]], { interactive: false, icon: L.divIcon({ className: 'nwsd-boxlbl', html: '', iconSize: [0, 0] }) })
-        .bindTooltip(`${r.short} ${w == null ? '—' : w.toFixed(1)}${r.weather?.floored ? ' ▲' : ''}`, { permanent: true, direction: 'bottom', offset: [18, 4], className: 'nwsd-tip nwsd-boxtip' })
+        .bindTooltip(textEl(`${r.short} ${w == null ? '—' : w.toFixed(1)}${r.weather?.floored ? ' ▲' : ''}`), { permanent: true, direction: 'bottom', offset: [18, 4], className: 'nwsd-tip nwsd-boxtip' })
         .addTo(boxes.current!)
     }
     pins.current.clearLayers()
@@ -143,7 +146,7 @@ function WarningsMap({ airports, bbox, focus, regions, current }: {
     for (const a of airports) {
       const c = IMPACT[a.reachable ? a.impact : 'clear'].color
       const mk = L.circleMarker([a.lat, a.lon], { radius: a.impact === 'clear' ? 6 : 9, color: '#0b1220', weight: 2, fillColor: a.reachable ? c : '#64748b', fillOpacity: 0.95 })
-        .bindTooltip(a.iata, { permanent: true, direction: 'right', className: 'nwsd-tip', offset: [8, 0] })
+        .bindTooltip(textEl(a.iata), { permanent: true, direction: 'right', className: 'nwsd-tip', offset: [8, 0] })
         .bindPopup(() => popup(a))
       mk.addTo(pins.current)
       markers.current.set(a.iata, mk)
