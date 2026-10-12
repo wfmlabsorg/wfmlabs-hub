@@ -72,7 +72,10 @@ export default async function NwsPanelPage({ params }: { params: Promise<{ node:
     return wrap(<>{head}<GapNotice title="Outside NWS coverage" detail={d.note ?? 'The National Weather Service covers the United States only.'} /></>)
   }
 
-  const s = d.summary!
+  if (!d.summary) {
+    return wrap(<>{head}<DataUnavailable title="The NWS panel answered without data" detail="ovix-api returned no summary for this region. This is a gap, not an all-clear; the page retries every two minutes." /></>)
+  }
+  const s = d.summary
   const alerts = d.alerts ?? []
   const reports = d.reports ?? []
   return wrap(
