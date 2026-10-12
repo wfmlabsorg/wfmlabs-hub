@@ -2,17 +2,21 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 /**
- * Signal purge cron — runs every 6 hours via Vercel Cron.
- * Deletes signals older than 48 hours. Processes in batches of 100.
+ * Signal purge cron — runs daily at 06:00 UTC via Vercel Cron (see `vercel.json`).
+ * Deletes signals older than 192 hours (8 days). Processes in batches of 100.
+ *
+ * Why 192 h: the OVIX op-risk index reads a 168 h (7-day) window of signals, so the
+ * previous 48 h retention made the "7-day" score a 2–3-day score and corrupted its
+ * baseline (2026-10-12 audit). 192 h = 168 h window + 24 h slack for the daily cron.
  *
  * Also callable manually:
- *   GET /api/signals/purge?hours=48
+ *   GET /api/signals/purge?hours=192
  *
  * Requires CRON_SECRET header (Vercel injects this for cron jobs)
  * or admin session.
  */
 
-const RETENTION_HOURS = 48
+const RETENTION_HOURS = 192
 const BATCH_SIZE = 100
 
 export async function GET(req: Request) {

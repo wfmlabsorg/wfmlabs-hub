@@ -88,10 +88,11 @@ export async function POST(req: Request) {
       if (!sig.message || !sig.source || !sig.signalType) continue
 
       const signalType = (['ai', 'alert', 'ovix', 'member'].includes(sig.signalType) ? sig.signalType : 'ai') as 'ai' | 'alert' | 'ovix' | 'member'
+      // Canonical bands live in roc/workers/_shared/severity-adopt.ts `signalLabelFor`.
       const severityLabel = (sig.severityLabel || (
-        sig.severity && sig.severity >= 8 ? 'extreme'
-        : sig.severity && sig.severity >= 6 ? 'severe'
-        : sig.severity && sig.severity >= 4 ? 'moderate'
+        sig.severity && sig.severity >= 9 ? 'extreme'
+        : sig.severity && sig.severity >= 7 ? 'severe'
+        : sig.severity && sig.severity >= 5 ? 'moderate'
         : 'info'
       )) as 'info' | 'moderate' | 'severe' | 'extreme'
       // Coerce genuinely unknown values to 'general'; known enum values pass through.
@@ -189,7 +190,8 @@ export async function GET(req: Request) {
 }
 
 /**
- * DELETE /api/signals?older_than=48h — Purge signals older than specified duration.
+ * DELETE /api/signals?hours=192 — Purge signals older than specified duration.
+ * Default matches the purge cron's 192 h retention (see /api/signals/purge/route.ts).
  * Requires admin session or ROC API key.
  */
 export async function DELETE(req: Request) {
@@ -213,7 +215,7 @@ export async function DELETE(req: Request) {
   }
 
   const url = new URL(req.url)
-  const hours = parseInt(url.searchParams.get('hours') || '48')
+  const hours = parseInt(url.searchParams.get('hours') || '192')
   const cutoff = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString()
 
   try {
