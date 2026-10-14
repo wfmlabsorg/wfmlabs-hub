@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react'
 import { domainColor } from '@/lib/domainColors'
+import { isNwsAlertUrl, nwsHrefFor } from '@/lib/travelrisk/nwsHref'
 
 interface Signal {
   id: number
@@ -631,7 +632,33 @@ export default function SignalsPage() {
                             </span>
                           </>
                         )}
-                        {sig.sourceUrl && (
+                        {sig.sourceUrl && isNwsAlertUrl(sig.sourceUrl) && (
+                          // An NWS warning opens our NWS dashboard for its region, not the alert's raw
+                          // JSON (Ted, 14 Oct). The JSON stays one small click away.
+                          <>
+                            <span style={{ fontWeight: 500 }}>NWS dashboard</span>
+                            <span>
+                              <a
+                                href={nwsHrefFor({ regionId: sig.regionId }) ?? '/travelrisk/region/global/nws'}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ color, textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                              >
+                                {sig.regionName ? `${sig.regionName} · NWS warnings` : 'NWS warnings'}
+                              </a>
+                              <a
+                                href={sig.sourceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="The alert as NWS publishes it (JSON)"
+                                style={{ marginLeft: '0.5rem', fontSize: '0.6875rem', color: 'var(--fg-muted)' }}
+                              >
+                                json ↗
+                              </a>
+                            </span>
+                          </>
+                        )}
+                        {sig.sourceUrl && !isNwsAlertUrl(sig.sourceUrl) && (
                           <>
                             <span style={{ fontWeight: 500 }}>Link</span>
                             <a

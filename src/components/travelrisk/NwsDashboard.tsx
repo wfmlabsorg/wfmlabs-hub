@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import 'leaflet/dist/leaflet.css'
 import type { Map as LMap, LayerGroup, TileLayer } from 'leaflet'
 import type { AirportStatus, AviationImpact, NwsAlert, NwsPanel, RegionChip } from '@/lib/travelrisk/panels'
+import { nwsHrefFor } from '@/lib/travelrisk/nwsHref'
 
 /**
  * NWS ACTIVE WARNINGS — the tier-2 weather window (rebuilt from ovix6's NWSWarningsPanel, 2026-10-12).
@@ -169,7 +170,7 @@ function WarningsMap({ airports, bbox, focus, regions, current }: {
 
 // ── Auto-scrolling severity column ─────────────────────────────────────────
 
-function Column({ sev, items, now }: { sev: string; items: NwsAlert[]; now: number | null }) {
+function Column({ sev, items, now, current }: { sev: string; items: NwsAlert[]; now: number | null; current: string }) {
   const clip = useRef<HTMLDivElement>(null)
   const set = useRef<HTMLDivElement>(null)
   const [h, setH] = useState(0)
@@ -180,13 +181,20 @@ function Column({ sev, items, now }: { sev: string; items: NwsAlert[]; now: numb
   const c = SEV_COLOR[sev]
   const list = (k: string) => (
     <div ref={k === 'a' ? set : undefined} key={k}>
-      {items.map((a, i) => (
-        <a key={k + i} href={a.url ?? undefined} target="_blank" rel="noopener" className="nwsd-alert">
+      {items.map((a, i) => {
+        // A warning opens the NWS dashboard of the sub-region that holds it (Ted, 14 Oct). On that
+        // sub-region's own page the card opens the alert as NWS publishes it (JSON), so the
+        // provenance stays one click away.
+        const dash = nwsHrefFor({ states: a.states, area: a.area }, current)
+        return (
+        <a key={k + i} href={dash ?? a.url ?? undefined} target={dash ? undefined : '_blank'} rel="noopener" className="nwsd-alert"
+          title={dash ? "Open this sub-region's NWS dashboard" : 'The alert as NWS publishes it (JSON)'}>
           <div style={{ color: c, fontWeight: 700, fontSize: 12 }}>{a.event}</div>
           <div style={{ fontSize: 11, color: '#cbd5e1', lineHeight: 1.35 }}>{a.area.length > 140 ? a.area.slice(0, 137) + '…' : a.area}</div>
           <div style={{ fontFamily: MONO, fontSize: 10, color: '#64748b' }}>{[a.states.join(' '), left(a.expires, now)].filter(Boolean).join(' · ')}</div>
         </a>
-      ))}
+        )
+      })}
     </div>
   )
   return (
@@ -299,7 +307,7 @@ export function NwsDashboard({ d, weather, regionHref }: {
       </div>
 
       <div className="nwsd-lower">
-        {SEV.map((k) => <Column key={k} sev={k} items={bySev[k]} now={now} />)}
+        {SEV.map((k) => <Column key={k} sev={k} items={bySev[k]} now={now} current={d.node.id} />)}
       </div>
     </div>,
     host,
