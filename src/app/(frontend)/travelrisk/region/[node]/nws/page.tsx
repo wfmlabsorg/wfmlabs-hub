@@ -6,6 +6,7 @@ import { DataUnavailable } from '@/components/DataUnavailable'
 import { AutoRefresh } from '@/components/AutoRefresh'
 import { NEUTRAL, NEUTRAL_DIM, NEUTRAL_LINE } from '@/lib/scoreState'
 import { fetchNwsPanel, fetchRegionWindow, fmtZ } from '@/lib/travelrisk/panels'
+import { nwsHrefFor } from '@/lib/travelrisk/nwsHref'
 
 /**
  * NWS ACTIVE WARNINGS — the first tier-2 panel and the template for the rest (2026-10-12).
@@ -122,23 +123,31 @@ export default async function NwsPanelPage({ params }: { params: Promise<{ node:
               <thead>
                 <tr style={{ textAlign: 'left', fontFamily: MONO, fontSize: '0.5625rem', letterSpacing: '0.08em', color: NEUTRAL_DIM }}>
                   <th style={{ padding: '0.3rem' }}>SEVERITY</th><th style={{ padding: '0.3rem' }}>EVENT</th><th style={{ padding: '0.3rem' }}>AREA</th>
-                  <th style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>ISSUED</th><th style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>EXPIRES</th>
+                  <th style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>ISSUED</th><th style={{ padding: '0.3rem', whiteSpace: 'nowrap' }}>EXPIRES</th><th style={{ padding: '0.3rem' }}>SRC</th>
                 </tr>
               </thead>
               <tbody>
-                {alerts.map((a, i) => (
+                {alerts.map((a, i) => {
+                  // A warning opens the NWS dashboard of the sub-region that holds it (Ted, 14 Oct); on that
+                  // sub-region's own page it is plain text. The alert's raw JSON stays one small click away.
+                  const dash = nwsHrefFor({ states: a.states, area: a.area }, d.node.id)
+                  return (
                   <tr key={(a.url ?? '') + i} style={{ borderTop: `1px solid ${NEUTRAL_LINE}`, verticalAlign: 'top' }}>
                     <td style={{ padding: '0.35rem 0.3rem', fontFamily: MONO, fontWeight: 700, color: sevColor(a.severityLabel), whiteSpace: 'nowrap' }}>{a.severityLabel}</td>
                     <td style={{ padding: '0.35rem 0.3rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {a.url ? <a href={a.url} target="_blank" rel="noopener" style={{ color: 'var(--fg)' }}>{a.event}</a> : a.event}
+                      {dash ? <a href={dash} title="Open this sub-region's NWS dashboard" style={{ color: 'var(--fg)' }}>{a.event}</a> : a.event}
                     </td>
                     <td style={{ padding: '0.35rem 0.3rem', color: 'var(--fg-muted)', minWidth: '14rem' }} title={a.headline ?? undefined}>
                       {a.area.length > 160 ? a.area.slice(0, 157) + '…' : a.area}
                     </td>
                     <td style={{ padding: '0.35rem 0.3rem', fontFamily: MONO, whiteSpace: 'nowrap' }}>{fmtZ(a.issued)}</td>
                     <td style={{ padding: '0.35rem 0.3rem', fontFamily: MONO, whiteSpace: 'nowrap' }}>{fmtZ(a.expires)}</td>
+                    <td style={{ padding: '0.35rem 0.3rem', fontFamily: MONO, fontSize: '0.5625rem', whiteSpace: 'nowrap' }}>
+                      {a.url ? <a href={a.url} target="_blank" rel="noopener" title="The alert as NWS publishes it (JSON)" style={{ color: NEUTRAL_DIM }}>json ↗</a> : null}
+                    </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             {(d.truncated?.alerts ?? 0) > 0 && <p style={{ fontSize: '0.6875rem', color: NEUTRAL_DIM }}>+{d.truncated!.alerts} more, lower severity.</p>}

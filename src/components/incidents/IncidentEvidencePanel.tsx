@@ -6,6 +6,7 @@ import type {
 } from '@/lib/evidence'
 import { ruleKey } from '@/lib/evidence'
 import { CorroborationBadge } from '@/components/incidents/CorroborationBadge'
+import { isNwsAlertUrl, nwsDashboardHref } from '@/lib/travelrisk/nwsHref'
 
 /**
  * IncidentEvidencePanel — hub-026 / WFM-125.
@@ -424,8 +425,11 @@ function SourcesList({ sources, corroboration }: { sources: unknown[]; corrobora
               textDecoration: 'none',
               color: 'inherit',
             }
-            return s.url ? (
-              <a key={`${s.url}-${i}`} href={s.url} target="_blank" rel="noopener noreferrer" style={style}>
+            // An NWS warning opens the general NWS dashboard, not the alert's raw JSON (Ted, 14 Oct).
+            const nws = isNwsAlertUrl(s.url)
+            const href = nws ? nwsDashboardHref() : s.url
+            return href ? (
+              <a key={`${href}-${i}`} href={href} target={nws ? undefined : '_blank'} rel="noopener noreferrer" style={style}>
                 {inner}
               </a>
             ) : (
