@@ -948,7 +948,7 @@ function loadStories() {
       var m = d.meta || {}, nf = (d.flights || []).length;
       var sqFail = (d.meta && d.meta.failed) || [];
       feed('delays', true, nDelayed, m.run_at, nDelayed + ' flight(s) ≥ 60 min late · arcs drawn at 2 h+');
-      feed('stories', sqFail.length === 0, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : '') + (sqFail.length ? ' · GAP: ' + sqFail.join(', ') : ''));
+      feed('stories', sqFail.length === 0, (d.airports || []).length, m.run_at, (d.airports || []).length + ' story airports · ' + nf + ' flights · ' + (d.emergencies || []).length + ' emergencies · ' + (m.units_today != null ? m.units_today + '/' + (m.daily_cap || '?') + ' board units today' : '') + (m.reserve_active ? ' · RESERVE: last ' + (m.reserve_pct || '?') + '% held for FAA / ops stories' : '') + (sqFail.length ? ' · GAP: ' + sqFail.join(', ') : ''));
     })
     .catch(function (e) { feed('stories', false, 0, null, String(e.message || e)); feed('delays', false, 0, null, String(e.message || e)); });
 }
