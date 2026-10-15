@@ -6,6 +6,7 @@ import { DataUnavailable } from '@/components/DataUnavailable'
 import { AutoRefresh } from '@/components/AutoRefresh'
 import { NwsDashboard } from '@/components/travelrisk/NwsDashboard'
 import { fetchNwsPanel, fetchRegionWindow } from '@/lib/travelrisk/panels'
+import { nwsDashboardHref } from '@/lib/travelrisk/nwsHref'
 
 /**
  * NWS ACTIVE WARNINGS — tier-2 weather window (2026-10-12). Server reads ovix-api once per refresh;
@@ -24,12 +25,16 @@ export default async function NwsPanelPage({ params }: { params: Promise<{ node:
   const { node } = await params
   const [p, w] = await Promise.all([fetchNwsPanel(node), fetchRegionWindow(node)])
   if (!p.ok && p.status === 404) notFound()
-  const regionHref = `/travelrisk/region/${encodeURIComponent(node)}`
+  // The region window is retired (2026-10-15): the way back is the Travel Risk board itself.
+  const regionHref = '/travelrisk'
 
   const plain = (body: React.ReactNode) => (
     <div style={{ maxWidth: '48rem', margin: '0 auto', padding: '1.25rem 1rem 2rem' }}>
       <AutoRefresh intervalMs={120_000} />
-      <p><a href={regionHref} style={{ color: 'var(--accent)' }}>← region window</a></p>
+      <p style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+        <a href={regionHref} style={{ color: 'var(--accent)' }}>← Travel Risk</a>
+        <a href={nwsDashboardHref()} style={{ color: 'var(--accent)' }}>NWS Active Warnings (US) →</a>
+      </p>
       {body}
     </div>
   )
