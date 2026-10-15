@@ -55,6 +55,38 @@ export interface AirportStatus {
   alerts: { event: string; severity: string; impact: AviationImpact; ends: string | null; headline: string | null; url: string | null }[]
 }
 
+// ── Space weather (2026-10-15) — mirrors workers/ovix-api/src/panels/space.ts ──────────────────────
+export type SpaceScale = 'R' | 'S' | 'G'
+export type SpaceLevel = 0 | 1 | 2 | 3 | 4 | 5
+export interface SwpcAlert {
+  productId: string; issued: string; kind: 'watch' | 'warning' | 'alert' | 'summary' | 'other'; code: string | null
+  scale: SpaceScale | null; level: SpaceLevel | null; headline: string; validUntil: string | null; message: string
+}
+export interface ScaleDay { date: string; R: SpaceLevel | null; S: SpaceLevel | null; G: SpaceLevel | null; rMinorProb: number | null; rMajorProb: number | null; sProb: number | null }
+export interface SwpcSnapshot {
+  fetchedAt: string
+  scales: { current: { R: SpaceLevel; S: SpaceLevel; G: SpaceLevel }; observedAt: string | null; yesterday: ScaleDay | null; forecast: ScaleDay[] } | null
+  kp: { series: { t: string; kp: number }[]; latest: { t: string; kp: number } | null; estimated: { t: string; kp: number } | null } | null
+  xray: { series: { t: string; flux: number }[]; latest: { t: string; flux: number; cls: string | null } | null; peak: { t: string; flux: number; cls: string | null } | null } | null
+  protons: { series: { t: string; p10: number | null; p100: number | null }[]; latest: { t: string; p10: number | null; p100: number | null } | null } | null
+  wind: { series: { t: string; speed: number | null; density: number | null; bz: number | null; bt: number | null }[]; latest: { t: string; speed: number | null; density: number | null; bz: number | null; bt: number | null } | null } | null
+  alerts: SwpcAlert[] | null
+  gaps: string[]
+}
+export interface SpaceAviation { key: 'hf' | 'polar' | 'gnss' | 'satcom'; label: string; level: SpaceLevel; text: string; drivers: string }
+export interface SpacePanel {
+  panel: PanelDef; node: PanelNode; coverage: 'full'; generatedAt: string
+  snapshot: SwpcSnapshot
+  levels: { now: { R: SpaceLevel; S: SpaceLevel; G: SpaceLevel }; today: { R: SpaceLevel; S: SpaceLevel; G: SpaceLevel } | null; worstNow: SpaceLevel; worstToday: SpaceLevel | null }
+  score: { value: number; band: 'QUIET' | 'MINOR' | 'ELEVATED' | 'SEVERE'; banner: string; todayValue: number | null }
+  aviation: SpaceAviation[]
+  sun: { lat: number; lon: number; daylit: string[] }
+  images: { suvi195: string; lascoC3: string; auroraNorth: string; auroraSouth: string; overview: string }
+  events: { title: string; type: string | null; severity: number; label: string | null; at: string; expires: string | null; url: string | null; detail: string | null }[]
+  floor: { domain: string; floor: number; rule: string; reason: string; source: string; count: number } | null
+  sources: { live: string; events: string }
+}
+
 export type Fetched<T> = { ok: true; data: T } | { ok: false; status: number | null }
 
 async function get<T>(path: string, revalidate: number): Promise<Fetched<T>> {
@@ -69,6 +101,7 @@ async function get<T>(path: string, revalidate: number): Promise<Fetched<T>> {
 
 export const fetchRegionWindow = (node: string) => get<RegionWindow>(`/api/ovix/panels?node=${encodeURIComponent(node)}`, 120)
 export const fetchNwsPanel = (node: string) => get<NwsPanel>(`/api/ovix/panels/nws?node=${encodeURIComponent(node)}`, 60)
+export const fetchSpacePanel = (node: string) => get<SpacePanel>(`/api/ovix/panels/space?node=${encodeURIComponent(node)}`, 60)
 
 /** "2026-10-12 15:06:00+00" → "Oct 12 15:06Z" */
 export function fmtZ(v: string | null | undefined): string {
