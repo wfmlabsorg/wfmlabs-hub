@@ -201,8 +201,8 @@
     <div class="row"><i style="background:#ef4444"></i>airport degraded · column height = median delay</div>
     <div class="row"><i style="background:#18BC9C"></i>airport checked, normal</div>
     <div class="row"><i style="border:2px solid #94a3b8"></i>airport not checked (never drawn calm)</div>
-    <div class="row"><i style="background:#18BC9C"></i>misery dot · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#f97316"></i>miserable <i style="background:#ef4444"></i>severe ≥60</div>
-    <div class="row"><i style="border:2px solid #94a3b8;background:transparent"></i>misery not scored (statistics withheld / absent from sweep) · <i style="border:2px solid #a78bfa;background:transparent"></i>military airbase (no commercial data)</div>
+    <div class="row"><i style="background:#18BC9C;border-radius:2px"></i><b>square = airport</b> (click it) · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#f97316"></i>miserable <i style="background:#ef4444"></i>severe ≥60</div>
+    <div class="row"><i style="background:#1e293b;border:1px solid #94a3b8;border-radius:2px"></i>airport not scored (statistics withheld / absent from sweep) · <i style="background:#a78bfa;border-radius:2px"></i>military airbase (no commercial data) · circles are events, never airports</div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
     <div class="row"><i style="background:#ef4444"></i>flight event: diverted / emergency (solid) · cancelled (dashed) · <i style="background:#f59e0b"></i>delay 2 h+ (own layer)</div>
@@ -228,7 +228,9 @@ var viewer = null;
 var feeds = {};                     // name → { ok, at, n, note }
 var lookup = {};                    // entity id → card payload
 var layerDefs = [
-  { id: 'airports',  label: 'Airports & delays',    color: '#18BC9C', on: true },
+  // 2026-10-15 (Ted): off by default — the Travel misery layer (wg-misery.js) now draws every airport as a square;
+  // this layer's circles + delay columns are a click away for the degraded detail.
+  { id: 'airports',  label: 'Airports & delays',    color: '#18BC9C', on: false },
   // Defaults (Ted, 2026-10-11): what carries the posture is ON — airports & delays, flight events,
   // flight delays, open incidents, cyclones (plus the nathaz and faa plugins). Weather volumes
   // (SIGMETs, radar), live event dots and corridor arcs are a click away, not the first thing seen.

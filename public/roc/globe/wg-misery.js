@@ -1,14 +1,18 @@
 /* =========================================================================
  * wg-misery.js — the Travel Misery Index, as a World Glass plugin layer (api-083).
  *
- *   One dot per registry airport (660 of them, military airbases included), from /api/roc-misery:
+ *   One marker per registry airport (660 of them, military airbases included), from /api/roc-misery.
+ *   AIRPORTS ARE SQUARES. Every other layer on the board draws circles (events, hazards, quakes — hollow when
+ *   the position is approximate), so an airport must never be a circle (Ted, 2026-10-15: "difficult to see what
+ *   airports are versus little events that are these open circles"). A square is an airport, full stop;
+ *   its IATA code is printed beside it once you are within ~2,500 km.
  *     SIZE   = scheduled movements (departures + arrivals) in the feed's 2-hour window — square-root
  *              scale, so a 300-movement hub is ~3× a 30-movement field, not 10×.
  *     COLOUR = misery 0-100 (rule airport_misery v1): calm < 20 teal · slow 20-40 amber ·
  *              miserable 40-60 orange · severe ≥ 60 red. A ring pulses around severe.
- *     GREY HOLLOW = no score — the feed withheld statistics (too few flights), the airport was
- *              absent from the sweep, or it has never been observed. Drawn at its real size, never calm.
- *     MILITARY = hollow violet ring, no commercial data by construction (category government).
+ *     GREY   = no score — the feed withheld statistics (too few flights), the airport was absent from
+ *              the sweep, or it has never been observed. A dark square at its real size, never calm.
+ *     MILITARY = violet square with a white cross, no commercial data by construction (category government).
  *   The gauge in the panel is the FLIGHT-WEIGHTED mean misery across scored airports for the newest
  *   sweep, with a 24-hour sparkline. A thin sweep says so (scored / total).
  *
@@ -50,17 +54,40 @@ function windowText(a) {
 }
 function signed(v, unit) { if (v == null) return null; return (v > 0 ? '+' : '') + (Math.round(v * 10) / 10) + (unit || ''); }
 
+
+/* ── the glyph: a rounded square, cached per (size, fill, outline, style) ── */
+var glyphCache = {};
+function squareGlyph(px, fill, outline, style) {
+  var key = px + '|' + fill + '|' + outline + '|' + (style || '');
+  if (glyphCache[key]) return glyphCache[key];
+  var pad = 3, w = px + pad * 2, c = document.createElement('canvas'); c.width = w; c.height = w;
+  var g = c.getContext('2d'), r = Math.max(2, Math.round(px / 5));
+  g.beginPath(); g.moveTo(pad + r, pad); g.lineTo(pad + px - r, pad); g.quadraticCurveTo(pad + px, pad, pad + px, pad + r);
+  g.lineTo(pad + px, pad + px - r); g.quadraticCurveTo(pad + px, pad + px, pad + px - r, pad + px); g.lineTo(pad + r, pad + px);
+  g.quadraticCurveTo(pad, pad + px, pad, pad + px - r); g.lineTo(pad, pad + r); g.quadraticCurveTo(pad, pad, pad + r, pad); g.closePath();
+  g.fillStyle = fill; g.fill(); g.lineWidth = style === 'thin' ? 1 : 1.5; g.strokeStyle = outline; g.stroke();
+  if (style === 'cross') {   // military: a white cross so the violet square reads as "base" even when tiny
+    g.strokeStyle = 'rgba(255,255,255,.95)'; g.lineWidth = Math.max(1.5, px / 6); var m = pad + px / 2, a = px * 0.28;
+    g.beginPath(); g.moveTo(m - a, m); g.lineTo(m + a, m); g.moveTo(m, m - a); g.lineTo(m, m + a); g.stroke();
+  }
+  glyphCache[key] = c; return c;
+}
+var LABEL_NEAR = new Cesium.DistanceDisplayCondition(0, 2.5e6);
+function codeLabel(a, px, col, text, far) {
+  return { text: text, font: (far ? '12px' : '11px') + ' monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(0, -(px / 2 + 9)), distanceDisplayCondition: far || LABEL_NEAR };
+}
+
 /* ── the card ── */
 WG.card('misery', function (x) {
   var a = x.a, b = bandOf(a.misery), col = colorOf(a);
-  var head = a.military ? 'Military airbase' : (a.misery != null ? 'Misery ' + Math.round(a.misery) + ' · ' + b.word : 'Misery · not scored');
-  var h = '<div class="h" style="color:' + col + '">' + esc(head) + '</div><div class="ct">' + esc((a.name || a.icao) + ' (' + (a.iata || a.icao) + ')') + (a.city ? ' · ' + esc(a.city) : '') + '</div>';
-  var rows = [];
+  var head = (a.military ? 'Military airbase' : 'Airport') + ' · ' + (a.misery != null ? 'misery ' + Math.round(a.misery) + ' · ' + b.word : a.military ? 'no commercial data' : 'not scored');
+  var h = '<div class="h" style="color:' + col + '">' + esc(head) + '</div><div class="ct">' + esc(a.name || a.icao) + '</div>';
+  var rows = [['codes', (a.iata ? a.iata + ' · ' : '') + a.icao], ['where', [a.city, a.country].filter(Boolean).join(', ')]];
+  if (!a.military) rows.push(['flights in window', a.movements != null ? a.movements + ' scheduled (' + (a.departures_total != null ? a.departures_total : '?') + ' departures · ' + (a.arrivals_total != null ? a.arrivals_total : '?') + ' arrivals)' : null]);
+  if (!a.military) rows.push(['cancelled', a.cancelled != null && a.movements ? a.cancelled + ' (' + (a.departures_cancelled || 0) + ' dep · ' + (a.arrivals_cancelled || 0) + ' arr' + (a.cancel_rate != null ? ' · ' + pct(a.cancel_rate) : '') + ')' : null]);
+  if (!a.military) rows.push(['delays', a.median_delay_min != null ? 'median ' + mins(a.median_delay_min) + ' (dep ' + (a.departures_median_delay_min != null ? signed(a.departures_median_delay_min, 'm') : '—') + ' · arr ' + (a.arrivals_median_delay_min != null ? signed(a.arrivals_median_delay_min, 'm') : '—') + ')' + (a.delay_index != null ? ' · index ' + (Math.round(a.delay_index * 100) / 100) + '/5' : '') : null]);
   if (a.misery == null) rows.push(['why no score', REASON[a.misery_reason] || a.misery_reason || 'unknown']);
-  rows.push(['scheduled', a.movements != null ? a.movements + ' movements (' + (a.departures_total != null ? a.departures_total : '?') + ' dep · ' + (a.arrivals_total != null ? a.arrivals_total : '?') + ' arr)' : null]);
-  rows.push(['cancelled', a.cancelled != null && a.movements ? a.cancelled + (a.cancel_rate != null ? ' (' + pct(a.cancel_rate) + ')' : '') : null]);
-  rows.push(['median delay', a.median_delay_min != null ? mins(a.median_delay_min) + (a.departures_median_delay_min != null || a.arrivals_median_delay_min != null ? ' (dep ' + (a.departures_median_delay_min != null ? signed(a.departures_median_delay_min, 'm') : '—') + ' · arr ' + (a.arrivals_median_delay_min != null ? signed(a.arrivals_median_delay_min, 'm') : '—') + ')' : '') : null]);
-  rows.push(['delay index', a.delay_index != null ? (Math.round(a.delay_index * 100) / 100) + ' of 5 (feed\'s own)' : null]);
   if (a.vs_normal != null) rows.push(['vs normal', signed(a.vs_normal) + ' against the ' + (a.baseline_granularity === 'day_of_week' ? 'same-weekday' : 'flat') + ' baseline (' + a.baseline_maturity + ', ' + a.baseline_samples + ' samples)']);
   else if (a.misery != null) rows.push(['vs normal', 'no baseline yet']);
   if (a.program_type) rows.push(['programme', a.program_type + (a.lifecycle ? ' · ' + a.lifecycle : '')]);
@@ -70,6 +97,7 @@ WG.card('misery', function (x) {
   rows.push(['registry', (a.category || '') + ' · tier ' + a.monitor_tier + ' · weight ' + a.business_travel_weight]);
   rows.push(['rule', a.rule_id ? a.rule_id + ' ' + a.rule_version : null]);
   h += WG.kvs(rows);
+  if (!a.military) h += '<pre>The feed gives a median delay and a 0–5 index per window, not a count of delayed flights; cancellations are counted.</pre>';
   if (a.misery != null) h += '<pre>45 × min(1, median/60) + 30 × min(1, index/4) + 25 × min(1, cancelled%/20) — our own index from the 15-minute sweep, not FlightAware\'s.</pre>';
   return { html: h, at: [a.lon, a.lat] };
 });
@@ -122,25 +150,22 @@ function loadMisery(src) {
         WG.put(id, { kind: 'misery', a: a });
         if (a.military) {
           counts.military++;
-          src.entities.add({ id: id, position: pos, point: { pixelSize: 7, color: Cesium.Color.TRANSPARENT, outlineColor: C(C_MILITARY, 0.95), outlineWidth: 2, disableDepthTestDistance: 0 },
-            label: { text: a.iata || a.icao, font: '10px monospace', fillColor: C(C_MILITARY), outlineColor: Cesium.Color.BLACK, outlineWidth: 2, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-              pixelOffset: new Cesium.Cartesian2(0, -11), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.5e6) } });
+          src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(9, C_MILITARY, '#0f172a', 'cross'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
+            label: codeLabel(a, 9, C_MILITARY, a.iata || a.icao) });
           return;
         }
         if (a.misery == null) {
           counts.unscored++;
-          src.entities.add({ id: id, position: pos, point: { pixelSize: px, color: Cesium.Color.TRANSPARENT, outlineColor: C(C_UNSCORED, 0.8), outlineWidth: 1.5 } });
+          src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(px, '#1e293b', C_UNSCORED, 'thin'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
+            label: codeLabel(a, px, C_UNSCORED, a.iata || a.icao) });
           return;
         }
         counts.scored++; var b = bandOf(a.misery); bands[b.band] = (bands[b.band] || 0) + 1;
-        src.entities.add({ id: id, position: pos, point: { pixelSize: px, color: C(col, 0.9), outlineColor: C('#0f172a', 0.8), outlineWidth: 1 } });
+        var far = a.misery >= 60 ? new Cesium.DistanceDisplayCondition(0, 1.2e7) : a.misery >= 40 ? new Cesium.DistanceDisplayCondition(0, 5.0e6) : null;
+        src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(px, col, '#0f172a'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
+          label: codeLabel(a, px, col, (a.iata || a.icao) + (a.misery >= 40 ? ' ' + Math.round(a.misery) : ''), far) });
         if (a.misery >= 60) {
           src.entities.add({ id: id + ':halo', position: pos, ellipse: { semiMajorAxis: WG.pulse(2600, 50000, 140000), semiMinorAxis: WG.pulse(2600, 50000, 140000), material: C(col, 0.18), outline: false, height: 0 } });
-          src.entities.add({ id: id + ':lbl', position: pos, label: { text: (a.iata || a.icao) + ' ' + Math.round(a.misery), font: '12px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(0, -(px / 2 + 8)), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.2e7) } });
-        } else if (a.misery >= 40) {
-          src.entities.add({ id: id + ':lbl', position: pos, label: { text: (a.iata || a.icao) + ' ' + Math.round(a.misery), font: '11px monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(0, -(px / 2 + 8)), distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 5.0e6) } });
         }
         if (a.misery >= 40) watch.push({ rank: 40 + Math.min(40, a.misery * 0.4) + Math.min(10, (a.movements || 0) / 30), kind: 'MISERY · ' + b.word.toUpperCase(), color: col,
           title: (a.name || a.icao) + ' (' + (a.iata || a.icao) + ')', sub: 'misery ' + Math.round(a.misery) + ' · ' + (a.movements || 0) + ' movements · ' + (a.cancelled || 0) + ' cancelled' + (a.median_delay_min != null ? ' · median ' + mins(a.median_delay_min) : '') + (a.vs_normal != null ? ' · ' + signed(a.vs_normal) + ' vs normal' : ''),
