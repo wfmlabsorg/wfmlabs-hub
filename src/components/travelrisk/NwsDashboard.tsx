@@ -264,7 +264,8 @@ export function NwsDashboard({ d, weather, regionHref }: {
     <div className="nwsd-root">
       <style>{CSS}</style>
       <header className="nwsd-head">
-        <a href={regionHref} style={{ color: '#38bdf8', textDecoration: 'none', fontFamily: MONO, fontSize: 11 }}>← {d.node.name}</a>
+        <a href={regionHref} style={{ color: '#38bdf8', textDecoration: 'none', fontFamily: MONO, fontSize: 11 }}>← Travel Risk</a>
+        <span style={{ fontFamily: MONO, fontSize: 11, color: '#94a3b8' }}>{d.node.name}</span>
         <span style={{ fontFamily: MONO, fontWeight: 800, letterSpacing: '0.14em', fontSize: 14, color: '#f1f5f9' }}>NWS ACTIVE WARNINGS</span>
         <span style={{ display: 'flex', gap: 6 }}>
           {SEV.map((k) => (

@@ -38,6 +38,37 @@ function getJ(layer, ms) {
 }
 function link(u, t) { return u && /^https?:\/\//.test(u) ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(t) + '</a>' : null; }
 function when(iso) { if (!iso) return null; var a = WG.ago(iso); return a === 'now' ? 'just now' : a + ' ago'; }
+
+/* NWS Active Warnings dashboard (Ted, 2026-10-15): every NWS warning and every covered region on the board
+ * opens the dashboard we built — scrolling warnings, airports impacted — never a raw alert record and never
+ * the retired region window. Mirrors src/lib/travelrisk/nwsHref.ts and ovix-api SUB_REGIONS. */
+var NWS_NODES = [
+  ['us-northeast', ['NY','NJ','CT','MA','PA','ME','NH','VT','RI','DE','MD']],
+  ['us-southeast', ['GA','FL','NC','SC','VA','TN','AL','MS','LA','KY','WV']],
+  ['us-midwest', ['IL','OH','MI','IN','WI','MN','IA','MO','KS','NE','ND','SD']],
+  ['us-south-central', ['TX','OK','AR']],
+  ['us-mountain', ['AZ','CO','NM','NV','UT','WY','MT','ID']],
+  ['us-west-coast', ['CA','OR','WA']]
+];
+function nwsHref(node) { return '/travelrisk/region/' + encodeURIComponent(node || 'global') + '/nws'; }
+function isNws(h) { return /^NWS/.test(h.src || '') || /^https?:\/\/(api|alerts)\.weather\.gov\//i.test(h.url || ''); }
+/* "Henderson, NC; Transylvania, NC" → the sub-region that holds NC; nothing recognisable → the general dashboard. */
+function nwsNodeFor(areaDesc) {
+  var segs = String(areaDesc || '').split(';');
+  for (var i = 0; i < segs.length; i++) {
+    var m = /,\s*([A-Z]{2})\s*$/.exec(segs[i].trim());
+    if (!m) continue;
+    for (var j = 0; j < NWS_NODES.length; j++) if (NWS_NODES[j][1].indexOf(m[1]) >= 0) return NWS_NODES[j][0];
+  }
+  return null;
+}
+/* A region node NWS covers: the six US sub-regions in full, North America in part. Elsewhere there is no panel. */
+function nwsNodeOf(n) {
+  if (n.id === 'north-america') return n.id;
+  for (var i = 0; i < NWS_NODES.length; i++) if (NWS_NODES[i][0] === n.id) return n.id;
+  return null;
+}
+function nwsLink(h) { return isNws(h) ? '<a href="' + nwsHref(nwsNodeFor(h.area)) + '" target="_blank" rel="noopener">NWS Active Warnings ↗</a>' : null; }
 function bar(v) { var p = Math.max(0, Math.min(100, (v / 10) * 100)); return '<span style="display:inline-block;vertical-align:middle;width:90px;height:7px;background:#1e293b;border-radius:2px;margin-right:6px"><span style="display:block;height:7px;width:' + p.toFixed(0) + '%;background:' + INDEX_HUE + ';border-radius:2px"></span></span>'; }
 function floorNote(f) { var k = Object.keys(f || {}); return k.length ? k.map(function (x) { return f[x] + ' ' + x; }).join('; ') : 'none'; }
 
@@ -65,14 +96,14 @@ WG.card('fleetHazard', function (x) {
     ['severity', h.sev != null ? h.sev + ' / 10 (ovix scale)' : null], ['area', h.area],
     ['location', h.approx ? 'APPROXIMATE — placed at the ' + (h.precision || 'area') + ' centroid by the source, not at the event' : 'as reported (' + WG.num(h.lat).toFixed(2) + ', ' + WG.num(h.lon).toFixed(2) + ')'],
     ['nearest airport', near ? near + ' (registry)' : 'none within 300 km'], ['occurred', when(h.at)], ['expires', h.expires ? h.expires.slice(0, 16).replace('T', ' ') + 'Z' : null],
-    ['source', link(h.url, h.src + ' record'), true]]) + (h.detail ? '<pre>' + esc(h.detail) + '</pre>' : '');
+    ['dashboard', nwsLink(h), true], ['source', link(h.url, h.src + (isNws(h) ? ' record (json)' : ' record')), true]]) + (h.detail ? '<pre>' + esc(h.detail) + '</pre>' : '');
   return { html: html, at: [h.lon, h.lat] };
 });
 WG.card('fleetHazardGroup', function (x) {
   var g = x.g, k = kindOf(g.items[0].kind);
   var html = '<div class="h" style="color:' + k.c + '">' + esc(g.items[0].src) + ' · ' + g.items.length + ' warning' + (g.items.length === 1 ? '' : 's') + ' · APPROXIMATE</div><div class="ct">' + esc(g.where) + '</div>'
     + '<pre>Placed at the ' + esc(g.items[0].precision || 'area') + ' centroid the source publishes. The warnings below are for areas inside it, not for this point.</pre>'
-    + g.items.slice(0, 14).map(function (h) { var kk = kindOf(h.kind); return '<div style="margin:3px 0"><span style="color:' + kk.c + '">' + esc(h.label || kk.w) + '</span> · ' + (link(h.url, h.title) || esc(h.title)) + (h.area ? ' <span style="color:' + SLATE + '">(' + esc(h.area.slice(0, 80)) + ')</span>' : '') + (h.expires ? ' <span style="color:' + SLATE + '">until ' + esc(h.expires.slice(5, 16).replace('T', ' ')) + 'Z</span>' : '') + '</div>'; }).join('')
+    + g.items.slice(0, 14).map(function (h) { var kk = kindOf(h.kind); return '<div style="margin:3px 0"><span style="color:' + kk.c + '">' + esc(h.label || kk.w) + '</span> · ' + (isNws(h) ? '<a href="' + nwsHref(nwsNodeFor(h.area)) + '" target="_blank" rel="noopener">' + esc(h.title) + '</a>' + (link(h.url, 'json') ? ' <span style="font-size:10px">' + link(h.url, 'json') + '</span>' : '') : (link(h.url, h.title) || esc(h.title))) + (h.area ? ' <span style="color:' + SLATE + '">(' + esc(h.area.slice(0, 80)) + ')</span>' : '') + (h.expires ? ' <span style="color:' + SLATE + '">until ' + esc(h.expires.slice(5, 16).replace('T', ' ')) + 'Z</span>' : '') + '</div>'; }).join('')
     + (g.items.length > 14 ? '<div style="color:' + SLATE + '">+ ' + (g.items.length - 14) + ' more</div>' : '');
   return { html: html, at: [g.lon, g.lat] };
 });
@@ -173,18 +204,19 @@ function loadRail(src) {
  * ====================================================================== */
 WG.card('fleetRegion', function (x) {
   var n = x.n, read = (n.domains || []).length, b = n.basis || {};
-  // Tier 2 (2026-10-12): the region window opens in a new tab — domains, official floors and the panels
-  // (NWS warnings, …) that explain them. World Glass itself stays uncrowded.
-  var win = '/travelrisk/region/' + encodeURIComponent(n.id);
+  // The region window is retired (Ted, 2026-10-15). A region NWS covers opens its NWS Active Warnings
+  // dashboard in a new tab; the weather domain row goes there too. Other domains have no panel yet.
+  var win = nwsNodeOf(n) ? nwsHref(nwsNodeOf(n)) : null;
   var head = '<div class="h" style="color:' + INDEX_HUE + '">Op-risk index · ' + esc(n.tier === 'macro' ? 'macro region' : 'sub-region') + '</div><div class="ct">' + esc(n.name) + '</div>'
-    + '<div style="margin:4px 0 6px"><a href="' + win + '" target="_blank" rel="noopener" style="color:' + INDEX_HUE + ';font-weight:700">Open region window ↗</a></div>';
+    + (win ? '<div style="margin:4px 0 6px"><a href="' + win + '" target="_blank" rel="noopener" style="color:' + INDEX_HUE + ';font-weight:700">Open NWS Active Warnings ↗</a></div>'
+      : '<div style="margin:4px 0 6px;color:' + SLATE + '">No panel for this region yet — NWS Active Warnings covers the United States only.</div>');
   if (!n.reachable) return { html: head + '<pre>No answer from ovix-api for this region on the last read. This is a gap, not a calm region.</pre>', at: [n.lon, n.lat] };
   var html = head + WG.kvs([
     ['composite', n.composite != null ? bar(n.composite) + esc(n.composite.toFixed(1)) + ' / 10 · ' + esc(n.level || '') : 'NO READING — no domain has events in this region', true],
     ['confidence', 'reading on ' + read + ' of 12 domains' + (b.settled != null ? ' (settled ' + b.settled + ', provisional ' + (b.provisional || 0) + ')' : '') + ' · state ' + (n.state || '?')],
     ['no reading', (n.noReading || []).join(', ') || null], ['updated', when(n.updated)]])
     + (read ? '<div class="h" style="margin-top:8px">Domains with a reading · drivers</div>' + n.domains.map(function (d) {
-      return '<div style="margin:4px 0">' + bar(d.score) + '<a href="' + win + '#d-' + esc(d.domain) + '" target="_blank" rel="noopener">' + esc(d.domain) + '</a> ' + esc((d.score != null ? d.score.toFixed(1) : '?') + ' ' + (d.level || '') + (d.state === 'PROVISIONAL' ? ' · provisional' : '') + (d.events != null ? ' · ' + d.events + ' events' : ''))
+      return '<div style="margin:4px 0">' + bar(d.score) + (win && d.domain === 'weather' ? '<a href="' + win + '" target="_blank" rel="noopener">weather ↗</a>' : esc(d.domain)) + ' ' + esc((d.score != null ? d.score.toFixed(1) : '?') + ' ' + (d.level || '') + (d.state === 'PROVISIONAL' ? ' · provisional' : '') + (d.events != null ? ' · ' + d.events + ' events' : ''))
         + (d.top ? '<div style="color:' + SLATE + ';margin-left:96px">' + esc(d.top) + (d.topSource ? ' — ' + esc(d.topSource) : '') + '</div>' : '') + '</div>'; }).join('') : '')
     + '<pre>A provisional index ranked from event volume, not a checked operational state: magnitude is drawn as column height in one hue, and red/amber stay reserved for things checked and found impaired. A region with few domains reading can score high on one driver. Regions are a business taxonomy, not a partition of the map: empty ground is unscored, not safe.</pre>';
   return { html: html, at: [n.lon, n.lat] };
