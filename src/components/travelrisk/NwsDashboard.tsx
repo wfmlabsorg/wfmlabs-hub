@@ -282,7 +282,8 @@ export function NwsDashboard({ d, weather, regionHref }: {
         <a href="https://www.weather.gov/" target="_blank" rel="noopener" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>weather.gov ↗</a>
       </header>
       <RegionStrip regions={d.regions ?? []} current={d.node.id} />
-      {d.coverage === 'partial' && d.note && <div className="nwsd-note">{d.note}</div>}
+      {/* The global dashboard is the general US one by design (Ted, 15 Oct): no coverage note there. North America keeps its 'not Canada or Mexico' note. */}
+      {d.coverage === 'partial' && d.note && d.node.tier !== 'global' && <div className="nwsd-note">{d.note}</div>}
 
       <div className="nwsd-upper">
         <div className="nwsd-map">
