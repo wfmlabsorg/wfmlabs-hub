@@ -13,8 +13,8 @@
  *     GREY   = no score — the feed withheld statistics (too few flights), the airport was absent from
  *              the sweep, or it has never been observed. A dark square at its real size, never calm.
  *     MILITARY = violet square with a white cross, no commercial data by construction (category government).
- *   The gauge in the panel is the FLIGHT-WEIGHTED mean misery across scored airports for the newest
- *   sweep, with a 24-hour sparkline. A thin sweep says so (scored / total).
+ *   The gauge is ONE line in the top bar next to the feeds list: flight-weighted mean misery across scored
+ *   airports for the newest sweep + a 24-hour sparkline; counts, cancellations and method sit in its tooltip.
  *
  * Honesty (hub-051): a failed read is a GAP, never an empty calm layer. Everything the score was
  * built from (median, index, cancellations, window, sweep, baseline maturity) is on the card.
@@ -102,38 +102,43 @@ WG.card('misery', function (x) {
   return { html: h, at: [a.lon, a.lat] };
 });
 
-/* ── the gauge: a small strip under the feeds list ── */
+/* ── the gauge: ONE line in the top bar, next to the feeds list (2026-10-16, Ted: the 3-line strip covered the map) ──
+ * "MISERY 13 calm · 284/666 · 17 mis · 9 sev · −0.2/1h ▁▂▃" — counts, cancellations and the method live in the tooltip. */
 function ensureGauge() {
-  var el = document.getElementById('misery-gauge');
+  var el = document.getElementById("misery-gauge");
   if (el) return el;
-  var host = document.getElementById('feeds'); if (!host || !host.parentNode) return null;
-  el = document.createElement('div'); el.id = 'misery-gauge';
-  el.style.cssText = 'margin-top:6px;padding:6px 8px;border-top:1px solid rgba(148,163,184,.25);font:12px/1.35 system-ui,sans-serif';
+  var host = document.getElementById("feeds"); if (!host || !host.parentNode) return null;
+  el = document.createElement("div"); el.id = "misery-gauge";
+  el.style.cssText = "display:flex;align-items:center;gap:5px;font-size:10px;line-height:1;white-space:nowrap;color:#94a3b8;cursor:help";
   host.parentNode.insertBefore(el, host.nextSibling);
   return el;
 }
 function drawSpark(canvas, series) {
-  var ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height; ctx.clearRect(0, 0, w, h);
+  var ctx = canvas.getContext("2d"), w = canvas.width, h = canvas.height; ctx.clearRect(0, 0, w, h);
   var pts = series.filter(function (s) { return s.misery != null; }); if (pts.length < 2) return;
-  var n = pts.length, step = w / (n - 1);
-  BANDS.slice(1).forEach(function (b) { var y = h - (b.from / 100) * h; ctx.strokeStyle = b.color; ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); });
-  ctx.globalAlpha = 1; ctx.lineWidth = 1.5; ctx.strokeStyle = '#e2e8f0'; ctx.beginPath();
-  pts.forEach(function (s, i) { var y = h - Math.min(100, s.misery) / 100 * h; if (i) ctx.lineTo(i * step, y); else ctx.moveTo(0, y); });
+  var n = pts.length, step = (w - 3) / (n - 1), top = 1, span = h - 4;   // the 0–100 scale compressed so a calm 13 is still a visible line
+  var y = function (m) { return top + span - Math.min(100, m) / 100 * span; };
+  BANDS.slice(1).forEach(function (b) { ctx.strokeStyle = b.color; ctx.globalAlpha = 0.3; ctx.beginPath(); ctx.moveTo(0, y(b.from)); ctx.lineTo(w, y(b.from)); ctx.stroke(); });
+  ctx.globalAlpha = 1; ctx.lineWidth = 1.2; ctx.strokeStyle = "#e2e8f0"; ctx.beginPath();
+  pts.forEach(function (s, i) { if (i) ctx.lineTo(i * step, y(s.misery)); else ctx.moveTo(0, y(s.misery)); });
   ctx.stroke();
-  var last = pts[n - 1], lb = bandOf(last.misery); ctx.fillStyle = lb ? lb.color : '#e2e8f0'; ctx.beginPath(); ctx.arc(w - 2, h - Math.min(100, last.misery) / 100 * h, 2.5, 0, Math.PI * 2); ctx.fill();
+  var last = pts[n - 1], lb = bandOf(last.misery); ctx.fillStyle = lb ? lb.color : "#e2e8f0"; ctx.beginPath(); ctx.arc((n - 1) * step, y(last.misery), 2, 0, Math.PI * 2); ctx.fill();
 }
 function renderGauge(g, meta) {
   var el = ensureGauge(); if (!el) return;
   var now = g && g.now, series = (g && g.series) || [];
-  if (!now || now.misery == null) { el.innerHTML = '<b>Travel misery</b> <span style="color:#94a3b8">— no scored sweep in the last 24 h</span>'; return; }
+  if (!now || now.misery == null) { el.innerHTML = "<b style=\"color:#e2e8f0\">MISERY</b> <span>— no scored sweep in 24 h</span>"; el.title = "Travel misery: no scored sweep in the last 24 hours"; return; }
   var b = bandOf(now.misery), prev = series.length > 4 ? series[series.length - 5] : null;   // ~1 h earlier at 15-min sweeps
-  var trend = prev && prev.misery != null ? signed(now.misery - prev.misery) + ' vs 1 h ago' : '';
-  el.innerHTML = '<b>Travel misery</b> <span style="color:' + b.color + ';font-weight:700">' + Math.round(now.misery) + '</span> <span style="color:' + b.color + '">' + b.word + '</span>'
-    + ' <span style="color:#94a3b8">· ' + now.airports_scored + '/' + now.airports_total + ' airports scored · ' + now.miserable_airports + ' miserable · ' + now.severe_airports + ' severe'
-    + (now.cancelled != null ? ' · ' + now.cancelled + ' cancelled' : '') + (trend ? ' · ' + trend : '') + '</span>'
-    + '<canvas id="misery-spark" width="220" height="22" style="display:block;margin-top:4px;width:100%;height:22px"></canvas>'
-    + '<div style="color:#94a3b8;font-size:11px">flight-weighted mean of every scored airport · last 24 h · ' + when(now.observed_at) + '</div>';
-  var cv = document.getElementById('misery-spark'); if (cv) drawSpark(cv, series);
+  var trend = prev && prev.misery != null ? signed(now.misery - prev.misery) + "/1h" : "";
+  el.innerHTML = "<b style=\"color:#e2e8f0;letter-spacing:.06em\">MISERY</b>"
+    + " <b style=\"color:" + b.color + ";font-size:12px\">" + Math.round(now.misery) + "</b><span style=\"color:" + b.color + "\">" + b.word + "</span>"
+    + "<span>· " + now.airports_scored + "/" + now.airports_total + " · " + now.miserable_airports + " mis · " + now.severe_airports + " sev" + (trend ? " · " + trend : "") + "</span>"
+    + "<canvas id=\"misery-spark\" width=\"72\" height=\"14\" style=\"display:block;width:72px;height:14px;opacity:.9\"></canvas>";
+  el.title = "Travel misery " + now.misery.toFixed(1) + " (" + b.word + "): flight-weighted mean of every scored airport in the latest 15-minute sweep · "
+    + now.airports_scored + " of " + now.airports_total + " registry airports scored · " + now.miserable_airports + " miserable (≥40) · " + now.severe_airports + " severe (≥60)"
+    + (now.cancelled != null ? " · " + now.cancelled + " cancellations in window" : "") + (trend ? " · " + trend.replace("/1h", " vs 1 h ago") : "")
+    + " · sparkline = last 24 h · sweep " + when(now.observed_at) + " · click any square for that airport";
+  var cv = document.getElementById("misery-spark"); if (cv) drawSpark(cv, series);
 }
 
 /* ── the layer ── */
