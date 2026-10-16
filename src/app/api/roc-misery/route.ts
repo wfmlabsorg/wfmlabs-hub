@@ -1,10 +1,10 @@
-import { getPool } from '@/lib/db'
+import { readMisery } from '@/lib/misery'
 
 /**
  * ROC Misery — the Travel Misery Index for the travel globe (api-083).
  *
- * Reads the Hub Neon DB directly via `getPool()` raw SQL, the same same-origin
- * pattern as /api/roc-airports. The scoring lives in the database
+ * Reads the Hub Neon DB through `readMisery()` (src/lib/misery.ts) — the same read the
+ * /travelrisk/misery dashboard page uses, so both show one number. The scoring lives in the database
  * (`airport_misery_latest`, `airport_misery_global`, rule `airport_misery v1`,
  * schema/066 in wfmlabsorg/roc) so the hub, the desk and a SQL console all read
  * one number; this route only shapes it.
@@ -60,86 +60,10 @@ import { getPool } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
-const AIRPORTS_SQL = `
-  SELECT
-    icao, iata, name, city, country,
-    lat::double precision AS lat, lon::double precision AS lon,
-    category, military, monitor_tier, business_travel_weight,
-    observed_at, source_at, window_start_at, window_end_at, sweep_id,
-    obs_status, obs_status_reason, program_type, lifecycle,
-    movements, cancelled,
-    median_delay_min::double precision AS median_delay_min,
-    delay_index::double precision      AS delay_index,
-    cancel_rate::double precision      AS cancel_rate,
-    departures_total, departures_cancelled,
-    departures_median_delay_min::double precision AS departures_median_delay_min,
-    departures_delay_index::double precision      AS departures_delay_index,
-    arrivals_total, arrivals_cancelled,
-    arrivals_median_delay_min::double precision   AS arrivals_median_delay_min,
-    arrivals_delay_index::double precision        AS arrivals_delay_index,
-    misery::double precision AS misery, misery_band, misery_reason,
-    baseline_score::double precision AS baseline_score, baseline_granularity, baseline_maturity, baseline_samples,
-    vs_normal::double precision AS vs_normal,
-    rule_id, rule_version
-  FROM airport_misery_latest
-  ORDER BY misery DESC NULLS LAST, movements DESC NULLS LAST, icao
-`
-
-const GLOBAL_SQL = `
-  SELECT sweep_id, observed_at,
-         misery::double precision AS misery, misery_unweighted::double precision AS misery_unweighted,
-         movements::int AS movements, cancelled::int AS cancelled,
-         airports_scored::int AS airports_scored, airports_total::int AS airports_total,
-         miserable_airports::int AS miserable_airports, severe_airports::int AS severe_airports
-  FROM airport_misery_global
-  ORDER BY observed_at ASC
-`
-
-type Row = Record<string, unknown>
-
-function tally(rows: Row[], key: string): Record<string, number> {
-  const out: Record<string, number> = {}
-  for (const r of rows) {
-    const v = r[key]
-    const k = v === null || v === undefined ? 'null' : String(v)
-    out[k] = (out[k] ?? 0) + 1
-  }
-  return out
-}
-
 export async function GET() {
   try {
-    const pool = getPool()
-    const [air, glob] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL)])
-    const airports = air.rows as Row[]
-    const series = glob.rows as Row[]
-
-    let newest: string | null = null
-    for (const a of airports) {
-      const t = a.observed_at instanceof Date ? a.observed_at.toISOString() : (a.observed_at as string | null)
-      if (t && (!newest || t > newest)) newest = t
-    }
-    const scored = airports.filter((a) => a.misery !== null && a.misery !== undefined)
-    const unscored = airports.filter((a) => a.misery === null || a.misery === undefined)
-
-    return Response.json(
-      {
-        airports,
-        global: { now: series.length ? series[series.length - 1] : null, series },
-        meta: {
-          count: airports.length,
-          scored: scored.length,
-          unscored_by_reason: tally(unscored, 'misery_reason'),
-          bands: tally(scored, 'misery_band'),
-          military: airports.filter((a) => a.military === true).length,
-          baseline_maturity: tally(airports, 'baseline_maturity'),
-          newest_observed_at: newest,
-          generatedAt: new Date().toISOString(),
-          rule: { id: 'airport_misery', version: 'v1' },
-        },
-      },
-      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } },
-    )
+    const payload = await readMisery()
+    return Response.json(payload, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } })
   } catch (e) {
     console.error('roc-misery query error:', e)
     // Fail loudly. An empty `airports` array would read on the globe as "nobody is
