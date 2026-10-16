@@ -187,5 +187,6 @@ function loadMisery(src) {
     });
 }
 
-WG.addLayer({ id: 'misery', label: 'Travel misery (dots)', color: '#f97316', on: true, refreshMs: 5 * 60e3, load: loadMisery });
+// 2026-10-16 (Ted): this IS the airports layer now — listed first, named like the one it replaced.
+WG.addLayer({ id: 'misery', label: 'Airports & delays', color: '#18BC9C', on: true, first: true, refreshMs: 5 * 60e3, load: loadMisery });
 })();

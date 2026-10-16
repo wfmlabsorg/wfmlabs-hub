@@ -198,9 +198,7 @@
 
   <div id="legend" class="panel">
     <div class="h" id="keyhead" role="button" tabindex="0" aria-expanded="true">Key ▾</div>
-    <div class="row"><i style="background:#ef4444"></i>airport degraded · column height = median delay</div>
-    <div class="row"><i style="background:#18BC9C"></i>airport checked, normal</div>
-    <div class="row"><i style="border:2px solid #94a3b8"></i>airport not checked (never drawn calm)</div>
+    <div class="row"><i style="flex:none;background:#ef4444"></i><span>24 h replay (drag the bar): column height = median delay at that hour</span></div>
     <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#f97316"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
     <div class="row"><i style="flex:none;background:#1e293b;border:1px solid #94a3b8;border-radius:2px"></i><span>airport not scored (statistics withheld / absent from sweep) · <i style="background:#a78bfa;border-radius:2px"></i>military airbase (no commercial data) · circles are events, never airports</span></div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
@@ -228,9 +226,10 @@ var viewer = null;
 var feeds = {};                     // name → { ok, at, n, note }
 var lookup = {};                    // entity id → card payload
 var layerDefs = [
-  // 2026-10-15 (Ted): off by default — the Travel misery layer (wg-misery.js) now draws every airport as a square;
-  // this layer's circles + delay columns are a click away for the degraded detail.
-  { id: 'airports',  label: 'Airports & delays',    color: '#18BC9C', on: false },
+  // 2026-10-16 (Ted): the misery squares (wg-misery.js, listed FIRST as "Airports & delays") replaced this layer's circles.
+  // hidden: not in the layer list and no watch entries; the loader still runs because apByIata feeds the disrupted
+  // corridors, the 24 h replay columns and the feeds count.
+  { id: 'airports',  label: 'Airports & delays (legacy circles)', color: '#18BC9C', on: false, hidden: true },
   // Defaults (Ted, 2026-10-11): what carries the posture is ON — airports & delays, flight events,
   // flight delays, open incidents, cyclones (plus the nathaz and faa plugins). Weather volumes
   // (SIGMETs, radar), live event dots and corridor arcs are a click away, not the first thing seen.
@@ -357,7 +356,7 @@ function loadAirports() {
         }
       });
       degraded.sort(function (x, y) { return ((y._depMedian || y._arrMedian || 0) - (x._depMedian || x._arrMedian || 0)); });
-      watchItems.airports = degraded.slice(0, 6).map(function (a) {
+      watchItems.airports = layerDefs.some(function (d) { return d.id === 'airports' && d.hidden; }) ? [] : degraded.slice(0, 6).map(function (a) {
         var med = a._depMedian != null ? a._depMedian : a._arrMedian;
         return { rank: 60 + Math.min(30, (med || 0) / 4), kind: 'AIRPORT', color: degradedColor(a), title: (a.name || a.icao) + ' (' + (a.iata || a.icao) + ')',
           sub: (delaySentence(a) || opClassWhy(a, a._op) || 'degraded'), lon: a._lon, lat: a._lat, h: 900000, id: 'ap:' + (a.icao || a.iata) };
@@ -972,7 +971,7 @@ function setLayer(id, on) {
   renderLayers(); writeHash();
 }
 function renderLayers() {
-  document.getElementById('laylist').innerHTML = layerDefs.map(function (d) {
+  document.getElementById('laylist').innerHTML = layerDefs.filter(function (d) { return !d.hidden; }).map(function (d) {
     var f = feeds[d.id], n = !f ? '…' : f.ok ? (f.n + (f.at ? ' · ' + ago(f.at) : '')) : 'GAP';
     return '<div class="lay' + (d.on ? '' : ' off') + '" role="switch" tabindex="0" aria-checked="' + d.on + '" data-id="' + d.id + '" title="' + esc(f ? f.note : 'loading') + '"><span class="sw" style="color:' + d.color + ';background:' + d.color + '33"></span><span>' + esc(d.label) + '</span><span class="n' + (f && !f.ok ? ' gap' : '') + '">' + esc(n) + '</span></div>';
   }).join('');
@@ -1163,7 +1162,7 @@ window.WG = {
     var on = bootHash && bootHash.l != null ? bootHash.l.split(',').indexOf(def.id) !== -1 : def.on !== false;
     if (!/^[a-z0-9_-]{1,32}$/.test(String(def.id))) return null;   // ids reach data-* attributes and the share hash
     var col = safeColor(def.color || '#94a3b8'); if (col.charAt(0) !== '#') col = '#94a3b8';   // the swatch appends a hex alpha
-    layerDefs.push({ id: def.id, label: def.label || def.id, color: col, on: on });
+    layerDefs[def.first ? 'unshift' : 'push']({ id: def.id, label: def.label || def.id, color: col, on: on });
     var src = new Cesium.CustomDataSource(def.id); src.show = on; sources[def.id] = src; viewer.dataSources.add(src);
     watchItems[def.id] = watchItems[def.id] || [];
     pluginLoaders[def.id] = function () {
