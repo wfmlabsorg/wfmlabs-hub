@@ -3,23 +3,30 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import 'leaflet/dist/leaflet.css'
-import type { Map as LMap, LayerGroup, Marker } from 'leaflet'
-import type { MiseryAirport, MiseryGlobalRow, MiseryPayload } from '@/lib/misery'
+import type { Map as LMap, LayerGroup, Marker, TileLayer } from 'leaflet'
+import type { MiseryAirport, MiseryGlobalRow, MiseryPayload, MiseryHistory, FrameCell } from '@/lib/misery'
 
 /**
- * TRAVEL MISERY INDEX — the flat-map read-out of the 15-minute airport sweep (api-083, 2026-10-16;
- * Ted: "a nice misery map view similar to the NWS dashboard"). Same shell as NwsDashboard.
+ * TRAVEL MISERY INDEX — the MiseryMap-style read-out of the 15-minute airport sweep (api-083, 2026-10-16).
+ * Ted: "replicate how FlightAware's MiseryMap works, with our detail": rings on the dashboard only (the globe
+ * keeps its squares), US default with a World switch.
  *
- *   ┌ header: global score · band counts · scored/total · movements · cancelled · trend · sweep age ──┐
- *   │ MAP — every registry airport as a square:        │ WORST AIRPORTS — misery ≥ 20, worst first,  │
- *   │ size = flights in the 2 h window, colour = band  │ click a card to fly to it                   │
- *   ├──────────────────────────────────────────────────┴────────────────────────────────────────────┤
- *   │ SEVERE │ MISERABLE │ SLOW — auto-scrolling, hover to pause │ 24 H · COVERAGE · METHOD           │
- *   └───────────────────────────────────────────────────────────────────────────────────────────────┘
+ *   ┌ header: US|World · score pill · band counts · flights · cancelled · window · sweep age · links ─────────┐
+ *   │ MAP — Leaflet, radar underneath. One RING per airport:      │ RANKED — one bar per airport, worst first: │
+ *   │ size = flights in the 2 h window; red arc = misery score;   │ red = misery, dark red = its cancellation  │
+ *   │ dark-red part of the arc = the cancellation points of that  │ points; totals above (flights, cancelled)  │
+ *   │ score; the rest green. Grey ring = not scored. Violet =     │ click a row to fly there                   │
+ *   │ military. Hover a boarded airport → arcs to the far ends    │                                            │
+ *   │ of its delayed / cancelled / diverted flights.              │                                            │
+ *   │ ▶ replay bar: the last 24 h, one frame per hour             │                                            │
+ *   ├────────────────────────────────────────────────────────────┴────────────────────────────────────────────┤
+ *   │ SEVERE │ MISERABLE │ SLOW (auto-scroll, hover pauses, click flies) │ 24 H · COVERAGE · METHOD         │
+ *   └─────────────────────────────────────────────────────────────────────────────────────────────────────────┘
  *
- * Honesty: an unscored airport is drawn dark grey at its real size with its reason, never calm;
- * a military field is violet with a cross; the global score is flight-weighted and shown with
- * scored/total. Band colours are the data marks the globe uses (wg-misery.js), not chrome (hub-041).
+ * Honesty: FlightAware counts flights (on-time / delayed / cancelled). Our feed gives a median, a 0–5 index and
+ * a cancellation COUNT per airport, so the ring shows OUR SCORE (0–100), decomposed exactly as the rule builds
+ * it: cancellation points (25 × min(1, cancelled% / 20)) in dark red, delay points in red, the remainder green.
+ * Unscored airports are grey with their reason, never green. The replay uses the same SQL rule on stored rows.
  */
 
 const BANDS = [
@@ -29,9 +36,10 @@ const BANDS = [
   { band: 'calm', from: 0, color: '#18BC9C', note: '< 20' },
 ] as const
 type Band = (typeof BANDS)[number]
-const C_UNSCORED = '#475569', C_MILITARY = '#a78bfa'
+const C_ONTIME = '#22c55e', C_MISERY = '#ef4444', C_CANCEL = '#7f1d1d', C_UNSCORED = '#475569', C_MILITARY = '#a78bfa', C_DIVERTED = '#a78bfa'
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 const WORLD: [[number, number], [number, number]] = [[-50, -170], [72, 180]]
+const CONUS: [[number, number], [number, number]] = [[23.5, -126], [50.5, -66]]
 const REASON: Record<string, string> = {
   insufficient_qualified: 'fewer than 5 flights with statistics',
   no_statistics: 'feed gave no delay statistics',
@@ -41,9 +49,12 @@ const REASON: Record<string, string> = {
   never_observed: 'never observed',
   no_traffic: 'no traffic',
 }
+type Region = 'us' | 'world'
+type Frame = { misery: number | null; cancelled: number; movements: number; cancel_rate: number | null }
 
 const bandOf = (m: number): Band => BANDS.find((b) => m >= b.from) ?? BANDS[3]
-const dotPx = (mov: number | null) => Math.max(6, Math.min(22, Math.round(4 + Math.sqrt(mov || 0))))
+const ringPx = (mov: number | null) => Math.max(14, Math.min(46, Math.round(6 + 2.2 * Math.sqrt(mov || 0))))
+const cancelPts = (rate: number | null) => (rate == null ? 0 : 25 * Math.min(1, rate / 0.2))
 const parse = (v: string | null) => (v ? Date.parse(v) : NaN)
 function ago(v: string | null, now: number | null): string {
   const t = parse(v)
@@ -52,38 +63,73 @@ function ago(v: string | null, now: number | null): string {
   const m = Math.max(0, Math.round((now - t) / 60e3))
   return m < 60 ? `${m}m ago` : `${Math.floor(m / 60)}h ${m % 60}m ago`
 }
+const hhmm = (v: string | null) => { const t = parse(v); return Number.isNaN(t) ? '—' : new Date(t).toISOString().slice(11, 16) + 'Z' }
 const mins = (m: number | null) => (m == null ? '—' : m >= 60 ? `${Math.floor(m / 60)} h ${Math.round(m % 60)} m` : `${Math.round(m)} min`)
 const signed = (v: number) => (v > 0 ? '+' : '') + v.toFixed(1)
 const num = (v: number | null | undefined) => (v == null ? '—' : v.toLocaleString())
 const place = (a: MiseryAirport) => [a.city, a.country].filter(Boolean).join(', ')
 const reasonText = (a: MiseryAirport) => REASON[a.misery_reason ?? ''] ?? a.misery_reason ?? 'not scored'
+const inRegion = (a: MiseryAirport, r: Region) => r === 'world' || a.country === 'US'
+const weighted = (rows: { misery: number | null; movements: number | null }[]) => {
+  let s = 0, w = 0
+  for (const r of rows) if (r.misery != null) { const m = Math.max(1, r.movements ?? 1); s += r.misery * m; w += m }
+  return w ? s / w : null
+}
 
 /** Leaflet treats string content as HTML; API strings always go in as text nodes. */
 function textEl(t: string): HTMLElement { const e = document.createElement('span'); e.textContent = t; return e }
 
-function popup(a: MiseryAirport, now: number | null): HTMLElement {
+/** The ring. Built from numbers and fixed colours only — no API string reaches the markup. */
+function ringSvg(px: number, misery: number | null, cPts: number, kind: 'scored' | 'unscored' | 'military', code: string | null): string {
+  const r = px / 2 - 2.2, c = px / 2, circ = 2 * Math.PI * r, sw = px >= 30 ? 4.2 : px >= 20 ? 3.4 : 2.6
+  const label = code && px >= 28 && /^[A-Z0-9]{3,4}$/.test(code) ? `<text x="${c}" y="${c + 3.2}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-weight="700" font-size="${px >= 40 ? 11 : 9}" fill="#f1f5f9">${code}</text>` : ''
+  if (kind === 'military') return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><circle cx="${c}" cy="${c}" r="${r}" fill="rgba(11,18,32,.85)" stroke="${C_MILITARY}" stroke-width="${sw}"/><path d="M${c - 3} ${c}h6M${c} ${c - 3}v6" stroke="#fff" stroke-width="1.6"/></svg>`
+  if (kind === 'unscored' || misery == null) return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><circle cx="${c}" cy="${c}" r="${r}" fill="rgba(11,18,32,.8)" stroke="${C_UNSCORED}" stroke-width="${sw}" stroke-dasharray="3 2"/>${label}</svg>`
+  const m = Math.min(100, Math.max(0, misery)), cp = Math.min(m, Math.max(0, cPts))
+  const red = (m / 100) * circ, dark = (cp / 100) * circ
+  // stroke-dasharray arcs start at 12 o'clock (rotate -90): green full ring under, red arc, dark-red cancellation part on top
+  return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><g transform="rotate(-90 ${c} ${c})">`
+    + `<circle cx="${c}" cy="${c}" r="${r}" fill="rgba(11,18,32,.85)" stroke="${C_ONTIME}" stroke-width="${sw}"/>`
+    + (red > 0 ? `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${C_MISERY}" stroke-width="${sw}" stroke-dasharray="${red.toFixed(2)} ${(circ - red).toFixed(2)}"/>` : '')
+    + (dark > 0 ? `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="${C_CANCEL}" stroke-width="${sw}" stroke-dasharray="${dark.toFixed(2)} ${(circ - dark).toFixed(2)}"/>` : '')
+    + `</g>${label}</svg>`
+}
+
+function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: string | null): HTMLElement {
   const box = document.createElement('div')
   const head = document.createElement('b'); head.textContent = `${a.iata ?? a.icao} · ${a.name}`; box.appendChild(head)
   const lines: string[] = [place(a)]
+  const misery = f ? f.misery : a.misery, cancelled = f ? f.cancelled : a.cancelled, movements = f ? f.movements : a.movements
   if (a.military) lines.push('Military airbase — no commercial data by construction')
-  else if (a.misery != null) {
-    const b = bandOf(a.misery)
-    lines.push(`Misery ${Math.round(a.misery)} — ${b.band}${a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal (${a.baseline_maturity ?? 'baseline'})` : ''}`)
-    lines.push(`${num(a.movements)} flights in window · ${num(a.cancelled)} cancelled · median delay ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5`)
-  } else lines.push(`Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
-  lines.push(`Sweep ${ago(a.observed_at, now)}${a.icao ? ` · ${a.icao}` : ''}`)
+  else if (misery != null) {
+    const b = bandOf(misery)
+    lines.push(`Misery ${Math.round(misery)} — ${b.band}${!f && a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal (${a.baseline_maturity ?? 'baseline'})` : ''}`)
+    lines.push(f ? `${num(movements)} flights in window · ${num(cancelled)} cancelled` : `${num(movements)} flights in window · ${num(cancelled)} cancelled · median delay ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5`)
+    lines.push(`Ring: red = score, dark red = its cancellation points, green = the rest`)
+  } else lines.push(f ? 'Not scored in this frame' : `Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
+  lines.push(replayAt ? `Replay frame ${hhmm(replayAt)}` : `Sweep ${ago(a.observed_at, now)} · ${a.icao}`)
   for (const t of lines) { const d = document.createElement('div'); d.textContent = t; box.appendChild(d) }
   return box
 }
 
 // ── Map ────────────────────────────────────────────────────────────────────
 
-function MiseryMap({ airports, focus, now }: { airports: MiseryAirport[]; focus: { icao: string; n: number } | null; now: number | null }) {
+type StoryArc = { lat: number; lon: number; kind: string }
+
+function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
+  airports: MiseryAirport[]; focus: { icao: string; n: number } | null; now: number | null; region: Region
+  frame: Record<string, FrameCell> | null; replayAt: string | null; arcs: Map<string, StoryArc[]>
+}) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<LMap | null>(null)
   const pins = useRef<LayerGroup | null>(null)
+  const lines = useRef<LayerGroup | null>(null)
+  const radar = useRef<TileLayer | null>(null)
   const markers = useRef(new Map<string, Marker>())
   const nowRef = useRef(now); nowRef.current = now
+  const arcsRef = useRef(arcs); arcsRef.current = arcs
+  const frameRef = useRef(frame); frameRef.current = frame
+  const replayRef = useRef(replayAt); replayRef.current = replayAt
 
   useEffect(() => {
     let dead = false
@@ -91,42 +137,75 @@ function MiseryMap({ airports, focus, now }: { airports: MiseryAirport[]; focus:
       if (dead || !el.current || map.current) return
       const m = L.map(el.current, { zoomControl: true, attributionControl: true, worldCopyJump: true, minZoom: 2, maxZoom: 10 })
       const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas'
-      L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { attribution: 'Esri, HERE, Garmin, © OpenStreetMap · airport sweep © AeroDataBox', maxZoom: 12 }).addTo(m)
+      L.tileLayer(`${ESRI}/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}`, { attribution: 'Esri, HERE, Garmin, © OpenStreetMap · radar © RainViewer · airport sweep © AeroDataBox', maxZoom: 12 }).addTo(m)
       L.tileLayer(`${ESRI}/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}`, { maxZoom: 12, pane: 'overlayPane' }).addTo(m)
+      lines.current = L.layerGroup().addTo(m)
       pins.current = L.layerGroup().addTo(m)
-      m.fitBounds(WORLD, { padding: [4, 4] })
+      m.fitBounds(region === 'us' ? CONUS : WORLD, { padding: [4, 4] })
       map.current = m
       draw(L)
+      // Radar under the rings: RainViewer's newest global mosaic frame (the globe does the same; here one frame, live).
+      fetch('https://api.rainviewer.com/public/weather-maps.json', { signal: AbortSignal.timeout(15000) })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          const past = d?.radar?.past ?? []
+          if (dead || !map.current || !past.length) return
+          const fr = past[past.length - 1]
+          radar.current = L.tileLayer(`${d.host}${fr.path}/256/{z}/{x}/{y}/2/1_1.png`, { opacity: 0.5, maxZoom: 12, pane: 'tilePane' }).addTo(map.current)
+        })
+        .catch(() => { /* no radar is a missing overlay, not a wrong map */ })
     })
     return () => { dead = true; map.current?.remove(); map.current = null }
+
   }, [])
 
   function draw(L: typeof import('leaflet')) {
     if (!pins.current) return
     pins.current.clearLayers()
     markers.current.clear()
-    // Worst on top: unscored, then calm → severe.
-    const order = (a: MiseryAirport) => (a.military ? -2 : a.misery == null ? -1 : a.misery)
+    const f = frameRef.current
+    const cell = (a: MiseryAirport): Frame | null => {
+      if (!f) return null
+      const c = f[a.icao]
+      return c ? { misery: c[0], cancelled: c[1], movements: c[2], cancel_rate: c[3] } : { misery: null, cancelled: 0, movements: 0, cancel_rate: null }
+    }
+    const val = (a: MiseryAirport) => { const c = cell(a); return { misery: c ? c.misery : a.misery, movements: c ? c.movements : a.movements, rate: c ? c.cancel_rate : a.cancel_rate } }
+    const order = (a: MiseryAirport) => (a.military ? -2 : val(a).misery == null ? -1 : (val(a).misery as number))
     const list = airports.filter((a) => a.lat != null && a.lon != null).slice().sort((x, y) => order(x) - order(y))
     for (const a of list) {
-      const px = a.military ? 9 : dotPx(a.movements)
-      const fill = a.military ? C_MILITARY : a.misery == null ? '#1e293b' : bandOf(a.misery).color
-      const edge = a.military ? '#0f172a' : a.misery == null ? C_UNSCORED : '#0f172a'
-      // The icon markup is built from numbers and fixed colours only — no API string reaches it.
-      const html = a.military
-        ? `<i style="display:block;width:${px}px;height:${px}px;background:${fill};border:1px solid ${edge};border-radius:2px;box-sizing:border-box;color:#fff;font:700 8px/7px monospace;text-align:center">+</i>`
-        : `<i style="display:block;width:${px}px;height:${px}px;background:${fill};border:1px solid ${edge};border-radius:2px;box-sizing:border-box"></i>`
-      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: 'misd-sq', html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) })
+      const v = val(a)
+      const px = a.military ? 14 : ringPx(v.movements)
+      const kind = a.military ? 'military' : v.misery == null ? 'unscored' : 'scored'
       const code = a.iata ?? a.icao
-      if (a.misery != null && a.misery >= 40) mk.bindTooltip(textEl(`${code} ${Math.round(a.misery)}`), { permanent: true, direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
-      else mk.bindTooltip(textEl(code), { direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
-      mk.bindPopup(() => popup(a, nowRef.current))
+      const html = ringSvg(px, v.misery, cancelPts(v.rate), kind, code)
+      // the per-airport class is only ever an ICAO that passed the regex — it reaches a class attribute
+      const cls = /^[A-Z0-9]{3,4}$/.test(a.icao) ? `misd-ring r-${a.icao}` : 'misd-ring'
+      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) })
+      if (v.misery != null && v.misery >= 40 && px < 28) mk.bindTooltip(textEl(`${code} ${Math.round(v.misery)}`), { permanent: true, direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
+      else mk.bindTooltip(textEl(v.misery != null ? `${code} ${Math.round(v.misery)}` : code), { direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
+      mk.bindPopup(() => popup(a, cell(a), nowRef.current, replayRef.current))
+      mk.on('mouseover', () => showArcs(L, a))
+      mk.on('mouseout', () => lines.current?.clearLayers())
       mk.addTo(pins.current)
       markers.current.set(a.icao, mk)
     }
   }
 
-  useEffect(() => { import('leaflet').then((L) => draw(L)) }, [airports])
+  /** Hover: the far ends of this airport's delayed / cancelled / diverted flights — only airports the story worker boarded have them. */
+  function showArcs(L: typeof import('leaflet'), a: MiseryAirport) {
+    if (!lines.current) return
+    lines.current.clearLayers()
+    const list = arcsRef.current.get(a.icao)
+    if (!list) return
+    for (const x of list) {
+      const col = x.kind === 'cancelled' ? C_CANCEL : x.kind === 'diverted' ? C_DIVERTED : C_MISERY
+      L.polyline([[a.lat, a.lon], [x.lat, x.lon]], { color: col, weight: 1.4, opacity: 0.8, interactive: false }).addTo(lines.current)
+    }
+  }
+
+  useEffect(() => { import('leaflet').then((L) => draw(L)) }, [airports, frame])
+
+  useEffect(() => { map.current?.flyToBounds(region === 'us' ? CONUS : WORLD, { padding: [4, 4], duration: 0.9 }) }, [region])
 
   useEffect(() => {
     if (!focus || !map.current) return
@@ -137,26 +216,23 @@ function MiseryMap({ airports, focus, now }: { airports: MiseryAirport[]; focus:
   return <div ref={el} style={{ position: 'absolute', inset: 0, background: '#0b1220' }} />
 }
 
-// ── Airport card (worst first) ─────────────────────────────────────────────
+// ── Ranked bars (worst first) ──────────────────────────────────────────────
 
-function AirportCard({ a, now, onPick }: { a: MiseryAirport; now: number | null; onPick: (icao: string) => void }) {
-  const b = bandOf(a.misery ?? 0)
+function BarRow({ a, f, now, onPick }: { a: MiseryAirport; f: Frame | null; now: number | null; onPick: (icao: string) => void }) {
+  const misery = f ? f.misery : a.misery, cancelled = f ? f.cancelled : a.cancelled, movements = f ? f.movements : a.movements, rate = f ? f.cancel_rate : a.cancel_rate
+  const m = Math.min(100, misery ?? 0), cp = Math.min(m, cancelPts(rate))
+  const b = bandOf(misery ?? 0)
   return (
-    <button onClick={() => onPick(a.icao)} className="misd-card" style={{ borderLeft: `4px solid ${b.color}` }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 16, color: '#f1f5f9' }}>{a.iata ?? a.icao}</span>
-        <span style={{ fontSize: 11, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{place(a)}</span>
-        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 18, fontWeight: 800, color: b.color }}>{Math.round(a.misery ?? 0)}</span>
-      </div>
-      <div style={{ display: 'flex', gap: 6, fontSize: 11, color: '#cbd5e1', marginTop: 3 }}>
-        <span style={{ fontFamily: MONO, fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: b.color }}>{b.band.toUpperCase()}</span>
-        <span style={{ marginLeft: 'auto', fontFamily: MONO, fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>
-          {num(a.movements)} flights · {num(a.cancelled)} cxl · median {mins(a.median_delay_min)}
-        </span>
-      </div>
-      <div style={{ fontFamily: MONO, fontSize: 10, color: '#64748b', marginTop: 2 }}>
-        index {a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5{a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal` : ' · no baseline yet'} · {ago(a.observed_at, now)}
-      </div>
+    <button onClick={() => onPick(a.icao)} className="misd-bar" title={f ? 'Replay frame — click to fly there' : `${place(a)} — click to fly there`}>
+      <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: '#f1f5f9', width: 38, flex: 'none' }}>{a.iata ?? a.icao}</span>
+      <span className="misd-track">
+        <span style={{ width: `${m}%`, background: C_MISERY }} />
+        <span style={{ width: `${cp}%`, background: C_CANCEL }} />
+      </span>
+      <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: b.color, width: 28, textAlign: 'right', flex: 'none' }}>{Math.round(misery ?? 0)}</span>
+      <span className="misd-barsub">
+        {num(movements)} flights · {num(cancelled)} cxl{!f ? ` · median ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}` : ''}{!f && a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal` : ''}{!f ? ` · ${ago(a.observed_at, now)}` : ''}
+      </span>
     </button>
   )
 }
@@ -207,7 +283,7 @@ function Column({ band, items, onPick }: { band: Band; items: MiseryAirport[]; o
 
 // ── 24 h chart + coverage + method ─────────────────────────────────────────
 
-function Trend({ series, now }: { series: MiseryGlobalRow[]; now: number | null }) {
+function Trend({ series, now, mark }: { series: MiseryGlobalRow[]; now: number | null; mark: string | null }) {
   const pts = series.filter((s) => s.misery != null)
   const W = 300, H = 90, pad = 4
   const x = (i: number) => pad + (pts.length > 1 ? (i / (pts.length - 1)) * (W - 2 * pad) : 0)
@@ -215,11 +291,13 @@ function Trend({ series, now }: { series: MiseryGlobalRow[]; now: number | null 
   const path = pts.map((s, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(s.misery as number).toFixed(1)}`).join(' ')
   const last = pts[pts.length - 1], first = pts[0]
   const peak = pts.reduce<MiseryGlobalRow | null>((m, s) => (m == null || (s.misery as number) > (m.misery as number) ? s : m), null)
+  const mi = mark ? pts.findIndex((s) => s.observed_at >= mark) : -1
   return (
     <div style={{ padding: '6px 10px' }}>
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 90, display: 'block' }} role="img" aria-label="Global travel misery, last 24 hours">
         {BANDS.slice(0, 3).map((b) => <line key={b.band} x1={0} x2={W} y1={y(b.from)} y2={y(b.from)} stroke={b.color} strokeOpacity={0.35} strokeDasharray="3 3" />)}
         {pts.length > 1 && <path d={path} fill="none" stroke="#e2e8f0" strokeWidth={1.5} />}
+        {mi >= 0 && <line x1={x(mi)} x2={x(mi)} y1={0} y2={H} stroke="#38bdf8" strokeWidth={1} />}
         {last && <circle cx={x(pts.length - 1)} cy={y(last.misery as number)} r={3} fill={bandOf(last.misery as number).color} />}
       </svg>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO, fontSize: 10, color: '#64748b' }}>
@@ -239,43 +317,109 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const pick = (icao: string) => setFocus((f) => ({ icao, n: (f?.n ?? 0) + 1 }))
   useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 60_000); return () => clearInterval(t) }, [])
 
+  // US by default, World one click away; the choice is a per-viewer convenience.
+  const [region, setRegion] = useState<Region>('us')
+  useEffect(() => { try { const v = localStorage.getItem('misd-region'); if (v === 'world' || v === 'us') setRegion(v) } catch { /* private window */ } }, [])
+  const chooseRegion = (r: Region) => { setRegion(r); try { localStorage.setItem('misd-region', r) } catch { /* ignore */ } }
+
+  // Replay: hourly frames, fetched on first press.
+  const [hist, setHist] = useState<MiseryHistory | null>(null)
+  const [histErr, setHistErr] = useState<string | null>(null)
+  const [fi, setFi] = useState<number>(-1)          // -1 = live
+  const [playing, setPlaying] = useState(false)
+  const loadHist = async () => {
+    if (hist) return hist
+    try {
+      const r = await fetch('/api/roc-misery-history', { signal: AbortSignal.timeout(30000) })
+      if (!r.ok) throw new Error(`HTTP ${r.status}`)
+      const h = (await r.json()) as MiseryHistory
+      if (!h.frames?.length) throw new Error('no frames')
+      setHist(h); setHistErr(null); return h
+    } catch (e) { setHistErr(String((e as Error).message || e)); return null }
+  }
+  const play = async () => { const h = await loadHist(); if (!h) return; setFi((i) => (i < 0 || i >= h.frames.length - 1 ? 0 : i)); setPlaying(true) }
+  useEffect(() => {
+    if (!playing || !hist) return
+    const t = setInterval(() => setFi((i) => { if (i >= hist.frames.length - 1) { setPlaying(false); return -1 } return i + 1 }), 800)
+    return () => clearInterval(t)
+  }, [playing, hist])
+  const frame = fi >= 0 && hist ? hist.frames[fi] : null
+
+  // Story-flight arcs (boarded airports only): far ends of delayed / cancelled / diverted flights.
+  const [arcs, setArcs] = useState<Map<string, StoryArc[]>>(new Map())
+  useEffect(() => {
+    let dead = false
+    fetch('/api/gev-story-flights', { signal: AbortSignal.timeout(25000) }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      if (dead || !j?.flights) return
+      const m = new Map<string, StoryArc[]>()
+      for (const f of j.flights as { airport_icao: string; other_lat: number | null; other_lon: number | null; story_kind: string }[]) {
+        if (typeof f.other_lat !== 'number' || typeof f.other_lon !== 'number') continue
+        const l = m.get(f.airport_icao) ?? []; l.push({ lat: f.other_lat, lon: f.other_lon, kind: f.story_kind }); m.set(f.airport_icao, l)
+      }
+      setArcs(m)
+    }).catch(() => { /* arcs are an extra, never a gap */ })
+    return () => { dead = true }
+  }, [])
+
   const airports = d.airports ?? []
   const g = d.global?.now ?? null
   const series = d.global?.series ?? []
-  const scored = airports.filter((a) => a.misery != null)
-  const byBand = Object.fromEntries(BANDS.map((b) => [b.band, scored.filter((a) => bandOf(a.misery as number).band === b.band).sort((x, y) => (y.misery as number) - (x.misery as number))])) as Record<string, MiseryAirport[]>
-  const worst = scored.filter((a) => (a.misery as number) >= 20).sort((x, y) => (y.misery as number) - (x.misery as number) || (y.movements ?? 0) - (x.movements ?? 0))
+  const regional = airports.filter((a) => inRegion(a, region))
+  const cellOf = (a: MiseryAirport): Frame | null => {
+    if (!frame) return null
+    const c = frame.airports[a.icao]
+    return c ? { misery: c[0], cancelled: c[1], movements: c[2], cancel_rate: c[3] } : { misery: null, cancelled: 0, movements: 0, cancel_rate: null }
+  }
+  const live = (a: MiseryAirport) => { const c = cellOf(a); return c ? { misery: c.misery, movements: c.movements, cancelled: c.cancelled } : { misery: a.misery, movements: a.movements, cancelled: a.cancelled } }
+  const scoredAll = airports.filter((a) => a.misery != null)
+  const scoredR = regional.filter((a) => live(a).misery != null)
+  const byBand = Object.fromEntries(BANDS.map((b) => [b.band, regional.filter((a) => a.misery != null && bandOf(a.misery).band === b.band).sort((x, y) => (y.misery as number) - (x.misery as number))])) as Record<string, MiseryAirport[]>
+  const ranked = regional.filter((a) => !a.military && live(a).misery != null).sort((x, y) => (live(y).misery as number) - (live(x).misery as number) || (live(y).movements ?? 0) - (live(x).movements ?? 0))
+  const rMean = weighted(scoredR.map((a) => ({ misery: live(a).misery, movements: live(a).movements })))
+  const rFlights = scoredR.reduce((s, a) => s + (live(a).movements ?? 0), 0)
+  const rCancelled = scoredR.reduce((s, a) => s + (live(a).cancelled ?? 0), 0)
   const gb = g && g.misery != null ? bandOf(g.misery) : null
   const prev = series.length > 4 ? series[series.length - 5] : null   // ~1 h earlier at 15-min sweeps
   const trend = g && g.misery != null && prev && prev.misery != null ? signed(g.misery - prev.misery) : null
   const reasons = Object.entries(d.meta?.unscored_by_reason ?? {}).sort((x, y) => y[1] - x[1])
   const maturity = d.meta?.baseline_maturity ?? {}
+  const newest = airports.find((a) => a.observed_at === d.meta?.newest_observed_at) ?? airports.find((a) => a.observed_at)
+  const windowText = newest ? `${hhmm(newest.window_start_at)} – ${hhmm(newest.window_end_at)}` : '—'
+  const replayAt = frame ? frame.observed_at : null
 
   // Portal to <body>: the site layout wraps pages in a containing block that traps position:fixed.
   const [host, setHost] = useState<HTMLElement | null>(null)
   useEffect(() => { setHost(document.body) }, [])
   if (!host) return <div style={{ minHeight: '100vh', background: '#060b16' }} />
+  const regionLabel = region === 'us' ? 'US' : 'WORLD'
   return createPortal(
     <div className="misd-root">
       <style>{CSS}</style>
       <header className="misd-head">
         <a href={backHref} style={{ color: '#38bdf8', textDecoration: 'none', fontFamily: MONO, fontSize: 11 }}>← Travel Risk</a>
         <span style={{ fontFamily: MONO, fontWeight: 800, letterSpacing: '0.14em', fontSize: 14, color: '#f1f5f9' }}>TRAVEL MISERY INDEX</span>
+        <span className="misd-seg" role="group" aria-label="Region">
+          <button onClick={() => chooseRegion('us')} aria-pressed={region === 'us'}>US</button>
+          <button onClick={() => chooseRegion('world')} aria-pressed={region === 'world'}>WORLD</button>
+        </span>
         {g && g.misery != null && gb ? (
-          <span title="Flight-weighted mean misery of every scored airport in the newest 15-minute sweep" style={{ fontFamily: MONO, fontWeight: 800, fontSize: 18, color: gb.color, border: `1px solid ${gb.color}66`, background: `${gb.color}1a`, borderRadius: 4, padding: '0 10px', lineHeight: '26px' }}>
+          <span title="Flight-weighted mean misery of every scored airport worldwide in the newest 15-minute sweep" style={{ fontFamily: MONO, fontWeight: 800, fontSize: 18, color: gb.color, border: `1px solid ${gb.color}66`, background: `${gb.color}1a`, borderRadius: 4, padding: '0 10px', lineHeight: '26px' }}>
             {Math.round(g.misery)} <span style={{ fontSize: 11, fontWeight: 700 }}>{gb.band.toUpperCase()}</span>
             {trend && <span style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', marginLeft: 8 }}>{trend} / 1 h</span>}
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginLeft: 8 }}>WORLD</span>
           </span>
         ) : <span style={{ fontFamily: MONO, fontSize: 11, color: '#94a3b8' }}>no scored sweep in the last 24 h</span>}
+        {region === 'us' && rMean != null && (
+          <span title="Flight-weighted mean misery of the scored US airports" style={{ fontFamily: MONO, fontWeight: 800, fontSize: 18, color: bandOf(rMean).color, border: `1px solid ${bandOf(rMean).color}66`, background: `${bandOf(rMean).color}1a`, borderRadius: 4, padding: '0 10px', lineHeight: '26px' }}>
+            {Math.round(rMean)} <span style={{ fontSize: 11, fontWeight: 700 }}>{bandOf(rMean).band.toUpperCase()}</span><span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginLeft: 8 }}>US</span>
+          </span>
+        )}
         <span style={{ display: 'flex', gap: 6 }}>
           {BANDS.map((b) => (
             <span key={b.band} title={b.note} style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color: b.color, border: `1px solid ${b.color}55`, background: `${b.color}18`, borderRadius: 3, padding: '1px 6px' }}>
               {b.band} {byBand[b.band].length}
             </span>
           ))}
-        </span>
-        <span style={{ fontFamily: MONO, fontSize: 11, color: '#94a3b8' }} title="scored airports / registry · scheduled flights in the 2 h window · cancellations in window">
-          {scored.length}/{airports.length} scored · {num(g?.movements)} flights · {num(g?.cancelled)} cxl
         </span>
         <span style={{ fontFamily: MONO, fontSize: 11, color: '#64748b' }} title="15-minute AeroDataBox sweep; this page re-reads every 2 minutes">sweep {g ? ago(g.observed_at, now) : '—'}</span>
         <span style={{ marginLeft: 'auto', display: 'flex', gap: 14, whiteSpace: 'nowrap' }}>
@@ -287,25 +431,40 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
 
       <div className="misd-upper">
         <div className="misd-map">
-          <MiseryMap airports={airports} focus={focus} now={now} />
+          <MiseryMap airports={airports} focus={focus} now={now} region={region} frame={frame ? frame.airports : null} replayAt={replayAt} arcs={arcs} />
           <div className="misd-legend">
-            {BANDS.map((b) => <div key={b.band} title={b.note}><span style={{ background: b.color }} />{b.band} {b.band === 'calm' ? '< 20' : b.band === 'severe' ? '≥ 60' : b.band === 'miserable' ? '40–60' : '20–40'}</div>)}
-            <div title="statistics withheld, absent from the sweep or no traffic in the window"><span style={{ background: '#1e293b', border: `1px solid ${C_UNSCORED}` }} />not scored</div>
-            <div title="no commercial data by construction"><span style={{ background: C_MILITARY }} />military airbase</div>
-            <div style={{ color: '#64748b', marginTop: 2 }}>square size = flights in the 2 h window · click a square</div>
+            <div><span className="misd-sw" style={{ borderColor: C_MISERY }} />ring = misery score 0–100 · <i style={{ background: C_CANCEL }} />cancellation points · <i style={{ background: C_ONTIME }} />the rest</div>
+            <div><span className="misd-sw" style={{ borderColor: C_UNSCORED, borderStyle: 'dashed' }} />not scored (statistics withheld / absent / no traffic) · <span className="misd-sw" style={{ borderColor: C_MILITARY }} />military airbase</div>
+            <div style={{ color: '#64748b', marginTop: 2 }}>ring size = flights in the 2 h window · click a ring · hover a boarded airport for its delayed / cancelled flights&apos; far ends · radar © RainViewer</div>
+          </div>
+          <div className="misd-replay">
+            <button onClick={() => (playing ? setPlaying(false) : play())} title={playing ? 'Pause' : 'Replay the last 24 hours, one frame per hour'} aria-label={playing ? 'Pause replay' : 'Play 24 h replay'}>{playing ? '❚❚' : '▶'}</button>
+            <input type="range" min={0} max={Math.max(0, (hist?.frames.length ?? 24) - 1)} value={fi < 0 ? Math.max(0, (hist?.frames.length ?? 24) - 1) : fi}
+              onChange={async (e) => { const v = Number(e.target.value); const h = hist ?? (await loadHist()); if (h) { setPlaying(false); setFi(Math.min(v, h.frames.length - 1)) } }}
+              aria-label="Replay position" />
+            <button onClick={() => { setPlaying(false); setFi(-1) }} aria-pressed={fi < 0} title="Back to the live sweep">LIVE</button>
+            <span style={{ fontFamily: MONO, fontSize: 10, color: frame ? '#38bdf8' : '#64748b' }}>
+              {histErr ? `replay unavailable: ${histErr}` : frame ? `${hhmm(frame.observed_at)} · ${frame.observed_at.slice(5, 10)} · frame ${fi + 1}/${hist?.frames.length}` : `now · ${windowText} window`}
+            </span>
           </div>
         </div>
         <div className="misd-airports">
-          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#94a3b8', padding: '8px 10px 4px', display: 'flex' }}>
-            <span>WORST AIRPORTS · MISERY ≥ 20</span>
+          <div className="misd-totals">
+            <div><b>{num(rFlights)}</b><span>FLIGHTS</span></div>
+            <div><b style={{ color: rCancelled ? C_MISERY : '#e2e8f0' }}>{num(rCancelled)}</b><span>CANCELLED</span></div>
+            <div><b>{scoredR.length}<small>/{regional.length}</small></b><span>SCORED</span></div>
+            <div style={{ fontFamily: MONO, fontSize: 10, color: '#64748b', alignSelf: 'end' }}>{frame ? `replay ${hhmm(frame.observed_at)}` : `window ${windowText}`} · {regionLabel}</div>
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#94a3b8', padding: '6px 10px 2px', display: 'flex' }}>
+            <span>RANKED · {regionLabel}</span>
             <span style={{ marginLeft: 'auto', color: byBand.severe.length ? BANDS[0].color : byBand.miserable.length ? BANDS[1].color : '#22c55e' }}>
-              {byBand.severe.length ? `${byBand.severe.length} severe` : byBand.miserable.length ? `${byBand.miserable.length} miserable` : 'nothing above slow'}
+              {frame ? 'replay' : byBand.severe.length ? `${byBand.severe.length} severe` : byBand.miserable.length ? `${byBand.miserable.length} miserable` : 'nothing above slow'}
             </span>
           </div>
-          <div className="misd-grid">
-            {worst.length === 0
-              ? <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>{scored.length ? 'Every scored airport is calm.' : 'No airport scored on this read.'}</div>
-              : worst.slice(0, 40).map((a) => <AirportCard key={a.icao} a={a} now={now} onPick={pick} />)}
+          <div className="misd-list">
+            {ranked.length === 0
+              ? <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>No airport scored in this {frame ? 'frame' : 'read'}.</div>
+              : ranked.slice(0, 80).map((a) => <BarRow key={a.icao} a={a} f={cellOf(a)} now={now} onPick={pick} />)}
           </div>
         </div>
       </div>
@@ -314,17 +473,17 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
         {BANDS.slice(0, 3).map((b) => <Column key={b.band} band={b} items={byBand[b.band]} onPick={pick} />)}
         <div className="misd-col" style={{ borderRight: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #334155', padding: '6px 10px', fontFamily: MONO, fontWeight: 700, fontSize: 12, color: '#94a3b8', letterSpacing: '0.08em' }}>
-            <span>24 H · COVERAGE · METHOD</span><span>{series.length} sweeps</span>
+            <span>24 H · COVERAGE · METHOD</span><span>{series.length} sweeps · world</span>
           </div>
           <div className="misd-clip" style={{ overflow: 'auto' }}>
-            <Trend series={series} now={now} />
+            <Trend series={series} now={now} mark={replayAt} />
             <div style={{ padding: '4px 10px 10px', fontSize: 11, color: '#cbd5e1', lineHeight: 1.45 }}>
-              <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', marginBottom: 2 }}>NOT SCORED · {airports.length - scored.length} of {airports.length}</div>
+              <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', marginBottom: 2 }}>NOT SCORED · {airports.length - scoredAll.length} of {airports.length} worldwide</div>
               {reasons.map(([k, n]) => <div key={k} style={{ display: 'flex' }}><span>{REASON[k] ?? k}</span><span style={{ marginLeft: 'auto', fontFamily: MONO, color: '#94a3b8' }}>{n}</span></div>)}
               <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', margin: '8px 0 2px' }}>BASELINE</div>
-              <div>{Object.entries(maturity).filter(([k]) => k !== 'null').map(([k, n]) => `${n} ${k}`).join(' · ') || 'no baselines yet'}{maturity.null ? ` · ${maturity.null} without` : ''} — "vs normal" compares to the same local weekday; a warming baseline is said so.</div>
+              <div>{Object.entries(maturity).filter(([k]) => k !== 'null').map(([k, n]) => `${n} ${k}`).join(' · ') || 'no baselines yet'}{maturity.null ? ` · ${maturity.null} without` : ''} — &quot;vs normal&quot; compares to the same local weekday; a warming baseline is said so.</div>
               <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', margin: '8px 0 2px' }}>METHOD · {d.meta?.rule?.id ?? 'airport_misery'} {d.meta?.rule?.version ?? ''}</div>
-              <div>45 × min(1, median delay / 60 min) + 30 × min(1, delay index / 4) + 25 × min(1, cancelled % / 20), departures and arrivals blended by flights with statistics. Needs 5 such flights. The feed gives a median and a 0–5 index per 2 h window, not a count of delayed flights. Our own index from the 15-minute AeroDataBox sweep — not FlightAware&apos;s.</div>
+              <div>45 × min(1, median delay / 60 min) + 30 × min(1, delay index / 4) + 25 × min(1, cancelled % / 20), departures and arrivals blended by flights with statistics; needs 5 such flights. The ring shows that score: dark red = the cancellation points, red = the delay points, green = the rest. FlightAware&apos;s MiseryMap counts flights on-time / delayed / cancelled; our feed gives a median and a 0–5 index per 2 h window, not a count of delayed flights, so this is our own index, not theirs.</div>
             </div>
           </div>
         </div>
@@ -337,15 +496,32 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
 const CSS = `
 .misd-root{position:fixed;inset:0;z-index:2147483000;background:#060b16;color:#e2e8f0;display:flex;flex-direction:column;font-family:Inter,system-ui,sans-serif}
 .misd-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid #1e293b;background:#0b1220}
-.misd-upper{flex:0 0 52%;display:flex;min-height:0;border-bottom:1px solid #1e293b}
-.misd-map{position:relative;flex:1 1 60%;min-width:0}
-.misd-airports{flex:0 0 40%;max-width:34rem;display:flex;flex-direction:column;min-height:0;border-left:1px solid #1e293b;background:#0b1220}
-.misd-grid{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:6px;padding:6px 10px 10px;align-content:start}
-.misd-card{all:unset;cursor:pointer;display:block;padding:7px 9px;background:#0f172a;border:1px solid #1e293b;border-radius:4px}
-.misd-card:hover{background:#13203a}
-.misd-legend{position:absolute;left:10px;bottom:22px;z-index:500;background:rgba(6,11,22,.85);border:1px solid #1e293b;border-radius:4px;padding:6px 8px;font-family:${MONO};font-size:10px;color:#cbd5e1}
-.misd-legend span{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:-1px;box-sizing:border-box}
-.misd-sq{background:transparent;border:0}
+.misd-seg{display:inline-flex;border:1px solid #1e293b;border-radius:4px;overflow:hidden}
+.misd-seg button{all:unset;cursor:pointer;padding:3px 10px;font:700 11px ${MONO};color:#94a3b8;letter-spacing:.08em}
+.misd-seg button[aria-pressed="true"]{background:#13203a;color:#f1f5f9}
+.misd-upper{flex:0 0 56%;display:flex;min-height:0;border-bottom:1px solid #1e293b}
+.misd-map{position:relative;flex:1 1 62%;min-width:0}
+.misd-airports{flex:0 0 38%;max-width:34rem;display:flex;flex-direction:column;min-height:0;border-left:1px solid #1e293b;background:#0b1220}
+.misd-totals{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;padding:10px 12px 4px;border-bottom:1px solid #1e293b}
+.misd-totals>div{display:flex;flex-direction:column}
+.misd-totals b{font:800 26px/1 ${MONO};color:#f1f5f9}
+.misd-totals b small{font-size:12px;color:#64748b;font-weight:700}
+.misd-totals span{font:700 9px ${MONO};letter-spacing:.14em;color:#64748b;margin-top:3px}
+.misd-list{flex:1;overflow:auto;padding:4px 6px 10px}
+.misd-bar{all:unset;cursor:pointer;display:grid;grid-template-columns:38px 1fr 28px;grid-template-rows:auto auto;column-gap:8px;align-items:center;box-sizing:border-box;width:100%;padding:4px 6px;border-radius:3px}
+.misd-bar:hover{background:#13203a}
+.misd-track{position:relative;height:12px;background:#111c30;border-radius:2px;overflow:hidden;display:block}
+.misd-track span{position:absolute;left:0;top:0;bottom:0;display:block}
+.misd-barsub{grid-column:2/4;font:10px ${MONO};color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.misd-legend{position:absolute;left:10px;bottom:46px;z-index:500;background:rgba(6,11,22,.85);border:1px solid #1e293b;border-radius:4px;padding:6px 8px;font-family:${MONO};font-size:10px;color:#cbd5e1;max-width:34rem}
+.misd-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 4px;vertical-align:-1px}
+.misd-sw{display:inline-block;width:9px;height:9px;border-radius:50%;border:2.5px solid;margin-right:6px;vertical-align:-1px;box-sizing:border-box}
+.misd-replay{position:absolute;left:10px;right:10px;bottom:10px;z-index:500;display:flex;align-items:center;gap:8px;background:rgba(6,11,22,.85);border:1px solid #1e293b;border-radius:4px;padding:4px 8px}
+.misd-replay button{all:unset;cursor:pointer;font:700 11px ${MONO};color:#e2e8f0;background:#13203a;border:1px solid #1e293b;border-radius:3px;padding:2px 8px;letter-spacing:.06em}
+.misd-replay button[aria-pressed="true"]{color:#38bdf8;border-color:#38bdf8}
+.misd-replay input[type=range]{flex:1;accent-color:#38bdf8;min-width:80px}
+.misd-ring{background:transparent;border:0}
+.misd-ring svg{display:block;filter:drop-shadow(0 0 2px rgba(0,0,0,.8))}
 .misd-lower{flex:1;display:grid;grid-template-columns:repeat(4,1fr);min-height:0}
 .misd-col{display:flex;flex-direction:column;min-height:0;border-right:1px solid #1e293b}
 .misd-clip{flex:1;overflow:hidden;min-height:0}
@@ -362,9 +538,10 @@ const CSS = `
   .misd-root{overflow-y:auto}
   .misd-root>*{flex:none}
   .misd-upper{flex:none;flex-direction:column}
-  .misd-map{height:55vh;flex:none}
+  .misd-map{height:60vh;flex:none}
   .misd-airports{max-width:none;border-left:0;border-top:1px solid #1e293b}
-  .misd-grid{overflow:visible}
+  .misd-list{overflow:visible}
+  .misd-legend{display:none}
   .misd-lower{grid-template-columns:1fr}
   .misd-clip{height:18rem;flex:none}
 }

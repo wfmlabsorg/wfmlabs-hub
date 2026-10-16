@@ -138,3 +138,45 @@ export async function readMisery(): Promise<MiseryPayload> {
     },
   }
 }
+
+// ── 24 h replay frames ──────────────────────────────────────────────────────
+
+/** One hourly frame: every registry airport's score at that sweep, compact. [misery|null, cancelled, movements, cancel_rate|null] */
+export type FrameCell = [number | null, number, number, number | null]
+export interface MiseryFrame { sweep_id: string; observed_at: string; airports: Record<string, FrameCell> }
+export interface MiseryHistory { frames: MiseryFrame[]; meta: { hours: number; step_min: number; generatedAt: string; rule: { id: string; version: string } } }
+
+/**
+ * Hourly frames for the dashboard's replay (the :00 sweep of each hour, oldest first). Scores come from the
+ * same SQL rule the live view uses (`airport_misery_score`, schema/066), applied to the stored observation
+ * rows — nothing is re-derived in TypeScript. An airport absent from a sweep is simply missing from that frame.
+ */
+const HISTORY_SQL = `
+  WITH hourly AS (
+    SELECT DISTINCT ON (date_trunc('hour', observed_at)) sweep_id, observed_at
+      FROM airport_observations
+     WHERE observed_at > now() - ($1::int || ' hours')::interval
+     ORDER BY date_trunc('hour', observed_at), observed_at ASC
+  )
+  SELECT h.sweep_id, h.observed_at, o.icao,
+         (s).score::double precision AS misery, (s).cancelled::int AS cancelled, (s).movements::int AS movements,
+         (s).cancel_rate::double precision AS cancel_rate
+    FROM hourly h
+    JOIN airport_observations o ON o.sweep_id = h.sweep_id
+    CROSS JOIN LATERAL airport_misery_score(o.departures_total, o.departures_qualified, o.departures_cancelled, o.departures_median_delay_min, o.departures_delay_index,
+                                            o.arrivals_total, o.arrivals_qualified, o.arrivals_cancelled, o.arrivals_median_delay_min, o.arrivals_delay_index) AS s
+   ORDER BY h.observed_at ASC, o.icao
+`
+
+export async function readMiseryHistory(hours = 24): Promise<MiseryHistory> {
+  const pool = getPool()
+  const r = await pool.query(HISTORY_SQL, [hours])
+  const frames: MiseryFrame[] = []
+  let cur: MiseryFrame | null = null
+  for (const row of r.rows as Row[]) {
+    const t = row.observed_at instanceof Date ? row.observed_at.toISOString() : String(row.observed_at)
+    if (!cur || cur.sweep_id !== row.sweep_id) { cur = { sweep_id: String(row.sweep_id), observed_at: t, airports: {} }; frames.push(cur) }
+    cur.airports[String(row.icao)] = [row.misery as number | null, (row.cancelled as number) ?? 0, (row.movements as number) ?? 0, row.cancel_rate as number | null]
+  }
+  return { frames, meta: { hours, step_min: 60, generatedAt: new Date().toISOString(), rule: { id: 'airport_misery', version: 'v1' } } }
+}
