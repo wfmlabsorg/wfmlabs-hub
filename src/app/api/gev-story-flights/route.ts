@@ -14,7 +14,8 @@ import { getPool } from '@/lib/db'
  *              capped per airport, cancelled/diverted first then longest delay. Positions come from
  *              free ADS-B where the network has coverage (Russia, for example, has almost none).
  * emergencies  live 7700 / 7600 / 7500 squawks worldwide from adsb.lol (free), cached 60 s.
- * meta         run time, today's AeroDataBox units against the worker's daily cap.
+ * meta         run time, today's AeroDataBox units against the worker's daily cap, and whether the
+ *              budget reserve (last RESERVE_PCT, FAA / operational stories only) is in force.
  *
  * Public, read-only.
  */
@@ -78,7 +79,7 @@ export async function GET() {
     return Response.json({
       airports, flights, emergencies: em.list,
       meta: { run_id: run.rows[0]?.run_id ?? null, run_at: run.rows[0]?.completed_at ?? null, units_today: budget.rows[0].units, boards_today: budget.rows[0].boards,
-        failed: em.failed, daily_cap: summary.cap ?? null, boards_enabled: summary.enabled ?? null, per_airport_cap: PER_AIRPORT, positions: 'free ADS-B (adsb.lol); no coverage over Russia and parts of Africa/Asia' },
+        failed: em.failed, daily_cap: summary.cap ?? null, reserve_pct: summary.reserve_pct ?? null, reserve_active: summary.reserve_active ?? null, boards_enabled: summary.enabled ?? null, per_airport_cap: PER_AIRPORT, positions: 'free ADS-B (adsb.lol); no coverage over Russia and parts of Africa/Asia' },
     }, { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } })
   } catch (e) {
     // public endpoint: log the detail server-side, never hand pg error text to anonymous clients
