@@ -108,8 +108,8 @@ function ensureGauge() {
   var el = document.getElementById("misery-gauge");
   if (el) return el;
   var host = document.getElementById("feeds"); if (!host || !host.parentNode) return null;
-  el = document.createElement("div"); el.id = "misery-gauge";
-  el.style.cssText = "display:flex;align-items:center;gap:5px;font-size:10px;line-height:1;white-space:nowrap;color:#94a3b8;cursor:help";
+  el = document.createElement("a"); el.id = "misery-gauge"; el.href = "/travelrisk/misery"; el.target = "_blank"; el.rel = "noopener";
+  el.style.cssText = "display:flex;align-items:center;gap:5px;font-size:10px;line-height:1;white-space:nowrap;color:#94a3b8;text-decoration:none;cursor:pointer";
   host.parentNode.insertBefore(el, host.nextSibling);
   return el;
 }
@@ -137,7 +137,7 @@ function renderGauge(g, meta) {
   el.title = "Travel misery " + now.misery.toFixed(1) + " (" + b.word + "): flight-weighted mean of every scored airport in the latest 15-minute sweep · "
     + now.airports_scored + " of " + now.airports_total + " registry airports scored · " + now.miserable_airports + " miserable (≥40) · " + now.severe_airports + " severe (≥60)"
     + (now.cancelled != null ? " · " + now.cancelled + " cancellations in window" : "") + (trend ? " · " + trend.replace("/1h", " vs 1 h ago") : "")
-    + " · sparkline = last 24 h · sweep " + when(now.observed_at) + " · click any square for that airport";
+    + " · sparkline = last 24 h · sweep " + when(now.observed_at) + " · click for the Travel Misery dashboard (new tab); click any square for that airport";
   var cv = document.getElementById("misery-spark"); if (cv) drawSpark(cv, series);
 }
 
