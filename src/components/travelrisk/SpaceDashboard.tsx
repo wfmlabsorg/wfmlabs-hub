@@ -185,7 +185,8 @@ export function SpaceDashboard({ d, infrastructure, regionHref }: {
           {d.floor ? <span style={{ color: '#eab308' }}> · floor ≥{d.floor.floor.toFixed(1)} ({d.floor.rule})</span> : <span style={{ color: '#64748b' }}> · no official floor</span>}
         </span>
         <span style={{ fontFamily: MONO, fontSize: 10, color: '#64748b' }}>SWPC read {ago(s.fetchedAt, now)}</span>
-        <a href="/travelrisk/region/global/nws" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>NWS warnings →</a>
+        <a href="/travelrisk/misery" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>Travel misery →</a>
+        <a href="/travelrisk/region/global/nws" style={{ color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>NWS warnings →</a>
         <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener" style={{ color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>swpc.noaa.gov ↗</a>
       </header>
 

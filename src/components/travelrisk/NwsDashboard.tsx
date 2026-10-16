@@ -279,7 +279,8 @@ export function NwsDashboard({ d, weather, regionHref }: {
           OVIX weather <b style={{ color: '#f1f5f9' }}>{weather?.score != null ? weather.score.toFixed(1) : '—'}</b> {weather?.level ?? ''}
           {d.floor ? <span style={{ color: '#eab308' }}> · floor ≥{d.floor.floor.toFixed(1)} ({d.floor.rule})</span> : <span style={{ color: '#64748b' }}> · no official floor</span>}
         </span>
-        <a href="/travelrisk/region/global/space" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>Space weather →</a>
+        <a href="/travelrisk/misery" style={{ marginLeft: 'auto', color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>Travel misery →</a>
+        <a href="/travelrisk/region/global/space" style={{ color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>Space weather →</a>
         <a href="https://www.weather.gov/" target="_blank" rel="noopener" style={{ color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>weather.gov ↗</a>
       </header>
       <RegionStrip regions={d.regions ?? []} current={d.node.id} />
