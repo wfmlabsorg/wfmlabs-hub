@@ -1,6 +1,8 @@
 import React from 'react'
 import { notFound } from 'next/navigation'
 import { getPool } from '@/lib/db'
+import { getSignalEvidence } from '@/lib/evidence'
+import { SignalEvidencePanel } from '@/components/signals/SignalEvidencePanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,6 +103,9 @@ export default async function SignalDetailPage({ params }: { params: Promise<{ i
 
   const signal = await fetchSignal(numId).catch(() => null)
   if (!signal) notFound()
+
+  // Evidence chain (best-effort; null/absent for un-instrumented or pre-migration signals).
+  const evidence = await getSignalEvidence(signal.id)
 
   const catColor = categoryColors[signal.category || 'general'] || '#22d3ee'
   const sevColor = severityColors[(signal.severity_label || '').toLowerCase()] || '#22d3ee'
@@ -209,6 +214,11 @@ export default async function SignalDetailPage({ params }: { params: Promise<{ i
         <Meta label="Source" value={signal.source || '—'} />
         <Meta label="Detected (UTC)" value={fmtUTC(signal.created_at)} />
         <Meta label="Signal ID" value={`#${signal.id}`} />
+      </div>
+
+      {/* Evidence / Why this is a signal */}
+      <div style={{ marginTop: '2rem' }}>
+        <SignalEvidencePanel evidence={evidence} />
       </div>
 
       {/* Back to feed */}
