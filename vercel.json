@@ -3,6 +3,10 @@
     {
       "path": "/api/signals/purge",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/retention/purge",
+      "schedule": "30 6 * * *"
     }
   ]
 }
