@@ -74,6 +74,14 @@ const SCOUT_EXPECTED_MIN: Readonly<Record<string, number>> = {
   Cipher: 1440, //  0 6 * * *    daily since 05bdfff
   Grid: 1440, //    0 6 * * *    daily since 05bdfff
 }
+/** web-scout's own /health (status ready | hibernated | blocked | stale | degraded); null when unreachable. */
+async function readWebScoutHealth(): Promise<{ status?: string; hibernated?: string | null; reasons?: string[] } | null> {
+  try {
+    const r = await fetch('https://web-scout.tedlango.workers.dev/health', { signal: AbortSignal.timeout(3000), next: { revalidate: 300 } })
+    return r.status === 200 || r.status === 503 ? await r.json() : null
+  } catch { return null }
+}
+
 /** web-scout: crons "0 3,7,11,15,19,23 * * *" — every 4h. */
 const WEB_SCOUT_EXPECTED_MIN = 240
 
@@ -223,12 +231,16 @@ export async function GET() {
     const ws = webScoutRes.rows[0] || {}
     const wsC24 = parseInt(ws.c24, 10) || 0
     const wsAge = ageMinutes(ws.last_at)
+    // web-scout says itself when it is paused by decision (roc #195, 2026-10-17: BrowserUse trial key expired).
+    // Its own /health is the source of truth; if it can't be read, fall back to freshness as before.
+    const wsHealth = await readWebScoutHealth()
     const webScout = {
       last_at: ws.last_at || null,
       age_minutes: wsAge,
       signals_24h: wsC24,
       expected_interval_minutes: WEB_SCOUT_EXPECTED_MIN,
-      status: scoutStatus(wsAge, WEB_SCOUT_EXPECTED_MIN),
+      status: wsHealth?.status === 'hibernated' ? 'HIBERNATED' : scoutStatus(wsAge, WEB_SCOUT_EXPECTED_MIN),
+      hibernated_reason: wsHealth?.status === 'hibernated' ? (wsHealth.hibernated ?? wsHealth.reasons?.[0] ?? 'paused by decision') : null,
     }
 
     // --- coverage-auditor ---
@@ -262,7 +274,7 @@ export async function GET() {
     const scoutIssues = activeScouts.filter((s) => s.status !== 'OK').length
     const domainIssues = signalsByDomain.filter((d) => d.status === 'STALE').length
     const pipelineIssues =
-      (opRisk.status !== 'OK' ? 1 : 0) + (webScout.status !== 'OK' ? 1 : 0)
+      (opRisk.status !== 'OK' ? 1 : 0) + (webScout.status !== 'OK' && webScout.status !== 'HIBERNATED' ? 1 : 0)
 
     return Response.json(
       {
