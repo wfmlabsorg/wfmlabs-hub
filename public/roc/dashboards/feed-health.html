@@ -125,6 +125,7 @@
 
   function statusClass(st) {
     if (st === 'OK') return 'ok';
+    if (st === 'QUIET') return 'hib';   // intake flowing, nothing relevant: muted, not an alarm
     if (st === 'STALE') return 'stale';
     if (st === 'HIBERNATED') return 'hib';
     return 'dead';
@@ -176,6 +177,15 @@
   }
 
   function domainChip(d) {
+    if (d.status === 'QUIET') {
+      return '<div class="chip hib" title="' + esc('Scouts ingested ' + d.intake_24h + ' events in 24 h; the relevance filter passed none. Quiet, not broken.') + '">' +
+        '<div class="chip-top">' +
+          '<span class="chip-name">' + esc(d.domain.replace(/_/g, ' ')) + '</span>' +
+          '<span class="chip-count" style="color:var(--text-dim)">0</span>' +
+        '</div>' +
+        '<div class="chip-sub">quiet &middot; ' + esc(String(d.intake_24h)) + ' in, none relevant</div>' +
+      '</div>';
+    }
     if (d.status === 'HIBERNATED') {
       var h = d.hibernation || {};
       return '<div class="chip hib" title="' + esc((h.scouts || []).join(', ') + ' hibernated by decision: ' + (h.reason || '')) + '">' +
