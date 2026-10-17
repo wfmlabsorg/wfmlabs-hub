@@ -1,4 +1,5 @@
 import { getPool } from '@/lib/db'
+import { readFaaPrograms, type FaaProgram } from '@/lib/faa-programs'
 
 /**
  * Travel Misery Index — one read for the globe route (/api/roc-misery) and the dashboard page
@@ -27,6 +28,8 @@ export interface MiseryAirport {
   baseline_score: number | null; baseline_granularity: string | null; baseline_maturity: string | null; baseline_samples: number | null
   vs_normal: number | null
   rule_id: string | null; rule_version: string | null
+  /** Live FAA programmes at this airport, strongest first; [] when none. Shown beside the score, never in it. */
+  faa: FaaProgram[]
 }
 
 export interface MiseryGlobalRow {
@@ -47,6 +50,8 @@ export interface MiseryPayload {
     military: number
     baseline_maturity: Record<string, number>
     newest_observed_at: string | null
+    /** FAA read: when checked, how many airports carry a programme, and the error if the read failed. */
+    faa: { checked_at: string; airports: number; error: string | null }
     generatedAt: string
     rule: { id: string; version: string }
   }
@@ -110,8 +115,14 @@ function tally(rows: Row[], key: string): Record<string, number> {
 /** Throws on a database error — callers decide how loudly to fail (the route 500s, the page shows a gap). */
 export async function readMisery(): Promise<MiseryPayload> {
   const pool = getPool()
-  const [air, glob] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL)])
+  const [air, glob, faa] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL), readFaaPrograms()])
   const airports = (air.rows as Row[]).map(iso)
+  let faaAirports = 0
+  for (const a of airports) {
+    const list = (typeof a.iata === 'string' && faa.byIata[a.iata]) || []
+    a.faa = list as unknown as Row[string]
+    if (list.length) faaAirports++
+  }
   const series = (glob.rows as Row[]).map(iso)
 
   let newest: string | null = null
@@ -133,6 +144,7 @@ export async function readMisery(): Promise<MiseryPayload> {
       military: airports.filter((a) => a.military === true).length,
       baseline_maturity: tally(airports, 'baseline_maturity'),
       newest_observed_at: newest,
+      faa: { checked_at: faa.checked_at, airports: faaAirports, error: faa.error },
       generatedAt: new Date().toISOString(),
       rule: { id: 'airport_misery', version: 'v1' },
     },
