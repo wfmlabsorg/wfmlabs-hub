@@ -120,7 +120,7 @@ function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: 
     lines.push(f ? `${num(movements)} flights in window · ${num(cancelled)} cancelled` : `${num(movements)} flights in window · ${num(cancelled)} cancelled · median delay ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5`)
     lines.push(`Ring: red = score, dark red = its cancellation points, green = the rest`)
   } else lines.push(f ? 'Not scored in this frame' : `Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
-  for (const p of a.faa ?? []) lines.push(`${FAA_NAME[p.label] ?? p.title}${p.detail ? ` — ${p.detail}` : ''}${p.ends_at ? ` · until ${hhmm(p.ends_at)}Z` : ''}${replayAt ? ' (live, not this frame)' : ''}`)
+  for (const p of a.faa ?? []) lines.push(`${FAA_NAME[p.label] ?? p.title}${p.detail ? ` — ${p.detail}` : ''}${p.ends_at ? ` · until ${hhmm(p.ends_at)}` : ''}${replayAt ? ' (live, not this frame)' : ''}`)
   if (a.faa?.length && misery != null && misery < 40) lines.push('The score counts flights that have already moved; held flights reach it only when they depart or land.')
   lines.push(replayAt ? `Replay frame ${hhmm(replayAt)}` : `Sweep ${ago(a.observed_at, now)} · ${a.icao}`)
   for (const t of lines) { const d = document.createElement('div'); d.textContent = t; box.appendChild(d) }
@@ -239,8 +239,10 @@ function BarRow({ a, f, now, onPick }: { a: MiseryAirport; f: Frame | null; now:
   const b = bandOf(misery ?? 0)
   return (
     <button onClick={() => onPick(a.icao)} className="misd-bar" title={f ? 'Replay frame — click to fly there' : `${place(a)} — click to fly there`}>
-      <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: '#f1f5f9', width: 38, flex: 'none' }}>{a.iata ?? a.icao}</span>
-      {!f && <FaaPill a={a} />}
+      <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: '#f1f5f9', width: 38, flex: 'none' }}>{a.iata ?? a.icao}</span>
+        {!f && <FaaPill a={a} />}
+      </span>
       <span className="misd-track">
         <span style={{ width: `${m}%`, background: C_MISERY }} />
         <span style={{ width: `${cp}%`, background: C_CANCEL }} />
@@ -539,7 +541,7 @@ const CSS = `
 .misd-totals b small{font-size:12px;color:#64748b;font-weight:700}
 .misd-totals span{font:700 9px ${MONO};letter-spacing:.14em;color:#64748b;margin-top:3px}
 .misd-list{flex:1;overflow:auto;padding:4px 6px 10px}
-.misd-bar{all:unset;cursor:pointer;display:grid;grid-template-columns:38px 1fr 28px;grid-template-rows:auto auto;column-gap:8px;align-items:center;box-sizing:border-box;width:100%;padding:4px 6px;border-radius:3px}
+.misd-bar{all:unset;cursor:pointer;display:grid;grid-template-columns:auto 1fr 28px;grid-template-rows:auto auto;column-gap:8px;align-items:center;box-sizing:border-box;width:100%;padding:4px 6px;border-radius:3px}
 .misd-bar:hover{background:#13203a}
 .misd-track{position:relative;height:12px;background:#111c30;border-radius:2px;overflow:hidden;display:block}
 .misd-track span{position:absolute;left:0;top:0;bottom:0;display:block}
