@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "bash scripts/copy-openmct.sh",
+    "prebuild": "bash scripts/copy-openmct.sh && node scripts/check-no-orange.mjs",
     "build": "payload generate:importmap && next build",
     "start": "next start",
     "lint": "eslint .",
