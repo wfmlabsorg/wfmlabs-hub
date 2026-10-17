@@ -208,7 +208,9 @@ export async function GET() {
     const intake: Record<string, { n24: number; pass24: number }> = {}
     try {
       const r = await pool.query(
-        `SELECT domain, count(*)::int AS n24, count(*) FILTER (WHERE iws_pass)::int AS pass24
+        // "promotable" = both gates sentinel pass 2 applies (roc workers/sentinel/src/passes.ts): relevant AND
+        // severity >= SCOUT_INTEL_MIN_UPSTREAM_SEVERITY (5.0). Keep the 5.0 in sync with that constant.
+        `SELECT domain, count(*)::int AS n24, count(*) FILTER (WHERE iws_pass AND severity >= 5.0)::int AS pass24
            FROM news_events WHERE created_at > now() - interval '24 hours' AND domain IS NOT NULL GROUP BY domain`)
       for (const x of r.rows) intake[x.domain] = { n24: Number(x.n24) || 0, pass24: Number(x.pass24) || 0 }
     } catch { /* intake unknown → fall back to signals-only status */ }
@@ -224,7 +226,7 @@ export async function GET() {
         signals_24h: row.c24,
         last_at: row.last_at,
         intake_24h: inflow?.n24 ?? null,
-        relevant_24h: inflow?.pass24 ?? null,
+        promotable_24h: inflow?.pass24 ?? null,   // relevant AND severity >= 5 — what sentinel would promote
         status,
         hibernation: status === 'HIBERNATED' && hib ? { scouts: hib.scouts, reason: hib.reason } : null,
       }
