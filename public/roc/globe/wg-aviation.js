@@ -173,9 +173,9 @@
    * ================================================================== */
   var LEVEL = {
     closed:     { label: 'CLOSED',      color: '#b91c1c', alpha: 0.26, rank: 75 },
-    restricted: { label: 'RESTRICTED',  color: '#fb923c', alpha: 0.20, rank: 64 },
+    restricted: { label: 'RESTRICTED',  color: '#fda4af', alpha: 0.20, rank: 64 },
     do_not_fly: { label: 'DO NOT FLY',  color: '#dc2626', alpha: 0.22, rank: 58 },
-    avoid:      { label: 'AVOID',       color: '#f97316', alpha: 0.16, rank: 52 },
+    avoid:      { label: 'AVOID',       color: '#fb7185', alpha: 0.16, rank: 52 },
     caution:    { label: 'CAUTION',     color: '#eab308', alpha: 0.10, rank: 0 }
   };
   var SRC = { faa_notam: 'FAA NOTAM', easa_czib: 'EASA conflict-zone bulletin', safeairspace: 'safeairspace.net (OPSGROUP)' };

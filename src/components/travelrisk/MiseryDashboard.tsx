@@ -31,14 +31,14 @@ import type { MiseryAirport, MiseryGlobalRow, MiseryPayload, MiseryHistory, Fram
 
 const BANDS = [
   { band: 'severe', from: 60, color: '#ef4444', note: '≥ 60 — ground stop, mass cancellations or hours-long medians' },
-  { band: 'miserable', from: 40, color: '#f97316', note: '40 – 60' },
+  { band: 'miserable', from: 40, color: '#fb7185', note: '40 – 60' },
   { band: 'slow', from: 20, color: '#eab308', note: '20 – 40' },
   { band: 'calm', from: 0, color: '#18BC9C', note: '< 20' },
 ] as const
 type Band = (typeof BANDS)[number]
 const C_ONTIME = '#22c55e', C_MISERY = '#ef4444', C_CANCEL = '#7f1d1d', C_UNSCORED = '#475569', C_MILITARY = '#a78bfa', C_DIVERTED = '#a78bfa'
 // FAA programme badges: what the regulator has done NOW, beside (never inside) the score.
-const FAA_COLOR: Record<string, string> = { CLSD: '#f8fafc', GS: '#dc2626', GDP: '#f59e0b', DLY: '#64748b' }
+const FAA_COLOR: Record<string, string> = { CLSD: '#f8fafc', GS: '#dc2626', GDP: '#eab308', DLY: '#64748b' }
 const FAA_INK: Record<string, string> = { CLSD: '#0b1220', GS: '#fff', GDP: '#0b1220', DLY: '#fff' }
 const FAA_NAME: Record<string, string> = { CLSD: 'FAA closure', GS: 'FAA ground stop', GDP: 'FAA ground delay programme', DLY: 'FAA departure/arrival delays' }
 /** The strongest programme's badge. The label is one of four fixed strings, so it is safe in markup. */
@@ -539,7 +539,7 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
           {(faaNow.length > 0 || d.meta.faa?.error) && (
             <div className="misd-faastrip" title="Live FAA programmes (via travel-intel). Shown beside the score, never inside it: the score counts flights that have already moved.">
               <span style={{ color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em' }}>FAA NOW{frame ? ' (live)' : ''}</span>
-              {d.meta.faa?.error && <span style={{ color: '#f59e0b' }}>FAA read failed — badges may be missing</span>}
+              {d.meta.faa?.error && <span style={{ color: '#eab308' }}>FAA read failed — badges may be missing</span>}
               {faaNow.map((a) => (
                 <button key={a.icao} onClick={() => pick(a.icao)} title={a.faa.map((x) => `${x.title}${x.detail ? ' — ' + x.detail : ''}`).join('\n')}>
                   <FaaPill a={a} /> {a.iata ?? a.icao}{a.faa.length > 1 ? ` +${a.faa.slice(1).map((x) => x.label).join('+')}` : ''}

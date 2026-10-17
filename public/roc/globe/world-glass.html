@@ -199,7 +199,7 @@
   <div id="legend" class="panel">
     <div class="h" id="keyhead" role="button" tabindex="0" aria-expanded="true">Key ▾</div>
     <div class="row"><i style="flex:none;background:#ef4444"></i><span>24 h replay (drag the bar): column height = median delay at that hour</span></div>
-    <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#f97316"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
+    <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#fb7185"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
     <div class="row"><i style="flex:none;background:#1e293b;border:1px solid #94a3b8;border-radius:2px"></i><span>airport not scored (statistics withheld / absent from sweep) · <i style="background:#a78bfa;border-radius:2px"></i>military airbase (no commercial data) · circles are events, never airports</span></div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
@@ -236,12 +236,12 @@ var layerDefs = [
   { id: 'hazards',   label: 'Aviation hazards (SIGMET)', color: '#f59e0b', on: false },
   { id: 'cyclones',  label: 'Tropical cyclones',    color: '#ec4899', on: true },
   { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: false },
-  { id: 'events',    label: 'Live travel events',   color: '#f97316', on: false },
+  { id: 'events',    label: 'Live travel events',   color: '#fb7185', on: false },
   { id: 'incidents', label: 'Open incidents',       color: '#ef4444', on: true },
   { id: 'stories',   label: 'Flight events',        color: '#ef4444', on: true },
   { id: 'delays',    label: 'Flight delays (2 h+)', color: '#f59e0b', on: true },
   { id: 'flights',   label: 'All traffic (zoom)',   color: '#e2e8f0', on: false },
-  { id: 'arcs',      label: 'Disrupted corridors',  color: '#fb923c', on: false },
+  { id: 'arcs',      label: 'Disrupted corridors',  color: '#fda4af', on: false },
   { id: 'ir',        label: 'Satellite infrared',   color: '#cbd5e1', on: false },
   { id: 'lightning', label: 'Lightning density',    color: '#fde047', on: false },
   { id: 'tiles3d',   label: 'Photorealistic 3D',    color: '#86efac', on: false }
@@ -518,7 +518,7 @@ function loadEvents() {
       posture.then(function (p) {
         var t = p && (p.domains || []).filter(function (x) { return x.domain === 'travel'; })[0];
         var lvl = t && t.level ? String(t.level).toUpperCase() : null, comp = t ? t.composite : null;
-        var lc = lvl === 'SEVERE' || lvl === 'CRITICAL' ? '#ef4444' : lvl === 'SIGNIFICANT' ? '#f97316' : lvl === 'ELEVATED' ? '#eab308' : '#18BC9C';
+        var lc = lvl === 'SEVERE' || lvl === 'CRITICAL' ? '#ef4444' : lvl === 'SIGNIFICANT' ? '#fb7185' : lvl === 'ELEVATED' ? '#eab308' : '#18BC9C';
         document.getElementById('posture').innerHTML = lvl ? '<span class="lvl" style="color:' + lc + '">' + esc(lvl) + '</span>' + (comp != null ? esc(comp) + '/10 composite' : '') : 'posture — (no travel reading)';
       });
       var src = sources.events; src.entities.removeAll();

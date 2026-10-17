@@ -27,7 +27,7 @@ var Cesium = WG.Cesium, C = WG.C, esc = WG.esc;
 var BANDS = [
   { band: 'calm',      from: 0,  color: '#18BC9C', word: 'calm' },
   { band: 'slow',      from: 20, color: '#eab308', word: 'slow' },
-  { band: 'miserable', from: 40, color: '#f97316', word: 'miserable' },
+  { band: 'miserable', from: 40, color: '#fb7185', word: 'miserable' },
   { band: 'severe',    from: 60, color: '#ef4444', word: 'severe' }
 ];
 var C_UNSCORED = '#94a3b8', C_MILITARY = '#a78bfa';
