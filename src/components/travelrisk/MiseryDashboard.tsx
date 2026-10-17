@@ -46,6 +46,24 @@ function faaBadge(a: MiseryAirport): string {
   const p = a.faa?.[0]; if (!p || !FAA_COLOR[p.label]) return ''
   return `<span class="misd-faa" style="background:${FAA_COLOR[p.label]};color:${FAA_INK[p.label]}">${p.label}</span>`
 }
+// ── FLIGHTS mode: FlightAware's MiseryMap grammar from our own airport boards (rule airport_flight_counts v1) ──
+type Mode = 'score' | 'flights'
+const judged = (c: MiseryAirport['counts']) => (c ? c.ontime + c.delayed + c.cancelled : 0)
+/** Ring = shares of on-time (green), delayed ≥ 15 min (red) and cancelled (dark red) flights within ±60 min. */
+function flightsRingSvg(px: number, c: MiseryAirport['counts'], code: string | null): string {
+  const r = px / 2 - 2.2, cx = px / 2, circ = 2 * Math.PI * r, sw = px >= 30 ? 4.2 : px >= 20 ? 3.4 : 2.6
+  const label = code && px >= 28 && /^[A-Z0-9]{3,4}$/.test(code) ? `<text x="${cx}" y="${cx + 3.2}" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-weight="700" font-size="${px >= 40 ? 11 : 9}" fill="#f1f5f9">${code}</text>` : ''
+  const n = judged(c)
+  if (!c || n < 5) return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><circle cx="${cx}" cy="${cx}" r="${r}" fill="rgba(11,18,32,.8)" stroke="${C_UNSCORED}" stroke-width="${sw}" stroke-dasharray="3 2"/>${label}</svg>`
+  const bad = ((c.delayed + c.cancelled) / n) * circ, cx_ = (c.cancelled / n) * circ
+  return `<svg width="${px}" height="${px}" viewBox="0 0 ${px} ${px}"><g transform="rotate(-90 ${cx} ${cx})">`
+    + `<circle cx="${cx}" cy="${cx}" r="${r}" fill="rgba(11,18,32,.85)" stroke="${C_ONTIME}" stroke-width="${sw}"/>`
+    + (bad > 0 ? `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${C_MISERY}" stroke-width="${sw}" stroke-dasharray="${bad.toFixed(2)} ${(circ - bad).toFixed(2)}"/>` : '')
+    + (cx_ > 0 ? `<circle cx="${cx}" cy="${cx}" r="${r}" fill="none" stroke="${C_CANCEL}" stroke-width="${sw}" stroke-dasharray="${cx_.toFixed(2)} ${(circ - cx_).toFixed(2)}"/>` : '')
+    + `</g>${label}</svg>`
+}
+const pctOf = (c: MiseryAirport['counts']) => (c && c.bad_share != null ? Math.round(c.bad_share * 100) : null)
+
 function FaaPill({ a }: { a: MiseryAirport }) {
   const p = a.faa?.[0]; if (!p) return null
   return <span className="misd-pill" title={a.faa.map((x) => x.title).join(' · ')} style={{ background: FAA_COLOR[p.label], color: FAA_INK[p.label] }}>{p.label}</span>
@@ -121,6 +139,7 @@ function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: 
     if (!f && a.traffic_weight != null && a.traffic_weight < 1) lines.push(`Thin traffic: this window earns ${Math.round(a.traffic_weight * 100)} % of the full score (full at 20 flights)`)
     lines.push(`Ring: red = score, dark red = its cancellation points, green = the rest`)
   } else lines.push(f ? 'Not scored in this frame' : `Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
+  if (a.counts && judged(a.counts) >= 5) lines.push(`Flights ±1 h (board ${ago(a.counts.observed_at, now)}): ${a.counts.ontime} on time · ${a.counts.delayed} delayed ≥15 min · ${a.counts.cancelled} cancelled${a.counts.unknown ? ` · ${a.counts.unknown} no status` : ''} — ${pctOf(a.counts)} % late or cancelled`)
   for (const p of a.faa ?? []) lines.push(`${FAA_NAME[p.label] ?? p.title}${p.detail ? ` — ${p.detail}` : ''}${p.ends_at ? ` · until ${hhmm(p.ends_at)}` : ''}${replayAt ? ' (live, not this frame)' : ''}`)
   if (a.faa?.length && misery != null && misery < 40) lines.push('The score counts flights that have already moved; held flights reach it only when they depart or land.')
   lines.push(replayAt ? `Replay frame ${hhmm(replayAt)}` : `Sweep ${ago(a.observed_at, now)} · ${a.icao}`)
@@ -132,8 +151,8 @@ function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: 
 
 type StoryArc = { lat: number; lon: number; kind: string }
 
-function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
-  airports: MiseryAirport[]; focus: { icao: string; n: number } | null; now: number | null; region: Region
+function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs, mode }: {
+  airports: MiseryAirport[]; focus: { icao: string; n: number } | null; now: number | null; region: Region; mode: Mode
   frame: Record<string, FrameCell> | null; replayAt: string | null; arcs: Map<string, StoryArc[]>
 }) {
   const el = useRef<HTMLDivElement>(null)
@@ -146,6 +165,7 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
   const arcsRef = useRef(arcs); arcsRef.current = arcs
   const frameRef = useRef(frame); frameRef.current = frame
   const replayRef = useRef(replayAt); replayRef.current = replayAt
+  const modeRef = useRef(mode); modeRef.current = mode
 
   useEffect(() => {
     let dead = false
@@ -193,11 +213,15 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
       const px = a.military ? 14 : ringPx(v.movements)
       const kind = a.military ? 'military' : v.misery == null ? 'unscored' : 'scored'
       const code = a.iata ?? a.icao
-      const html = ringSvg(px, v.misery, cancelPts(v.rate) * (f ? 1 : a.traffic_weight ?? 1), kind, code) + (replayRef.current ? '' : faaBadge(a))
+      const flights = modeRef.current === 'flights' && !f && !a.military
+      if (modeRef.current === 'flights' && !f && (a.military || !a.counts)) continue   // FlightAware draws only airports it has flights for
+      const fpx = flights ? ringPx(a.counts?.flights ?? 0) : px
+      const html = (flights ? flightsRingSvg(fpx, a.counts, code) : ringSvg(px, v.misery, cancelPts(v.rate) * (f ? 1 : a.traffic_weight ?? 1), kind, code)) + (replayRef.current ? '' : faaBadge(a))
       // the per-airport class is only ever an ICAO that passed the regex — it reaches a class attribute
       const cls = /^[A-Z0-9]{3,4}$/.test(a.icao) ? `misd-ring r-${a.icao}` : 'misd-ring'
-      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) + (a.faa?.length ? 2000 : 0) })
-      if (v.misery != null && v.misery >= 40 && px < 28) mk.bindTooltip(textEl(`${code} ${Math.round(v.misery)}`), { permanent: true, direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
+      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [fpx, fpx], iconAnchor: [fpx / 2, fpx / 2] }), zIndexOffset: Math.round((flights ? (pctOf(a.counts) ?? -1) : order(a)) * 10) + (a.faa?.length ? 2000 : 0) })
+      if (flights) mk.bindTooltip(textEl(`${a.faa?.[0] ? a.faa[0].label + ' · ' : ''}${code}${judged(a.counts) >= 5 ? ` ${pctOf(a.counts)} % late/cxl` : ' · no board'}`), { permanent: (pctOf(a.counts) ?? 0) >= 40 && fpx < 28, direction: 'right', offset: [fpx / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
+      else if (v.misery != null && v.misery >= 40 && px < 28) mk.bindTooltip(textEl(`${code} ${Math.round(v.misery)}`), { permanent: true, direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
       else mk.bindTooltip(textEl(`${a.faa?.[0] && !replayRef.current ? a.faa[0].label + ' · ' : ''}${v.misery != null ? `${code} ${Math.round(v.misery)}` : code}`), { direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
       mk.bindPopup(() => popup(a, cell(a), nowRef.current, replayRef.current))
       mk.on('mouseover', () => showArcs(L, a))
@@ -219,7 +243,7 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
     }
   }
 
-  useEffect(() => { import('leaflet').then((L) => draw(L)) }, [airports, frame])
+  useEffect(() => { import('leaflet').then((L) => draw(L)) }, [airports, frame, mode])
 
   useEffect(() => { map.current?.flyToBounds(region === 'us' ? CONUS : WORLD, { padding: [4, 4], duration: 0.9 }) }, [region])
 
@@ -252,6 +276,24 @@ function BarRow({ a, f, now, onPick }: { a: MiseryAirport; f: Frame | null; now:
       <span className="misd-barsub">
         {num(movements)} flights · {num(cancelled)} cxl{!f ? ` · median ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}` : ''}{!f && a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal` : ''}{!f ? ` · ${ago(a.observed_at, now)}` : ''}
       </span>
+    </button>
+  )
+}
+
+function FlightsRow({ a, now, onPick }: { a: MiseryAirport; now: number | null; onPick: (icao: string) => void }) {
+  const c = a.counts!, n = judged(c), late = (c.delayed / n) * 100, cx = (c.cancelled / n) * 100, p = pctOf(c) ?? 0
+  return (
+    <button onClick={() => onPick(a.icao)} className="misd-bar" title={`${place(a)} — click to fly there`}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+        <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: '#f1f5f9', width: 38, flex: 'none' }}>{a.iata ?? a.icao}</span>
+        <FaaPill a={a} />
+      </span>
+      <span className="misd-track">
+        <span style={{ width: `${late + cx}%`, background: C_MISERY }} />
+        <span style={{ width: `${cx}%`, background: C_CANCEL }} />
+      </span>
+      <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: p >= 40 ? C_MISERY : p >= 20 ? '#eab308' : '#22c55e', width: 28, textAlign: 'right', flex: 'none' }}>{p}%</span>
+      <span className="misd-barsub">{c.ontime} on time · {c.delayed} delayed ≥15 · {c.cancelled} cxl{c.unknown ? ` · ${c.unknown} no status` : ''} · board {ago(c.observed_at, now)}</span>
     </button>
   )
 }
@@ -340,6 +382,10 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const [region, setRegion] = useState<Region>('us')
   useEffect(() => { try { const v = localStorage.getItem('misd-region'); if (v === 'world' || v === 'us') setRegion(v) } catch { /* private window */ } }, [])
   const chooseRegion = (r: Region) => { setRegion(r); try { localStorage.setItem('misd-region', r) } catch { /* ignore */ } }
+  // Ring mode: our misery SCORE, or FLIGHTS on time / delayed / cancelled the way FlightAware draws it.
+  const [mode, setMode] = useState<Mode>('score')
+  useEffect(() => { try { const v = localStorage.getItem('misd-mode'); if (v === 'score' || v === 'flights') setMode(v) } catch { /* private window */ } }, [])
+  const chooseMode = (m: Mode) => { setMode(m); try { localStorage.setItem('misd-mode', m) } catch { /* ignore */ } }
 
   // Replay: hourly frames, fetched on first press.
   const [hist, setHist] = useState<MiseryHistory | null>(null)
@@ -395,6 +441,7 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const scoredAll = airports.filter((a) => a.misery != null)
   const scoredR = regional.filter((a) => live(a).misery != null)
   const byBand = Object.fromEntries(BANDS.map((b) => [b.band, regional.filter((a) => a.misery != null && bandOf(a.misery).band === b.band).sort((x, y) => (y.misery as number) - (x.misery as number))])) as Record<string, MiseryAirport[]>
+  const flightsRanked = regional.filter((a) => !a.military && judged(a.counts) >= 5).sort((x, y) => (y.counts!.bad_share ?? 0) - (x.counts!.bad_share ?? 0) || judged(y.counts) - judged(x.counts))
   const ranked = regional.filter((a) => !a.military && live(a).misery != null).sort((x, y) => (live(y).misery as number) - (live(x).misery as number) || (live(y).movements ?? 0) - (live(x).movements ?? 0))
   const rMean = weighted(scoredR.map((a) => ({ misery: live(a).misery, movements: live(a).movements })))
   const rFlights = scoredR.reduce((s, a) => s + (live(a).movements ?? 0), 0)
@@ -419,6 +466,10 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
       <header className="misd-head">
         <a href={backHref} style={{ color: '#38bdf8', textDecoration: 'none', fontFamily: MONO, fontSize: 11 }}>← Travel Risk</a>
         <span style={{ fontFamily: MONO, fontWeight: 800, letterSpacing: '0.14em', fontSize: 14, color: '#f1f5f9' }}>TRAVEL MISERY INDEX</span>
+        <span className="misd-seg" role="group" aria-label="Ring mode" title="SCORE: our misery index. FLIGHTS: share of flights within ±1 h that are delayed ≥ 15 min or cancelled, by current estimate — FlightAware's MiseryMap method, from our airport boards.">
+          <button onClick={() => chooseMode('score')} aria-pressed={mode === 'score'}>SCORE</button>
+          <button onClick={() => chooseMode('flights')} aria-pressed={mode === 'flights'}>FLIGHTS</button>
+        </span>
         <span className="misd-seg" role="group" aria-label="Region">
           <button onClick={() => chooseRegion('us')} aria-pressed={region === 'us'}>US</button>
           <button onClick={() => chooseRegion('world')} aria-pressed={region === 'world'}>WORLD</button>
@@ -452,14 +503,22 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
 
       <div className="misd-upper">
         <div className="misd-map">
-          <MiseryMap airports={airports} focus={focus} now={now} region={region} frame={frame ? frame.airports : null} replayAt={replayAt} arcs={arcs} />
+          <MiseryMap airports={airports} focus={focus} now={now} region={region} frame={frame && mode === 'score' ? frame.airports : null} replayAt={mode === 'score' ? replayAt : null} arcs={arcs} mode={mode} />
+          {mode === 'flights' ? (
+          <div className="misd-legend">
+            <div><span className="misd-sw" style={{ borderColor: C_MISERY }} />ring = flights within ±1 h by current estimate: red delayed ≥ 15 min · <i style={{ background: C_CANCEL }} />cancelled · <i style={{ background: C_ONTIME }} />on time</div>
+            <div><span className="misd-sw" style={{ borderColor: C_UNSCORED, borderStyle: 'dashed' }} />fewer than 5 judged flights · airports without a board in the last 3 h are hidden</div>
+            <div style={{ color: '#64748b', marginTop: 2 }}>FlightAware MiseryMap method (rule airport_flight_counts v1) · 30 busiest US airports every 2 h, hourly under an FAA programme · plus every story board · radar © RainViewer</div>
+          </div>
+          ) : (
           <div className="misd-legend">
             <div><span className="misd-sw" style={{ borderColor: C_MISERY }} />ring = misery score 0–100 · <i style={{ background: C_CANCEL }} />cancellation points · <i style={{ background: C_ONTIME }} />the rest</div>
             <div><span className="misd-sw" style={{ borderColor: C_UNSCORED, borderStyle: 'dashed' }} />not scored (statistics withheld / absent / no traffic) · <span className="misd-sw" style={{ borderColor: C_MILITARY }} />military airbase</div>
             <div><span className="misd-pill" style={{ background: FAA_COLOR.GS, color: '#fff' }}>GS</span> FAA ground stop · <span className="misd-pill" style={{ background: FAA_COLOR.GDP, color: '#0b1220' }}>GDP</span> ground delay programme · <span className="misd-pill" style={{ background: FAA_COLOR.CLSD, color: '#0b1220' }}>CLSD</span> closure — live, beside the score</div>
             <div style={{ color: '#64748b', marginTop: 2 }}>ring size = flights in the 2 h window · click a ring · hover a boarded airport for its delayed / cancelled flights&apos; far ends · radar © RainViewer</div>
           </div>
-          <div className="misd-replay">
+          )}
+          {mode === 'score' && <div className="misd-replay">
             <button onClick={() => (playing ? setPlaying(false) : play())} title={playing ? 'Pause' : 'Replay the last 24 hours, one frame per hour'} aria-label={playing ? 'Pause replay' : 'Play 24 h replay'}>{playing ? '❚❚' : '▶'}</button>
             <input type="range" min={0} max={Math.max(0, (hist?.frames.length ?? 24) - 1)} value={fi < 0 ? Math.max(0, (hist?.frames.length ?? 24) - 1) : fi}
               onChange={async (e) => { const v = Number(e.target.value); const h = hist ?? (await loadHist()); if (h) { setPlaying(false); setFi(Math.min(v, h.frames.length - 1)) } }}
@@ -468,7 +527,7 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
             <span style={{ fontFamily: MONO, fontSize: 10, color: frame ? '#38bdf8' : '#64748b' }}>
               {histErr ? `replay unavailable: ${histErr}` : frame ? `${hhmm(frame.observed_at)} · ${frame.observed_at.slice(5, 10)} · frame ${fi + 1}/${hist?.frames.length}` : `now · ${windowText} window`}
             </span>
-          </div>
+          </div>}
         </div>
         <div className="misd-airports">
           <div className="misd-totals">
@@ -490,13 +549,16 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
             </div>
           )}
           <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#94a3b8', padding: '6px 10px 2px', display: 'flex' }}>
-            <span>RANKED · {regionLabel}</span>
+            <span>{mode === 'flights' ? 'LATE OR CANCELLED ±1 H' : 'RANKED'} · {regionLabel}</span>
             <span style={{ marginLeft: 'auto', color: byBand.severe.length ? BANDS[0].color : byBand.miserable.length ? BANDS[1].color : '#22c55e' }}>
-              {frame ? 'replay' : byBand.severe.length ? `${byBand.severe.length} severe` : byBand.miserable.length ? `${byBand.miserable.length} miserable` : 'nothing above slow'}
+              {mode === 'flights' ? `${flightsRanked.length} airports with a board` : frame ? 'replay' : byBand.severe.length ? `${byBand.severe.length} severe` : byBand.miserable.length ? `${byBand.miserable.length} miserable` : 'nothing above slow'}
             </span>
           </div>
           <div className="misd-list">
-            {ranked.length === 0
+            {mode === 'flights' ? (flightsRanked.length === 0
+              ? <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>No airport board in the last 3 h. Boards cover the 30 busiest US airports every 2 h, hourly under an FAA programme.</div>
+              : flightsRanked.slice(0, 80).map((a) => <FlightsRow key={a.icao} a={a} now={now} onPick={pick} />))
+            : ranked.length === 0
               ? <div style={{ padding: 12, fontSize: 12, color: '#64748b' }}>No airport scored in this {frame ? 'frame' : 'read'}.</div>
               : ranked.slice(0, 80).map((a) => <BarRow key={a.icao} a={a} f={cellOf(a)} now={now} onPick={pick} />)}
           </div>

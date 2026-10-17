@@ -32,8 +32,30 @@ export interface MiseryAirport {
   obs_source: string | null
   /** v2: min(1, usable flights / 20) — the share of the full score this much traffic earns (schema 070). */
   traffic_weight: number | null
+  /** FlightAware-style counts from the newest airport board within 3 h (rule airport_flight_counts v1, schema 071); null when no board. */
+  counts: FlightCounts | null
   /** Live FAA programmes at this airport, strongest first; [] when none. Shown beside the score, never in it. */
   faa: FaaProgram[]
+}
+
+export interface FlightCounts {
+  observed_at: string; window_start_at: string; window_end_at: string; board_kind: string
+  flights: number; ontime: number; delayed: number; cancelled: number; unknown: number
+  /** (delayed + cancelled) / (on time + delayed + cancelled) — FlightAware's MiseryMap ring. */
+  bad_share: number | null
+}
+
+const COUNTS_SQL = `
+  SELECT icao, observed_at, window_start_at, window_end_at, board_kind, flights, ontime, delayed, cancelled, unknown,
+         bad_share::double precision AS bad_share
+    FROM airport_flight_counts_latest`
+
+/** Counts are additive: a missing table (schema 071 not yet applied) or a failed read yields none, never an error. */
+async function readCounts(pool: ReturnType<typeof getPool>): Promise<Map<string, FlightCounts>> {
+  try {
+    const r = await pool.query(COUNTS_SQL)
+    return new Map((r.rows as Row[]).map((x) => { const c = iso(x); const icao = String(c.icao); delete c.icao; return [icao, c as unknown as FlightCounts] }))
+  } catch { return new Map() }
 }
 
 export interface MiseryGlobalRow {
@@ -120,12 +142,13 @@ function tally(rows: Row[], key: string): Record<string, number> {
 /** Throws on a database error — callers decide how loudly to fail (the route 500s, the page shows a gap). */
 export async function readMisery(): Promise<MiseryPayload> {
   const pool = getPool()
-  const [air, glob, faa] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL), readFaaPrograms()])
+  const [air, glob, faa, counts] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL), readFaaPrograms(), readCounts(pool)])
   const airports = (air.rows as Row[]).map(iso)
   let faaAirports = 0
   for (const a of airports) {
     const list = (typeof a.iata === 'string' && faa.byIata[a.iata]) || []
     a.faa = list as unknown as Row[string]
+    a.counts = (counts.get(String(a.icao)) ?? null) as unknown as Row[string]
     if (list.length) faaAirports++
   }
   const series = (glob.rows as Row[]).map(iso)
