@@ -17,11 +17,16 @@ const ROOTS = ['src', 'public/roc']
 const EXT = new Set(['.ts', '.tsx', '.js', '.mjs', '.css', '.html'])
 const ORANGE_HEX = ['fff7ed', 'ffedd5', 'fed7aa', 'fdba74', 'fb923c', 'f97316', 'ea580c', 'c2410c', '9a3412', '7c2d12', '431407']
 const RULES = [
-  new RegExp(`#(${ORANGE_HEX.join('|')})\\b`, 'i'),
-  /rgba?\(\s*249\s*,\s*115\s*,\s*22\b/,
+  // 6-digit, or 8-digit with alpha (#f9731688); not a longer hex run
+  new RegExp(`#(?:${ORANGE_HEX.join('|')})(?:[0-9a-f]{2})?(?![0-9a-f])`, 'i'),
+  // rgb()/rgba() with commas or the CSS4 space syntax: rgb(249 115 22 / .5)
+  /rgba?\(\s*249\s*[,\s]\s*115\s*[,\s]\s*22\b/,
   /\b(?:text|bg|border|from|via|to|ring|fill|stroke|outline|decoration|shadow|accent|caret)-orange-\d{2,3}\b/,
 ]
-const EXEMPT = /NO[ -]ORANGE/i
+// only a COMMENT that states the rule is exempt — a code line that merely mentions it is still scanned.
+// A line is a comment if it starts with a comment marker or sits inside an open /* … */ or <!-- … --> block.
+const STATES_RULE = /NO[ -]ORANGE/i
+const LINE_COMMENT = /^\s*(\/\/|\/\*|\*|<!--|#)/
 
 function* walk(dir) {
   for (const e of readdirSync(dir)) {
@@ -35,10 +40,23 @@ function* walk(dir) {
 const hits = []
 for (const root of ROOTS) {
   let files
-  try { files = [...walk(root)] } catch { continue }
+  try { files = [...walk(root)] } catch (e) {
+    // fail closed: a root that cannot be read must not pass as clean
+    console.error(`NO ORANGE: cannot scan ${root}: ${e.message}`)
+    process.exit(1)
+  }
   for (const f of files) {
     const lines = readFileSync(f, 'utf8').split('\n')
-    lines.forEach((l, i) => { if (!EXEMPT.test(l) && RULES.some((r) => r.test(l))) hits.push(`${f}:${i + 1}: ${l.trim().slice(0, 140)}`) })
+    let inBlock = false
+    lines.forEach((l, i) => {
+      const startsInBlock = inBlock
+      // track block comments across lines (last opener/closer on the line wins)
+      const open = Math.max(l.lastIndexOf('/*'), l.lastIndexOf('<!--')), close = Math.max(l.lastIndexOf('*/'), l.lastIndexOf('-->'))
+      if (open > close) inBlock = true; else if (close > open) inBlock = false
+      const isComment = startsInBlock || LINE_COMMENT.test(l)
+      if (isComment && STATES_RULE.test(l)) return
+      if (RULES.some((r) => r.test(l))) hits.push(`${f}:${i + 1}: ${l.trim().slice(0, 140)}`)
+    })
   }
 }
 if (hits.length) {
