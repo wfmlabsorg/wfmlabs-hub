@@ -1,6 +1,7 @@
 import React from 'react'
 import { NEUTRAL, NEUTRAL_DIM, NEUTRAL_LINE, NEUTRAL_FILL, levelColor } from '@/lib/scoreState'
 import { INDEX_HUE, INDEX_MAX, indexBarPct } from '@/lib/travelrisk/riskAxes'
+import { HIBERNATED_DOMAIN_LABEL, hibernationNote, type HibernatedDomain } from '@/lib/travelrisk/hibernation'
 
 /**
  * Presentational parts for the travelrisk surface (hub-047).
@@ -153,7 +154,9 @@ export function LevelPill({ level, score }: { level: string | null; score: numbe
 // withheld; it is demoted from a colour flood to a label, which is what a
 // provisional, absolute-basis ranking of event volume has earned. A domain with
 // no reading gets a hatched empty track and says so, rather than a zero-length
-// bar that reads as calm.
+// bar that reads as calm. A domain whose only feed was HIBERNATED by decision
+// (src/lib/travelrisk/hibernation.ts) says that instead of "NO READING", which
+// would read as a failed feed.
 
 export function IndexBar({ score, width = '100%' }: { score: number | null; width?: string }) {
   const pct = indexBarPct(score)
@@ -177,16 +180,22 @@ export function IndexBar({ score, width = '100%' }: { score: number | null; widt
 }
 
 export function IndexReadout({
-  score, level, available = true, big,
+  score, level, available = true, big, hibernated,
 }: {
   score: number | null
   level: string | null
   available?: boolean
   big?: boolean
+  /** Set when the domain's feed was switched off by decision; only shown when there is no reading. */
+  hibernated?: HibernatedDomain
 }) {
   const has = available && typeof score === 'number'
+  const hib = !has && hibernated ? hibernated : undefined
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap' }}>
+    <span
+      title={hib ? hibernationNote(hib) : undefined}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', whiteSpace: 'nowrap', cursor: hib ? 'help' : undefined }}
+    >
       <IndexBar score={has ? score : null} width={big ? '4.5rem' : '3rem'} />
       <span
         style={{
@@ -198,7 +207,7 @@ export function IndexReadout({
         {has ? (score as number).toFixed(1) : '—'}
       </span>
       <span style={{ fontFamily: MONO, fontSize: '0.5625rem', letterSpacing: '0.08em', color: NEUTRAL_DIM }}>
-        {has ? (level || 'LEVEL NOT HELD') : 'NO READING'}
+        {has ? (level || 'LEVEL NOT HELD') : hib ? HIBERNATED_DOMAIN_LABEL : 'NO READING'}
       </span>
       {!big && <span style={{ fontFamily: MONO, fontSize: '0.5rem', color: NEUTRAL_DIM }}>/{INDEX_MAX}</span>}
     </span>
@@ -212,11 +221,13 @@ export function IndexReadout({
 // dressed up as an all-clear and never disguised as an outage.
 
 export function GapNotice({
-  title, detail, owner,
+  title, detail, owner, kicker = '◌ Not yet published',
 }: {
   title: string
   detail: string
   owner?: string
+  /** Small uppercase line above the title. */
+  kicker?: string
 }) {
   return (
     <div
@@ -233,7 +244,7 @@ export function GapNotice({
           textTransform: 'uppercase', color: NEUTRAL, marginBottom: '0.375rem',
         }}
       >
-        ◌ Not yet published
+        {kicker}
       </div>
       <p style={{ margin: '0 0 0.375rem', fontSize: '0.875rem', fontWeight: 600 }}>{title}</p>
       <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.55 }}>{detail}</p>

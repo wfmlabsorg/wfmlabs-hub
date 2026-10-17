@@ -1,4 +1,8 @@
 import { getPool } from '@/lib/db'
+import {
+  HIBERNATED_SCOUTS, RENAMED_SCOUTS, hibernatedDomain,
+  HIBERNATION_COMMIT, HIBERNATION_DECIDED, HIBERNATION_EFFECTIVE,
+} from '@/lib/travelrisk/hibernation'
 
 /**
  * ROC Pipeline Health — live health snapshot of the signals-derived pipeline
@@ -19,15 +23,60 @@ import { getPool } from '@/lib/db'
 export const dynamic = 'force-dynamic'
 
 // The 12 canonical risk domains (signals.category enum). Any domain silent for
-// 24h is flagged so a starved lane is visible, not hidden by an empty bucket.
+// 24h is flagged so a starved lane is visible, not hidden by an empty bucket —
+// unless the lane was switched off on purpose (HIBERNATED_DOMAINS), in which
+// case it says so instead of reading as a fault.
 const DOMAINS = [
   'weather', 'seismic', 'disaster', 'cyber', 'infrastructure', 'health',
   'financial', 'environmental', 'geopolitical', 'supply_chain', 'labor', 'travel',
 ]
 
-// Scouts run on ~4h crons. web-scout runs ~6x/day (~4h). Thresholds in minutes.
-const SCOUT_OK_MIN = 300 // <= 5h
-const SCOUT_STALE_MIN = 600 // <= 10h, else DOWN
+type Status = 'OK' | 'STALE' | 'DOWN'
+type ScoutStatus = Status | 'HIBERNATED'
+type DomainStatus = 'OK' | 'STALE' | 'HIBERNATED'
+
+/**
+ * CADENCE-AWARE SCOUT FRESHNESS
+ * ----------------------------------------------------------------------------
+ * The old route judged every scout against one ~4h clock (OK <= 5h, STALE <=
+ * 10h). Since roc 05bdfff, Cipher and Grid run once a day at 06:00 UTC, so they
+ * read STALE by early afternoon every day, and Vector (every 2h) could be
+ * silent for 5h and still read OK.
+ *
+ * Each scout now has an EXPECTED WRITE INTERVAL in minutes — its cron interval
+ * from `roc/workers/scout-<name>/wrangler.toml`, except where its filter makes empty
+ * runs routine (see Atlas). Then:
+ *
+ *   OK     age <= expected x GRACE_OK            (one missed run tolerated)
+ *   STALE  age <= max(expected x DOWN_FACTOR, DOWN_FLOOR_MIN)
+ *   DOWN   beyond that, or never written
+ *
+ * `news_events` only records NEW (deduplicated) articles, so a healthy run can
+ * legitimately write nothing; the DOWN floor means no scout is called down for
+ * less than a full day of silence. Keep this map in step with roc's crons.
+ */
+const GRACE_OK = 2
+const DOWN_FACTOR = 4
+const DOWN_FLOOR_MIN = 24 * 60
+/** Fallback for a scout not listed below (the old fleet-wide ~4h cadence). */
+const DEFAULT_EXPECTED_MIN = 240
+
+const SCOUT_EXPECTED_MIN: Readonly<Record<string, number>> = {
+  Vector: 120, //    0 */2 * * *
+  Gale: 180, //      0 */3 * * *
+  Mayday: 180, //    0 */3 * * *
+  Picket: 180, //    0 */3 * * *
+  // Atlas polls every 3h (0 */3) but its travel-lens filter means most runs
+  // write nothing new: measured over 10 days to 2026-10-17, 72 writes, p90 gap
+  // 9h, max 27h. Judged on a 12h write interval, not its 3h cron.
+  Atlas: 720,
+  Concierge: 240, // 0 */4 * * *  (scout-triage, repurposed — see RENAMED_SCOUTS)
+  Cipher: 1440, //  0 6 * * *    daily since 05bdfff
+  Grid: 1440, //    0 6 * * *    daily since 05bdfff
+}
+/** web-scout: crons "0 3,7,11,15,19,23 * * *" — every 4h. */
+const WEB_SCOUT_EXPECTED_MIN = 240
+
 // op-risk cron refreshes frequently; flag if the global score is stale.
 const OPRISK_OK_MIN = 20
 const OPRISK_STALE_MIN = 60
@@ -37,14 +86,14 @@ function ageMinutes(ts: string | null): number | null {
   return Math.round((Date.now() - new Date(ts).getTime()) / 60000)
 }
 
-function scoutStatus(ageMin: number | null, c24: number): 'OK' | 'STALE' | 'DOWN' {
+function scoutStatus(ageMin: number | null, expectedMin: number): Status {
   if (ageMin === null) return 'DOWN'
-  if (ageMin <= SCOUT_OK_MIN) return c24 > 0 ? 'OK' : 'STALE'
-  if (ageMin <= SCOUT_STALE_MIN) return 'STALE'
+  if (ageMin <= expectedMin * GRACE_OK) return 'OK'
+  if (ageMin <= Math.max(expectedMin * DOWN_FACTOR, DOWN_FLOOR_MIN)) return 'STALE'
   return 'DOWN'
 }
 
-function opRiskStatus(ageMin: number | null): 'OK' | 'STALE' | 'DOWN' {
+function opRiskStatus(ageMin: number | null): Status {
   if (ageMin === null) return 'DOWN'
   if (ageMin <= OPRISK_OK_MIN) return 'OK'
   if (ageMin <= OPRISK_STALE_MIN) return 'STALE'
@@ -106,18 +155,39 @@ export async function GET() {
     ])
 
     // --- Scouts ---
-    const scouts = scoutRes.rows.map((r) => {
-      const c24 = parseInt(r.c24, 10) || 0
-      const ageMin = ageMinutes(r.last_at)
-      return {
-        source: r.source,
-        last_at: r.last_at,
-        age_minutes: ageMin,
-        events_24h: c24,
-        total_events: parseInt(r.total, 10) || 0,
-        status: scoutStatus(ageMin, c24),
-      }
-    })
+    // Renamed scouts (Triage -> Concierge) are dropped: their historical rows
+    // are the same worker under its old name, not a second scout that died.
+    // Hibernated scouts read HIBERNATED unless they have written in the last
+    // 24h (i.e. someone restored the schedule), in which case they are judged
+    // like any other scout.
+    const scouts = scoutRes.rows
+      .filter((r) => !RENAMED_SCOUTS[r.source])
+      .map((r) => {
+        const c24 = parseInt(r.c24, 10) || 0
+        const ageMin = ageMinutes(r.last_at)
+        const hib = HIBERNATED_SCOUTS[r.source]
+        const expectedMin = SCOUT_EXPECTED_MIN[r.source] ?? DEFAULT_EXPECTED_MIN
+        const status: ScoutStatus = hib && c24 === 0 ? 'HIBERNATED' : scoutStatus(ageMin, expectedMin)
+        return {
+          source: r.source,
+          last_at: r.last_at,
+          age_minutes: ageMin,
+          events_24h: c24,
+          total_events: parseInt(r.total, 10) || 0,
+          expected_interval_minutes: status === 'HIBERNATED' ? null : expectedMin,
+          status,
+          hibernation:
+            status === 'HIBERNATED' && hib
+              ? {
+                  domain: hib.domain,
+                  reason: hib.reason,
+                  decided: HIBERNATION_DECIDED,
+                  effective: HIBERNATION_EFFECTIVE,
+                  roc_commit: HIBERNATION_COMMIT,
+                }
+              : null,
+        }
+      })
 
     // --- Signals by domain (fill zeros for silent lanes) ---
     const domainMap: Record<string, { c24: number; last_at: string | null }> = {}
@@ -126,11 +196,15 @@ export async function GET() {
     })
     const signalsByDomain = DOMAINS.map((d) => {
       const row = domainMap[d] || { c24: 0, last_at: null }
+      const hib = hibernatedDomain(d)
+      // 0/24h = starved lane — unless its only dedicated feed was switched off.
+      const status: DomainStatus = row.c24 > 0 ? 'OK' : hib ? 'HIBERNATED' : 'STALE'
       return {
         domain: d,
         signals_24h: row.c24,
         last_at: row.last_at,
-        status: row.c24 > 0 ? 'OK' : 'STALE', // 0/24h = starved lane
+        status,
+        hibernation: status === 'HIBERNATED' && hib ? { scouts: hib.scouts, reason: hib.reason } : null,
       }
     })
 
@@ -153,7 +227,8 @@ export async function GET() {
       last_at: ws.last_at || null,
       age_minutes: wsAge,
       signals_24h: wsC24,
-      status: scoutStatus(wsAge, wsC24),
+      expected_interval_minutes: WEB_SCOUT_EXPECTED_MIN,
+      status: scoutStatus(wsAge, WEB_SCOUT_EXPECTED_MIN),
     }
 
     // --- coverage-auditor ---
@@ -181,8 +256,11 @@ export async function GET() {
       : null
 
     // --- rollup ---
-    const scoutIssues = scouts.filter((s) => s.status !== 'OK').length
-    const domainIssues = signalsByDomain.filter((d) => d.status !== 'OK').length
+    // HIBERNATED is a decision, not a fault: it is reported in its own count
+    // and never added to an issue total.
+    const activeScouts = scouts.filter((s) => s.status !== 'HIBERNATED')
+    const scoutIssues = activeScouts.filter((s) => s.status !== 'OK').length
+    const domainIssues = signalsByDomain.filter((d) => d.status === 'STALE').length
     const pipelineIssues =
       (opRisk.status !== 'OK' ? 1 : 0) + (webScout.status !== 'OK' ? 1 : 0)
 
@@ -190,15 +268,24 @@ export async function GET() {
       {
         generated_at: new Date().toISOString(),
         summary: {
-          scouts_total: scouts.length,
-          scouts_healthy: scouts.filter((s) => s.status === 'OK').length,
+          // scouts_total counts ACTIVE scouts only, so healthy/total reads true.
+          scouts_total: activeScouts.length,
+          scouts_healthy: activeScouts.filter((s) => s.status === 'OK').length,
+          scouts_hibernated: scouts.length - activeScouts.length,
           scout_issues: scoutIssues,
           domains_total: signalsByDomain.length,
+          domains_hibernated: signalsByDomain.filter((d) => d.status === 'HIBERNATED').length,
           domain_issues: domainIssues,
           pipeline_issues: pipelineIssues,
           signals_24h: signalsByDomain.reduce((s, d) => s + d.signals_24h, 0),
         },
         scouts,
+        renamed_scouts: Object.values(RENAMED_SCOUTS),
+        thresholds: {
+          scout_ok: `age <= expected_interval x ${GRACE_OK}`,
+          scout_stale: `age <= max(expected_interval x ${DOWN_FACTOR}, ${DOWN_FLOOR_MIN} min)`,
+          domain_stale: 'no signals in 24h and not hibernated',
+        },
         signals_by_domain: signalsByDomain,
         op_risk: opRisk,
         web_scout: webScout,

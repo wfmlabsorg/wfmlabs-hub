@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { DataUnavailable } from '@/components/DataUnavailable'
 import { Panel, Trace, StateChip, IndexReadout, MONO } from '@/components/travelrisk/parts'
 import { TRAVELRISK_DOMAIN_ORDER, domainHref } from '@/lib/travelrisk/domains'
+import { hibernatedDomain } from '@/lib/travelrisk/hibernation'
 import { fetchGlobalOpRisk } from '@/lib/travelrisk/opRiskRegions'
 import { domainState, explain, fmtUpdated, summarize, NEUTRAL, NEUTRAL_DIM } from '@/lib/scoreState'
 import { describeSpread, spreadSentence, INDEX_MAX } from '@/lib/travelrisk/riskAxes'
@@ -77,6 +78,7 @@ export default async function RiskMapIndexPage() {
             const entry = byDomain.get(meta.domain)
             const st = domainState(entry)
             const available = !!entry && entry.available !== false
+            const hib = entry && entry.available === false ? hibernatedDomain(meta.domain) : undefined   // published unavailable only; a failed read is an outage
             const dc = domainColor(meta.domain)
             return (
               <a
@@ -106,11 +108,11 @@ export default async function RiskMapIndexPage() {
                   </span>
                   <span style={{ fontSize: '0.9375rem', fontWeight: 700 }}>{meta.label}</span>
                   <span style={{ marginLeft: 'auto' }}>
-                    <StateChip state={st.state} compact />
+                    <StateChip state={hib ? null : st.state} compact />
                   </span>
                 </div>
                 <div style={{ marginBottom: '0.5rem' }}>
-                  <IndexReadout score={st.score} level={st.level} available={available} />
+                  <IndexReadout score={st.score} level={st.level} available={available} hibernated={hib} />
                 </div>
                 <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
                   {meta.why}
