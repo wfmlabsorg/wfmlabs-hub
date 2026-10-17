@@ -8,7 +8,7 @@
  *   its IATA code is printed beside it once you are within ~2,500 km.
  *     SIZE   = scheduled movements (departures + arrivals) in the feed's 2-hour window — square-root
  *              scale, so a 300-movement hub is ~3× a 30-movement field, not 10×.
- *     COLOUR = misery 0-100 (rule airport_misery v1): calm < 20 teal · slow 20-40 amber ·
+ *     COLOUR = misery 0-100 (rule airport_misery v2): calm < 20 teal · slow 20-40 amber ·
  *              miserable 40-60 orange · severe ≥ 60 red. A ring pulses around severe.
  *     GREY   = no score — the feed withheld statistics (too few flights), the airport was absent from
  *              the sweep, or it has never been observed. A dark square at its real size, never calm.
@@ -100,7 +100,7 @@ WG.card('misery', function (x) {
   rows.push(['rule', a.rule_id ? a.rule_id + ' ' + a.rule_version : null]);
   h += WG.kvs(rows);
   if (!a.military) h += '<pre>The feed gives a median delay and a 0–5 index per window, not a count of delayed flights; cancellations are counted.</pre>';
-  if (a.misery != null) h += '<pre>45 × min(1, median/60) + 30 × min(1, index/4) + 25 × min(1, cancelled%/20) — our own index from the 15-minute sweep, not FlightAware\'s.</pre>';
+  if (a.misery != null) h += '<pre>45 × min(1, median/60) + 30 × min(1, index/4) + 25 × min(1, cancelled%/20), × min(1, flights/20) — our own index from the 15-minute sweep, not FlightAware\'s.</pre>';
   return { html: h, at: [a.lon, a.lat] };
 });
 

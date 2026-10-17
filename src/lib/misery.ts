@@ -4,7 +4,7 @@ import { readFaaPrograms, type FaaProgram } from '@/lib/faa-programs'
 /**
  * Travel Misery Index — one read for the globe route (/api/roc-misery) and the dashboard page
  * (/travelrisk/misery). The scoring lives in Neon (`airport_misery_latest`, `airport_misery_global`,
- * rule `airport_misery v1`, schema/066 in wfmlabsorg/roc); this module only shapes it.
+ * rule `airport_misery v2`, schema/066 + 070 in wfmlabsorg/roc); this module only shapes it.
  *
  * Honesty rules (api-083): every registry airport is returned, unscored ones with `misery: null` and a
  * `misery_reason`; nothing is substituted for a missing value; size (`movements`) is reported for
@@ -28,6 +28,10 @@ export interface MiseryAirport {
   baseline_score: number | null; baseline_granularity: string | null; baseline_maturity: string | null; baseline_samples: number | null
   vs_normal: number | null
   rule_id: string | null; rule_version: string | null
+  /** 'aerodatabox_delays' (15-min sweep) or 'aerodatabox_fids' (hourly board), schema 069. */
+  obs_source: string | null
+  /** v2: min(1, usable flights / 20) — the share of the full score this much traffic earns (schema 070). */
+  traffic_weight: number | null
   /** Live FAA programmes at this airport, strongest first; [] when none. Shown beside the score, never in it. */
   faa: FaaProgram[]
 }
@@ -77,7 +81,8 @@ const AIRPORTS_SQL = `
     misery::double precision AS misery, misery_band, misery_reason,
     baseline_score::double precision AS baseline_score, baseline_granularity, baseline_maturity, baseline_samples,
     vs_normal::double precision AS vs_normal,
-    rule_id, rule_version
+    rule_id, rule_version, obs_source,
+    traffic_weight::double precision AS traffic_weight
   FROM airport_misery_latest
   ORDER BY misery DESC NULLS LAST, movements DESC NULLS LAST, icao
 `
@@ -146,7 +151,7 @@ export async function readMisery(): Promise<MiseryPayload> {
       newest_observed_at: newest,
       faa: { checked_at: faa.checked_at, airports: faaAirports, error: faa.error },
       generatedAt: new Date().toISOString(),
-      rule: { id: 'airport_misery', version: 'v1' },
+      rule: { id: 'airport_misery', version: 'v2' },
     },
   }
 }
@@ -190,5 +195,5 @@ export async function readMiseryHistory(hours = 24): Promise<MiseryHistory> {
     if (!cur || cur.sweep_id !== row.sweep_id) { cur = { sweep_id: String(row.sweep_id), observed_at: t, airports: {} }; frames.push(cur) }
     cur.airports[String(row.icao)] = [row.misery as number | null, (row.cancelled as number) ?? 0, (row.movements as number) ?? 0, row.cancel_rate as number | null]
   }
-  return { frames, meta: { hours, step_min: 60, generatedAt: new Date().toISOString(), rule: { id: 'airport_misery', version: 'v1' } } }
+  return { frames, meta: { hours, step_min: 60, generatedAt: new Date().toISOString(), rule: { id: 'airport_misery', version: 'v2' } } }
 }

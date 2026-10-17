@@ -118,6 +118,7 @@ function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: 
     const b = bandOf(misery)
     lines.push(`Misery ${Math.round(misery)} — ${b.band}${!f && a.vs_normal != null ? ` · ${signed(a.vs_normal)} vs normal (${a.baseline_maturity ?? 'baseline'})` : ''}`)
     lines.push(f ? `${num(movements)} flights in window · ${num(cancelled)} cancelled` : `${num(movements)} flights in window · ${num(cancelled)} cancelled · median delay ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5`)
+    if (!f && a.traffic_weight != null && a.traffic_weight < 1) lines.push(`Thin traffic: this window earns ${Math.round(a.traffic_weight * 100)} % of the full score (full at 20 flights)`)
     lines.push(`Ring: red = score, dark red = its cancellation points, green = the rest`)
   } else lines.push(f ? 'Not scored in this frame' : `Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
   for (const p of a.faa ?? []) lines.push(`${FAA_NAME[p.label] ?? p.title}${p.detail ? ` — ${p.detail}` : ''}${p.ends_at ? ` · until ${hhmm(p.ends_at)}` : ''}${replayAt ? ' (live, not this frame)' : ''}`)
@@ -192,7 +193,7 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
       const px = a.military ? 14 : ringPx(v.movements)
       const kind = a.military ? 'military' : v.misery == null ? 'unscored' : 'scored'
       const code = a.iata ?? a.icao
-      const html = ringSvg(px, v.misery, cancelPts(v.rate), kind, code) + (replayRef.current ? '' : faaBadge(a))
+      const html = ringSvg(px, v.misery, cancelPts(v.rate) * (f ? 1 : a.traffic_weight ?? 1), kind, code) + (replayRef.current ? '' : faaBadge(a))
       // the per-airport class is only ever an ICAO that passed the regex — it reaches a class attribute
       const cls = /^[A-Z0-9]{3,4}$/.test(a.icao) ? `misd-ring r-${a.icao}` : 'misd-ring'
       const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) + (a.faa?.length ? 2000 : 0) })
@@ -235,7 +236,7 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
 
 function BarRow({ a, f, now, onPick }: { a: MiseryAirport; f: Frame | null; now: number | null; onPick: (icao: string) => void }) {
   const misery = f ? f.misery : a.misery, cancelled = f ? f.cancelled : a.cancelled, movements = f ? f.movements : a.movements, rate = f ? f.cancel_rate : a.cancel_rate
-  const m = Math.min(100, misery ?? 0), cp = Math.min(m, cancelPts(rate))
+  const m = Math.min(100, misery ?? 0), cp = Math.min(m, cancelPts(rate) * (f ? 1 : a.traffic_weight ?? 1))
   const b = bandOf(misery ?? 0)
   return (
     <button onClick={() => onPick(a.icao)} className="misd-bar" title={f ? 'Replay frame — click to fly there' : `${place(a)} — click to fly there`}>
@@ -516,7 +517,7 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
               <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', margin: '8px 0 2px' }}>BASELINE</div>
               <div>{Object.entries(maturity).filter(([k]) => k !== 'null').map(([k, n]) => `${n} ${k}`).join(' · ') || 'no baselines yet'}{maturity.null ? ` · ${maturity.null} without` : ''} — &quot;vs normal&quot; compares to the same local weekday; a warming baseline is said so.</div>
               <div style={{ fontFamily: MONO, fontSize: 10, color: '#94a3b8', letterSpacing: '0.08em', margin: '8px 0 2px' }}>METHOD · {d.meta?.rule?.id ?? 'airport_misery'} {d.meta?.rule?.version ?? ''}</div>
-              <div>45 × min(1, median delay / 60 min) + 30 × min(1, delay index / 4) + 25 × min(1, cancelled % / 20), departures and arrivals blended by flights with statistics; needs 5 such flights. The ring shows that score: dark red = the cancellation points, red = the delay points, green = the rest. FlightAware&apos;s MiseryMap counts flights on-time / delayed / cancelled; our feed gives a median and a 0–5 index per 2 h window, not a count of delayed flights, so this is our own index, not theirs.</div>
+              <div>45 × min(1, median delay / 60 min) + 30 × min(1, delay index / 4) + 25 × min(1, cancelled % / 20), departures and arrivals blended by flights with statistics; needs 5 such flights. v2 scales that by traffic: × min(1, flights / 20), so five late red-eyes earn a quarter of the score. The ring shows that score: dark red = the cancellation points, red = the delay points, green = the rest. FlightAware&apos;s MiseryMap counts flights on-time / delayed / cancelled; our feed gives a median and a 0–5 index per 2 h window, not a count of delayed flights, so this is our own index, not theirs.</div>
             </div>
           </div>
         </div>
