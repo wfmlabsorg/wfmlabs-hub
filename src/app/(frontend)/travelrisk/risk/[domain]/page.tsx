@@ -132,7 +132,8 @@ export default async function DomainRiskMapPage(
   const globalAvailable = !!globalEntry && globalEntry.available !== false
   // Hibernated by decision (roc 05bdfff): only when the index has no reading,
   // so a domain that starts scoring again renders normally with no code change.
-  const hib = globalAvailable ? undefined : hibernatedDomain(meta.domain)
+  // A published `available: false` entry is required: a failed or empty index read is an outage, not hibernation.
+  const hib = globalEntry && globalEntry.available === false ? hibernatedDomain(meta.domain) : undefined
 
   const scored = regionRisk.nodes.filter((n) => n.available && n.score != null)
   const unscored = regionRisk.nodes.filter((n) => !(n.available && n.score != null))
@@ -314,7 +315,7 @@ export default async function DomainRiskMapPage(
           </>
         )}
 
-        {unscored.length > 0 && !hib && (
+        {unscored.length > 0 && !(hib && scored.length === 0) && (
           <div style={{ marginTop: '1rem' }}>
             <div
               style={{
