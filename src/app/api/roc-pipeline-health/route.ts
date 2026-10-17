@@ -33,7 +33,7 @@ const DOMAINS = [
 
 type Status = 'OK' | 'STALE' | 'DOWN'
 type ScoutStatus = Status | 'HIBERNATED'
-type DomainStatus = 'OK' | 'STALE' | 'HIBERNATED'
+type DomainStatus = 'OK' | 'QUIET' | 'STALE' | 'HIBERNATED'
 
 /**
  * CADENCE-AWARE SCOUT FRESHNESS
@@ -202,15 +202,29 @@ export async function GET() {
     domainRes.rows.forEach((r) => {
       domainMap[r.domain] = { c24: parseInt(r.c24, 10) || 0, last_at: r.last_at }
     })
+    // Intake per domain (2026-10-17): a lane with no signals is QUIET when its scouts are still ingesting but the
+    // relevance filter (iws_pass) rejected everything — e.g. cyber and disaster on 2026-10-17: 119 and 177 events in
+    // 4 days, 1 and 2 relevant (a ransomware report, an earthquake-drill explainer). STALE now means intake stopped.
+    const intake: Record<string, { n24: number; pass24: number }> = {}
+    try {
+      const r = await pool.query(
+        `SELECT domain, count(*)::int AS n24, count(*) FILTER (WHERE iws_pass)::int AS pass24
+           FROM news_events WHERE created_at > now() - interval '24 hours' AND domain IS NOT NULL GROUP BY domain`)
+      for (const x of r.rows) intake[x.domain] = { n24: Number(x.n24) || 0, pass24: Number(x.pass24) || 0 }
+    } catch { /* intake unknown → fall back to signals-only status */ }
     const signalsByDomain = DOMAINS.map((d) => {
       const row = domainMap[d] || { c24: 0, last_at: null }
       const hib = hibernatedDomain(d)
-      // 0/24h = starved lane — unless its only dedicated feed was switched off.
-      const status: DomainStatus = row.c24 > 0 ? 'OK' : hib ? 'HIBERNATED' : 'STALE'
+      const inflow = intake[d] ?? null
+      // 0/24h = starved lane — unless its only dedicated feed was switched off, or its intake is flowing and the
+      // relevance filter passed nothing (quiet by design, not broken).
+      const status: DomainStatus = row.c24 > 0 ? 'OK' : hib ? 'HIBERNATED' : inflow && inflow.n24 > 0 && inflow.pass24 === 0 ? 'QUIET' : 'STALE'
       return {
         domain: d,
         signals_24h: row.c24,
         last_at: row.last_at,
+        intake_24h: inflow?.n24 ?? null,
+        relevant_24h: inflow?.pass24 ?? null,
         status,
         hibernation: status === 'HIBERNATED' && hib ? { scouts: hib.scouts, reason: hib.reason } : null,
       }
