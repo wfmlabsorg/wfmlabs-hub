@@ -328,7 +328,7 @@
       '<div class="feed-stat"><b>&nbsp;</b><small>&nbsp;</small></div>';
     html += '<div class="section-title">Pipeline Core</div><div class="feed-grid">' +
       workerCard('op-risk INDEX', 'Signals-derived 12-domain score (global + region planes)', orStats, or.status) +
-      workerCard('web-scout', 'Always-on web scout feeding news_events / signals', wsStats, ws.status) +
+      workerCard('web-scout', ws.status === 'HIBERNATED' ? 'Hibernated by decision — ' + esc(ws.hibernated_reason || '') : 'Always-on web scout feeding news_events / signals', wsStats, ws.status) +
       '</div>';
 
     // 4. Coverage auditor (the G6 monitor — shows WHY, not a bare green light)
