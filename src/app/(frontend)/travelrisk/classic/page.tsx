@@ -452,7 +452,7 @@ export default async function TravelRiskClassicPage() {
               const dc = domainColor(meta.domain)
               const missing = !entry
               const available = !!entry && entry.available !== false
-              const hib = available ? undefined : hibernatedDomain(meta.domain)
+              const hib = entry && entry.available === false ? hibernatedDomain(meta.domain) : undefined   // published unavailable only
               return (
                 // hub-051 item 4: every card is now a LINK to that domain's own
                 // risk-map page. Twelve real URLs, not a switcher.

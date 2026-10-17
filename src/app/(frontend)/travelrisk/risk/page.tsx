@@ -78,7 +78,7 @@ export default async function RiskMapIndexPage() {
             const entry = byDomain.get(meta.domain)
             const st = domainState(entry)
             const available = !!entry && entry.available !== false
-            const hib = available ? undefined : hibernatedDomain(meta.domain)
+            const hib = entry && entry.available === false ? hibernatedDomain(meta.domain) : undefined   // published unavailable only; a failed read is an outage
             const dc = domainColor(meta.domain)
             return (
               <a
