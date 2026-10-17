@@ -33,8 +33,8 @@ async function j<T>(url: string): Promise<T | null> {
     return null
   }
 }
-const SEV_COLOR: Record<string, string> = { SEV1: '#ef4444', SEV2: '#f97316', SEV3: '#eab308', SEV4: '#94a3b8' }
-const LEVEL_COLOR = (l: string) => (l === 'SEVERE' || l === 'CRITICAL' ? '#ef4444' : l === 'SIGNIFICANT' ? '#f97316' : l === 'ELEVATED' ? '#eab308' : '#18BC9C')
+const SEV_COLOR: Record<string, string> = { SEV1: '#ef4444', SEV2: '#fb7185', SEV3: '#eab308', SEV4: '#94a3b8' }
+const LEVEL_COLOR = (l: string) => (l === 'SEVERE' || l === 'CRITICAL' ? '#ef4444' : l === 'SIGNIFICANT' ? '#fb7185' : l === 'ELEVATED' ? '#eab308' : '#18BC9C')
 const ago = (iso: string | null) => { if (!iso) return ''; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 60 ? `${m}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d` }
 
 export default async function TravelRiskPage() {

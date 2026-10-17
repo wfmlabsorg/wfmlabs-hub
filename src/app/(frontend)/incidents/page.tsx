@@ -67,7 +67,7 @@ interface DeskItem {
 
 const sevConfig: Record<string, { color: string; bg: string; pulse?: boolean }> = {
   SEV1: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', pulse: true },
-  SEV2: { color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
+  SEV2: { color: '#fb7185', bg: 'rgba(251,113,133,0.1)' },
   SEV3: { color: '#eab308', bg: 'rgba(234,179,8,0.08)' },
   SEV4: { color: '#64748b', bg: 'rgba(100,116,139,0.08)' },
 }
@@ -382,7 +382,7 @@ export default async function IncidentsPage() {
               const body = (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.625rem', flexWrap: mobile ? 'wrap' : 'nowrap', padding: '0.625rem 1rem' }}>
                   <Chip label={rungConfig.watching.label} color={rungConfig.watching.color} bg={rungConfig.watching.bg} />
-                  <span style={{ fontFamily: mono, fontSize: '0.75rem', fontWeight: 700, color: d.severity >= 8 ? '#f97316' : '#eab308' }}>
+                  <span style={{ fontFamily: mono, fontSize: '0.75rem', fontWeight: 700, color: d.severity >= 8 ? '#fb7185' : '#eab308' }}>
                     {Number(d.severity).toFixed(1)}
                   </span>
                   <span
