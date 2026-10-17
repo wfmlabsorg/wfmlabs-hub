@@ -37,6 +37,19 @@ const BANDS = [
 ] as const
 type Band = (typeof BANDS)[number]
 const C_ONTIME = '#22c55e', C_MISERY = '#ef4444', C_CANCEL = '#7f1d1d', C_UNSCORED = '#475569', C_MILITARY = '#a78bfa', C_DIVERTED = '#a78bfa'
+// FAA programme badges: what the regulator has done NOW, beside (never inside) the score.
+const FAA_COLOR: Record<string, string> = { CLSD: '#f8fafc', GS: '#dc2626', GDP: '#f59e0b', DLY: '#64748b' }
+const FAA_INK: Record<string, string> = { CLSD: '#0b1220', GS: '#fff', GDP: '#0b1220', DLY: '#fff' }
+const FAA_NAME: Record<string, string> = { CLSD: 'FAA closure', GS: 'FAA ground stop', GDP: 'FAA ground delay programme', DLY: 'FAA departure/arrival delays' }
+/** The strongest programme's badge. The label is one of four fixed strings, so it is safe in markup. */
+function faaBadge(a: MiseryAirport): string {
+  const p = a.faa?.[0]; if (!p || !FAA_COLOR[p.label]) return ''
+  return `<span class="misd-faa" style="background:${FAA_COLOR[p.label]};color:${FAA_INK[p.label]}">${p.label}</span>`
+}
+function FaaPill({ a }: { a: MiseryAirport }) {
+  const p = a.faa?.[0]; if (!p) return null
+  return <span className="misd-pill" title={a.faa.map((x) => x.title).join(' · ')} style={{ background: FAA_COLOR[p.label], color: FAA_INK[p.label] }}>{p.label}</span>
+}
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 const WORLD: [[number, number], [number, number]] = [[-50, -170], [72, 180]]
 const CONUS: [[number, number], [number, number]] = [[23.5, -126], [50.5, -66]]
@@ -107,6 +120,8 @@ function popup(a: MiseryAirport, f: Frame | null, now: number | null, replayAt: 
     lines.push(f ? `${num(movements)} flights in window · ${num(cancelled)} cancelled` : `${num(movements)} flights in window · ${num(cancelled)} cancelled · median delay ${mins(a.median_delay_min)} · index ${a.delay_index != null ? a.delay_index.toFixed(1) : '—'}/5`)
     lines.push(`Ring: red = score, dark red = its cancellation points, green = the rest`)
   } else lines.push(f ? 'Not scored in this frame' : `Not scored — ${reasonText(a)}${a.movements ? ` · ${num(a.movements)} flights in window` : ''}`)
+  for (const p of a.faa ?? []) lines.push(`${FAA_NAME[p.label] ?? p.title}${p.detail ? ` — ${p.detail}` : ''}${p.ends_at ? ` · until ${hhmm(p.ends_at)}Z` : ''}${replayAt ? ' (live, not this frame)' : ''}`)
+  if (a.faa?.length && misery != null && misery < 40) lines.push('The score counts flights that have already moved; held flights reach it only when they depart or land.')
   lines.push(replayAt ? `Replay frame ${hhmm(replayAt)}` : `Sweep ${ago(a.observed_at, now)} · ${a.icao}`)
   for (const t of lines) { const d = document.createElement('div'); d.textContent = t; box.appendChild(d) }
   return box
@@ -177,12 +192,12 @@ function MiseryMap({ airports, focus, now, region, frame, replayAt, arcs }: {
       const px = a.military ? 14 : ringPx(v.movements)
       const kind = a.military ? 'military' : v.misery == null ? 'unscored' : 'scored'
       const code = a.iata ?? a.icao
-      const html = ringSvg(px, v.misery, cancelPts(v.rate), kind, code)
+      const html = ringSvg(px, v.misery, cancelPts(v.rate), kind, code) + (replayRef.current ? '' : faaBadge(a))
       // the per-airport class is only ever an ICAO that passed the regex — it reaches a class attribute
       const cls = /^[A-Z0-9]{3,4}$/.test(a.icao) ? `misd-ring r-${a.icao}` : 'misd-ring'
-      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) })
+      const mk = L.marker([a.lat, a.lon], { icon: L.divIcon({ className: cls, html, iconSize: [px, px], iconAnchor: [px / 2, px / 2] }), zIndexOffset: Math.round(order(a) * 10) + (a.faa?.length ? 2000 : 0) })
       if (v.misery != null && v.misery >= 40 && px < 28) mk.bindTooltip(textEl(`${code} ${Math.round(v.misery)}`), { permanent: true, direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
-      else mk.bindTooltip(textEl(v.misery != null ? `${code} ${Math.round(v.misery)}` : code), { direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
+      else mk.bindTooltip(textEl(`${a.faa?.[0] && !replayRef.current ? a.faa[0].label + ' · ' : ''}${v.misery != null ? `${code} ${Math.round(v.misery)}` : code}`), { direction: 'right', offset: [px / 2 + 2, 0], className: 'misd-tip', opacity: 1 })
       mk.bindPopup(() => popup(a, cell(a), nowRef.current, replayRef.current))
       mk.on('mouseover', () => showArcs(L, a))
       mk.on('mouseout', () => lines.current?.clearLayers())
@@ -225,6 +240,7 @@ function BarRow({ a, f, now, onPick }: { a: MiseryAirport; f: Frame | null; now:
   return (
     <button onClick={() => onPick(a.icao)} className="misd-bar" title={f ? 'Replay frame — click to fly there' : `${place(a)} — click to fly there`}>
       <span style={{ fontFamily: MONO, fontWeight: 800, fontSize: 12, color: '#f1f5f9', width: 38, flex: 'none' }}>{a.iata ?? a.icao}</span>
+      {!f && <FaaPill a={a} />}
       <span className="misd-track">
         <span style={{ width: `${m}%`, background: C_MISERY }} />
         <span style={{ width: `${cp}%`, background: C_CANCEL }} />
@@ -365,6 +381,8 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const g = d.global?.now ?? null
   const series = d.global?.series ?? []
   const regional = airports.filter((a) => inRegion(a, region))
+  const FAA_RANK: Record<string, number> = { CLSD: 0, GS: 1, GDP: 2, DLY: 3 }
+  const faaNow = regional.filter((a) => a.faa?.length).sort((x, y) => (FAA_RANK[x.faa[0].label] - FAA_RANK[y.faa[0].label]) || ((y.business_travel_weight ?? 0) - (x.business_travel_weight ?? 0)))
   const cellOf = (a: MiseryAirport): Frame | null => {
     if (!frame) return null
     const c = frame.airports[a.icao]
@@ -435,6 +453,7 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
           <div className="misd-legend">
             <div><span className="misd-sw" style={{ borderColor: C_MISERY }} />ring = misery score 0–100 · <i style={{ background: C_CANCEL }} />cancellation points · <i style={{ background: C_ONTIME }} />the rest</div>
             <div><span className="misd-sw" style={{ borderColor: C_UNSCORED, borderStyle: 'dashed' }} />not scored (statistics withheld / absent / no traffic) · <span className="misd-sw" style={{ borderColor: C_MILITARY }} />military airbase</div>
+            <div><span className="misd-pill" style={{ background: FAA_COLOR.GS, color: '#fff' }}>GS</span> FAA ground stop · <span className="misd-pill" style={{ background: FAA_COLOR.GDP, color: '#0b1220' }}>GDP</span> ground delay programme · <span className="misd-pill" style={{ background: FAA_COLOR.CLSD, color: '#0b1220' }}>CLSD</span> closure — live, beside the score</div>
             <div style={{ color: '#64748b', marginTop: 2 }}>ring size = flights in the 2 h window · click a ring · hover a boarded airport for its delayed / cancelled flights&apos; far ends · radar © RainViewer</div>
           </div>
           <div className="misd-replay">
@@ -455,6 +474,18 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
             <div><b>{scoredR.length}<small>/{regional.length}</small></b><span>SCORED</span></div>
             <div style={{ fontFamily: MONO, fontSize: 10, color: '#64748b', alignSelf: 'end' }}>{frame ? `replay ${hhmm(frame.observed_at)}` : `window ${windowText}`} · {regionLabel}</div>
           </div>
+          {(faaNow.length > 0 || d.meta.faa?.error) && (
+            <div className="misd-faastrip" title="Live FAA programmes (via travel-intel). Shown beside the score, never inside it: the score counts flights that have already moved.">
+              <span style={{ color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em' }}>FAA NOW{frame ? ' (live)' : ''}</span>
+              {d.meta.faa?.error && <span style={{ color: '#f59e0b' }}>FAA read failed — badges may be missing</span>}
+              {faaNow.map((a) => (
+                <button key={a.icao} onClick={() => pick(a.icao)} title={a.faa.map((x) => `${x.title}${x.detail ? ' — ' + x.detail : ''}`).join('\n')}>
+                  <FaaPill a={a} /> {a.iata ?? a.icao}{a.faa.length > 1 ? ` +${a.faa.slice(1).map((x) => x.label).join('+')}` : ''}
+                  <span style={{ color: a.misery != null ? bandOf(a.misery).color : '#64748b' }}> {a.misery != null ? Math.round(a.misery) : '—'}</span>
+                </button>
+              ))}
+            </div>
+          )}
           <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', color: '#94a3b8', padding: '6px 10px 2px', display: 'flex' }}>
             <span>RANKED · {regionLabel}</span>
             <span style={{ marginLeft: 'auto', color: byBand.severe.length ? BANDS[0].color : byBand.miserable.length ? BANDS[1].color : '#22c55e' }}>
@@ -513,6 +544,11 @@ const CSS = `
 .misd-track{position:relative;height:12px;background:#111c30;border-radius:2px;overflow:hidden;display:block}
 .misd-track span{position:absolute;left:0;top:0;bottom:0;display:block}
 .misd-barsub{grid-column:2/4;font:10px ${MONO};color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.misd-faa{position:absolute;top:-7px;right:-10px;font:800 8.5px/1 'IBM Plex Mono',monospace;padding:2px 3px;border-radius:3px;box-shadow:0 0 0 1px #0b1220;pointer-events:none;letter-spacing:.04em}
+.misd-pill{display:inline-block;font:800 9px/1 'IBM Plex Mono',monospace;padding:2px 4px;border-radius:3px;margin-right:6px;flex:none;letter-spacing:.04em}
+.misd-faastrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #1e293b;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#e2e8f0}
+.misd-faastrip button{background:#0f172a;border:1px solid #1e293b;border-radius:3px;color:#e2e8f0;font:inherit;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center}
+.misd-faastrip button .misd-pill{margin-right:4px}
 .misd-legend{position:absolute;left:10px;bottom:46px;z-index:500;background:rgba(6,11,22,.85);border:1px solid #1e293b;border-radius:4px;padding:6px 8px;font-family:${MONO};font-size:10px;color:#cbd5e1;max-width:34rem}
 .misd-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 4px;vertical-align:-1px}
 .misd-sw{display:inline-block;width:9px;height:9px;border-radius:50%;border:2.5px solid;margin-right:6px;vertical-align:-1px;box-sizing:border-box}

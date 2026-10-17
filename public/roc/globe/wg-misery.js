@@ -87,6 +87,8 @@ WG.card('misery', function (x) {
   if (!a.military) rows.push(['flights in window', a.movements != null ? a.movements + ' scheduled (' + (a.departures_total != null ? a.departures_total : '?') + ' departures · ' + (a.arrivals_total != null ? a.arrivals_total : '?') + ' arrivals)' : null]);
   if (!a.military) rows.push(['cancelled', a.cancelled != null && a.movements ? a.cancelled + ' (' + (a.departures_cancelled || 0) + ' dep · ' + (a.arrivals_cancelled || 0) + ' arr' + (a.cancel_rate != null ? ' · ' + pct(a.cancel_rate) : '') + ')' : null]);
   if (!a.military) rows.push(['delays', a.median_delay_min != null ? 'median ' + mins(a.median_delay_min) + ' (dep ' + (a.departures_median_delay_min != null ? signed(a.departures_median_delay_min, 'm') : '—') + ' · arr ' + (a.arrivals_median_delay_min != null ? signed(a.arrivals_median_delay_min, 'm') : '—') + ')' + (a.delay_index != null ? ' · index ' + (Math.round(a.delay_index * 100) / 100) + '/5' : '') : null]);
+  (a.faa || []).forEach(function (p) { rows.push(['FAA ' + p.label, p.title + (p.detail ? ' — ' + p.detail : '') + (p.ends_at ? ' · until ' + p.ends_at.slice(11, 16) + 'Z' : '')]); });
+  if (a.faa && a.faa.length && a.misery != null && a.misery < 40) rows.push(['note', 'The score counts flights that have already moved; flights held by the FAA reach it only when they depart or land.']);
   if (a.misery == null) rows.push(['why no score', REASON[a.misery_reason] || a.misery_reason || 'unknown']);
   if (a.vs_normal != null) rows.push(['vs normal', signed(a.vs_normal) + ' against the ' + (a.baseline_granularity === 'day_of_week' ? 'same-weekday' : 'flat') + ' baseline (' + a.baseline_maturity + ', ' + a.baseline_samples + ' samples)']);
   else if (a.misery != null) rows.push(['vs normal', 'no baseline yet']);
@@ -162,13 +164,13 @@ function loadMisery(src) {
         if (a.misery == null) {
           counts.unscored++;
           src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(px, '#1e293b', C_UNSCORED, 'thin'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
-            label: codeLabel(a, px, C_UNSCORED, a.iata || a.icao) });
+            label: codeLabel(a, px, C_UNSCORED, faaTag(a) + (a.iata || a.icao)) });
           return;
         }
         counts.scored++; var b = bandOf(a.misery); bands[b.band] = (bands[b.band] || 0) + 1;
         var far = a.misery >= 60 ? new Cesium.DistanceDisplayCondition(0, 1.2e7) : a.misery >= 40 ? new Cesium.DistanceDisplayCondition(0, 5.0e6) : null;
         src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(px, col, '#0f172a'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
-          label: codeLabel(a, px, col, (a.iata || a.icao) + (a.misery >= 40 ? ' ' + Math.round(a.misery) : ''), far) });
+          label: codeLabel(a, px, col, faaTag(a) + (a.iata || a.icao) + (a.misery >= 40 ? ' ' + Math.round(a.misery) : ''), far) });
         if (a.misery >= 60) {
           src.entities.add({ id: id + ':halo', position: pos, ellipse: { semiMajorAxis: WG.pulse(2600, 50000, 140000), semiMinorAxis: WG.pulse(2600, 50000, 140000), material: C(col, 0.18), outline: false, height: 0 } });
         }
@@ -188,5 +190,8 @@ function loadMisery(src) {
 }
 
 // 2026-10-16 (Ted): this IS the airports layer now — listed first, named like the one it replaced.
+/** Live FAA programme, strongest first ("GS ", "GDP ", "CLSD "), prefixed to the code label — beside the score, never in it. */
+function faaTag(a) { var p = a.faa && a.faa[0]; return p && /^(CLSD|GS|GDP|DLY)$/.test(p.label) && p.label !== 'DLY' ? p.label + ' ' : ''; }
+
 WG.addLayer({ id: 'misery', label: 'Airports & delays', color: '#18BC9C', on: true, first: true, refreshMs: 5 * 60e3, load: loadMisery });
 })();
