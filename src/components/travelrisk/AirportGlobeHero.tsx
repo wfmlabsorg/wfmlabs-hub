@@ -27,7 +27,7 @@ import { CONFIDENCE, HAZARD, ADVISORY_HUE } from '@/lib/travelrisk/riskAxes'
  *
  * ── MOBILE ───────────────────────────────────────────────────────────────
  * This component is never rendered on mobile. hub-010 made a deliberate call
- * that Cesium does not go on a phone (battery, memory, and a 272-anchor scene
+ * that Cesium does not go on a phone (battery, memory, and a several-hundred-anchor scene
  * that cannot be read at that width — the globe's own CSS hides both side
  * panels below 900px). The landing keeps `<SignalGlobeHero mobile />` there,
  * which is the lightweight CSS globe plus the live ticker. The decision is made
@@ -49,7 +49,17 @@ function Key({ mark, label, note }: { mark: React.ReactNode; label: string; note
   )
 }
 
-export function AirportGlobeHero() {
+/**
+ * `airportCount` is the number of airports in the latest observation sweep,
+ * which covers the whole registry (666 on 2026-10-17; it was 272 when this
+ * headline was first written, and hard-coded). The caller already reads that
+ * sweep, so the headline is data-driven; when the sweep is unreadable it falls
+ * back to wording with no number rather than a stale one.
+ */
+export function AirportGlobeHero({ airportCount }: { airportCount?: number | null } = {}) {
+  const lead = typeof airportCount === 'number' && airportCount > 0
+    ? `${airportCount.toLocaleString('en-US')} airports`
+    : 'Every monitored airport'
   return (
     <section
       aria-label="Live travel risk globe"
@@ -72,7 +82,7 @@ export function AirportGlobeHero() {
               Travel Risk · Live
             </div>
             <h1 style={{ margin: '0.2rem 0 0', fontSize: 'clamp(1.15rem, 2.4vw, 1.6rem)', fontWeight: 700, lineHeight: 1.2 }}>
-              272 airports, every open incident, and the live signal stream — on one map
+              {lead}, every open incident, and the live signal stream — on one map
             </h1>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>

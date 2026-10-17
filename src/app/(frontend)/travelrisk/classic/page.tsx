@@ -28,6 +28,7 @@ import {
   applyProducerFilter, tileIsFullyHidden, hiddenNotice, TRAVELRISK_HIDDEN_PRODUCERS,
 } from '@/lib/travelrisk/presentation'
 import { domainColor } from '@/lib/domainColors'
+import { hibernatedDomain } from '@/lib/travelrisk/hibernation'
 
 /**
  * travelrisk.wfmlabs.com — the travel-first landing (hub-047).
@@ -245,6 +246,12 @@ export default async function TravelRiskClassicPage() {
     return { meta, entry, st: domainState(entry) }
   })
 
+  // Domains with no reading because their only feed was switched off by
+  // decision (roc 05bdfff) — named as hibernated, not as a missing reading.
+  const hibernatedUnavailable = entries.filter(
+    (e) => e.available === false && hibernatedDomain(e.domain),
+  ).length
+
   // Domains ovix-api published that the visible set does not show — named, so a
   // curated set can never quietly become a hidden one.
   const unshown = entries
@@ -319,7 +326,7 @@ export default async function TravelRiskClassicPage() {
           on it, not linked from beside a different map.
 
           On mobile it stays the lightweight hero. hub-010 decided Cesium does
-          not go on a phone (battery, memory, and a 272-anchor scene that cannot
+          not go on a phone (battery, memory, and a several-hundred-anchor scene that cannot
           be read at that width), and nothing about this task makes that a worse
           decision. */}
       {isMobile ? (
@@ -335,7 +342,7 @@ export default async function TravelRiskClassicPage() {
           priorityCategories={TRAVELRISK_PRIORITY_CATEGORIES}
         />
       ) : (
-        <AirportGlobeHero />
+        <AirportGlobeHero airportCount={sweepRow ? num(sweepRow.total) : null} />
       )}
 
       <div style={{ maxWidth: '80rem', margin: '0 auto', padding: '1.25rem 1rem 2rem' }}>
@@ -391,7 +398,7 @@ export default async function TravelRiskClassicPage() {
               <StatTile
                 label="Index basis"
                 value={`${sum.basis.settled}/${sum.total}`}
-                sub={`settled · ${sum.basis.provisional} provisional · ${sum.basis.unavailable} no reading`}
+                sub={`settled · ${sum.basis.provisional} provisional · ${Math.max(0, sum.basis.unavailable - hibernatedUnavailable)} no reading${hibernatedUnavailable ? ` · ${hibernatedUnavailable} hibernated` : ''}`}
                 color={NEUTRAL}
                 hatched={sum.provisional}
               />
@@ -445,6 +452,7 @@ export default async function TravelRiskClassicPage() {
               const dc = domainColor(meta.domain)
               const missing = !entry
               const available = !!entry && entry.available !== false
+              const hib = available ? undefined : hibernatedDomain(meta.domain)
               return (
                 // hub-051 item 4: every card is now a LINK to that domain's own
                 // risk-map page. Twelve real URLs, not a switcher.
@@ -477,7 +485,7 @@ export default async function TravelRiskClassicPage() {
                       {meta.label}
                     </span>
                     <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <StateChip state={st.state} title={explain(st) || undefined} compact />
+                      <StateChip state={hib ? null : st.state} title={explain(st) || undefined} compact />
                     </span>
                   </div>
 
@@ -486,7 +494,7 @@ export default async function TravelRiskClassicPage() {
                       itself amber whenever the score crossed 4.0 — nine of
                       twelve did, and the board became a wall. */}
                   <div style={{ marginBottom: '0.5rem' }}>
-                    <IndexReadout score={st.score} level={st.level} available={available} />
+                    <IndexReadout score={st.score} level={st.level} available={available} hibernated={hib} />
                   </div>
 
                   <p style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', color: 'var(--fg-muted)', lineHeight: 1.5 }}>

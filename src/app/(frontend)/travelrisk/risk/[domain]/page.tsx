@@ -15,6 +15,9 @@ import { domainState, explain, fmtUpdated, NEUTRAL, NEUTRAL_DIM } from '@/lib/sc
 import { HAZARD, CONFIDENCE, INDEX_MAX, describeSpread } from '@/lib/travelrisk/riskAxes'
 import { TRAVELRISK_HIDDEN_PRODUCERS } from '@/lib/travelrisk/presentation'
 import { domainColor } from '@/lib/domainColors'
+import {
+  hibernatedDomain, hibernationNote, HIBERNATED_DOMAIN_LABEL,
+} from '@/lib/travelrisk/hibernation'
 
 /**
  * ONE DOMAIN'S RISK MAP (hub-051 item 4)
@@ -127,6 +130,9 @@ export default async function DomainRiskMapPage(
   )
   const st = domainState(globalEntry)
   const globalAvailable = !!globalEntry && globalEntry.available !== false
+  // Hibernated by decision (roc 05bdfff): only when the index has no reading,
+  // so a domain that starts scoring again renders normally with no code change.
+  const hib = globalAvailable ? undefined : hibernatedDomain(meta.domain)
 
   const scored = regionRisk.nodes.filter((n) => n.available && n.score != null)
   const unscored = regionRisk.nodes.filter((n) => !(n.available && n.score != null))
@@ -160,7 +166,7 @@ export default async function DomainRiskMapPage(
         title={`${meta.label} — the global index`}
         subtitle="The same reading community.wfmlabs.com shows for this domain. Presentation differs; the number does not."
         accent={dc}
-        right={<StateChip state={st.state} title={explain(st) || undefined} />}
+        right={<StateChip state={hib ? null : st.state} title={explain(st) || undefined} />}
       >
         {!globalRisk ? (
           <DataUnavailable
@@ -169,7 +175,13 @@ export default async function DomainRiskMapPage(
           />
         ) : (
           <>
-            <IndexReadout score={st.score} level={st.level} available={globalAvailable} big />
+            <IndexReadout score={st.score} level={st.level} available={globalAvailable} big hibernated={hib} />
+            {hib && (
+              <p style={{ margin: '0.75rem 0 0', fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.6 }}>
+                {hibernationNote(hib)} ovix-api still publishes this domain; it arrives empty because nothing
+                feeds it. That is a scoping decision, not a failed feed and not an all-clear.
+              </p>
+            )}
             {st.provisional && (
               <p style={{ margin: '0.75rem 0 0', fontSize: '0.8125rem', color: 'var(--fg-muted)', lineHeight: 1.6 }}>
                 {explain(st)}
@@ -242,7 +254,14 @@ export default async function DomainRiskMapPage(
         subtitle="Every region with a reading, ranked — and every region without one, named. Both halves are the answer."
         accent={dc}
       >
-        {scored.length === 0 ? (
+        {scored.length === 0 && hib ? (
+          <GapNotice
+            kicker={`◌ ${HIBERNATED_DOMAIN_LABEL}`}
+            title={`${meta.label} is not scored for any region while its feed is hibernated`}
+            detail={hibernationNote(hib)}
+            owner="API fleet · roc scouts"
+          />
+        ) : scored.length === 0 ? (
           <GapNotice
             title={`The index publishes no ${meta.label.toLowerCase()} reading for any region right now`}
             detail="Every region reports `available: false` for this domain, which means no events were scored in that scope in the current window. That is a statement about coverage, not a statement that the world is calm."
@@ -295,7 +314,7 @@ export default async function DomainRiskMapPage(
           </>
         )}
 
-        {unscored.length > 0 && (
+        {unscored.length > 0 && !hib && (
           <div style={{ marginTop: '1rem' }}>
             <div
               style={{

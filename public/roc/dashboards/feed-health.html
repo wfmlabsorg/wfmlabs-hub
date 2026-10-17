@@ -47,6 +47,8 @@
   .feed-card.ok { border-left:3px solid var(--accent-green); }
   .feed-card.stale { border-left:3px solid var(--accent-amber); }
   .feed-card.dead { border-left:3px solid var(--accent-red); }
+  /* HIBERNATED = switched off by decision (roc 05bdfff). Muted, dashed, never amber/red. */
+  .feed-card.hib { border-left:3px dashed var(--border); opacity:.6; }
 
   .feed-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; gap:8px; }
   .feed-name { font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -54,6 +56,7 @@
   .feed-status.ok { background:rgba(34,197,94,.15); color:var(--accent-green); }
   .feed-status.stale { background:rgba(234,179,8,.12); color:var(--accent-amber); }
   .feed-status.dead { background:rgba(239,68,68,.12); color:var(--accent-red); }
+  .feed-status.hib { background:rgba(148,163,184,.1); color:var(--text-dim); }
 
   .feed-stats { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:8px; }
   .feed-stat { text-align:center; }
@@ -65,6 +68,8 @@
   .chip { background:var(--bg-panel); border:1px solid var(--border); border-radius:6px; padding:8px 10px; border-left:3px solid var(--border); }
   .chip.ok { border-left-color:var(--accent-green); }
   .chip.stale { border-left-color:var(--accent-red); }
+  .chip.hib { border-left:3px dashed var(--border); opacity:.6; }
+  .renamed-note { font-size:10px; color:var(--text-dim); margin-top:6px; }
   .chip-top { display:flex; align-items:center; justify-content:space-between; }
   .chip-name { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; }
   .chip-count { font-size:14px; font-weight:700; }
@@ -94,7 +99,7 @@
     <div class="banner-stats">
       <div class="stat-box"><div class="stat-value" id="s-scouts" style="color:var(--accent-green)">--</div><div class="stat-label">Scouts OK</div></div>
       <div class="stat-box"><div class="stat-value" id="s-issues" style="color:var(--accent-amber)">--</div><div class="stat-label">Issues</div></div>
-      <div class="stat-box"><div class="stat-value" id="s-domains">--</div><div class="stat-label">Domains 0/24h</div></div>
+      <div class="stat-box"><div class="stat-value" id="s-domains">--</div><div class="stat-label">Domains stale</div></div>
       <div class="stat-box"><div class="stat-value" id="s-signals">--</div><div class="stat-label">Signals/24h</div></div>
     </div>
     <span class="level-badge" id="health-badge" style="background:rgba(34,197,94,.15);color:var(--accent-green);border:1px solid rgba(34,197,94,.3)">--</span>
@@ -121,6 +126,7 @@
   function statusClass(st) {
     if (st === 'OK') return 'ok';
     if (st === 'STALE') return 'stale';
+    if (st === 'HIBERNATED') return 'hib';
     return 'dead';
   }
 
@@ -139,6 +145,22 @@
 
   function scoutCard(s) {
     var cls = statusClass(s.status);
+    if (s.status === 'HIBERNATED') {
+      var h = s.hibernation || {};
+      return '<div class="feed-card hib" title="' + esc('Hibernated by decision ' + (h.decided || '') + ' (roc ' + (h.roc_commit || '') + '): ' + (h.reason || '')) + '">' +
+        '<div class="feed-header">' +
+          '<span class="feed-name">' + esc(s.source) + '</span>' +
+          '<span class="feed-status hib">HIBERNATED</span>' +
+        '</div>' +
+        '<div class="feed-meta">' + esc((h.domain || '').replace(/_/g, ' ')) + ' &middot; off since ' + esc(h.effective || '') + ' &middot; ' + esc(h.reason || '') + '</div>' +
+        '<div class="feed-stats">' +
+          '<div class="feed-stat"><b>' + (s.total_events || 0).toLocaleString() + '</b><small>Total</small></div>' +
+          '<div class="feed-stat"><b>' + ago(s.age_minutes) + '</b><small>Last</small></div>' +
+          '<div class="feed-stat"><b>&nbsp;</b><small>&nbsp;</small></div>' +
+        '</div>' +
+      '</div>';
+    }
+    var every = s.expected_interval_minutes ? 'expected every ' + (s.expected_interval_minutes >= 60 ? Math.round(s.expected_interval_minutes / 60) + 'h' : s.expected_interval_minutes + 'm') : '';
     return '<div class="feed-card ' + cls + '">' +
       '<div class="feed-header">' +
         '<span class="feed-name">' + esc(s.source) + '</span>' +
@@ -149,10 +171,21 @@
         '<div class="feed-stat"><b>' + (s.total_events || 0).toLocaleString() + '</b><small>Total</small></div>' +
         '<div class="feed-stat"><b>' + ago(s.age_minutes) + '</b><small>Last</small></div>' +
       '</div>' +
+      (every ? '<div class="feed-meta">' + every + '</div>' : '') +
     '</div>';
   }
 
   function domainChip(d) {
+    if (d.status === 'HIBERNATED') {
+      var h = d.hibernation || {};
+      return '<div class="chip hib" title="' + esc((h.scouts || []).join(', ') + ' hibernated by decision: ' + (h.reason || '')) + '">' +
+        '<div class="chip-top">' +
+          '<span class="chip-name">' + esc(d.domain.replace(/_/g, ' ')) + '</span>' +
+          '<span class="chip-count" style="color:var(--text-dim)">&ndash;</span>' +
+        '</div>' +
+        '<div class="chip-sub">hibernated &middot; not a traveler-care input</div>' +
+      '</div>';
+    }
     var cls = d.status === 'OK' ? 'ok' : 'stale';
     var color = d.signals_24h > 0 ? 'var(--text-primary)' : 'var(--accent-red)';
     return '<div class="chip ' + cls + '">' +
@@ -249,7 +282,9 @@
 
   function render(data) {
     var sum = data.summary || {};
+    // scouts_total excludes hibernated scouts (switched off by decision, not failing).
     document.getElementById('s-scouts').textContent = (sum.scouts_healthy || 0) + '/' + (sum.scouts_total || 0);
+    document.getElementById('s-scouts').title = (sum.scouts_hibernated || 0) + ' hibernated by decision, not counted';
     document.getElementById('s-issues').textContent = (sum.scout_issues || 0) + (sum.pipeline_issues || 0) + (sum.domain_issues || 0);
     document.getElementById('s-domains').textContent = sum.domain_issues || 0;
     document.getElementById('s-signals').textContent = (sum.signals_24h || 0).toLocaleString();
@@ -269,11 +304,14 @@
 
     // 1. Scouts (problem scouts first)
     var scouts = (data.scouts || []).slice().sort(function (a, b) {
-      var order = { DOWN: 0, STALE: 1, OK: 2 };
+      var order = { DOWN: 0, STALE: 1, OK: 2, HIBERNATED: 3 };
       return (order[a.status] - order[b.status]);
     });
     html += '<div class="section-title">Scout Freshness (news_events)</div><div class="feed-grid">' +
-      (scouts.length ? scouts.map(scoutCard).join('') : '<div class="empty">No scouts reporting.</div>') + '</div>';
+      (scouts.length ? scouts.map(scoutCard).join('') : '<div class="empty">No scouts reporting.</div>') + '</div>' +
+      (data.renamed_scouts || []).map(function (r) {
+        return '<div class="renamed-note">' + esc(r.from) + ' is now ' + esc(r.to) + ' (' + esc(r.worker) + ', since ' + esc(r.since) + ') &mdash; ' + esc(r.note) + '</div>';
+      }).join('');
 
     // 2. Signals by domain
     html += '<div class="section-title">Signals Throughput — 12 Domains (24h)</div><div class="chip-grid">' +
