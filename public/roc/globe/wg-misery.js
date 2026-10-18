@@ -8,8 +8,15 @@
  *   its IATA code is printed beside it once you are within ~2,500 km.
  *     SIZE   = scheduled movements (departures + arrivals) in the feed's 2-hour window — square-root
  *              scale, so a 300-movement hub is ~3× a 30-movement field, not 10×.
- *     COLOUR = misery 0-100 (rule airport_misery v2): calm < 20 teal · slow 20-40 amber ·
- *              miserable 40-60 orange · severe ≥ 60 red. A ring pulses around severe.
+ *     COLOUR = misery 0-100 (rule airport_misery v2): calm < 20 teal · slow 20-40 yellow ·
+ *              miserable 40-60 rose · severe ≥ 60 red. A ring pulses around severe.
+ *     OUTLINE (2026-10-18, Ted: "closer to the misery index … the yellow and red as just the flights associated with
+ *              that specific airport") = THIS airport's own flights within ±60 min, from its newest board (rule
+ *              airport_flight_counts v1), read clockwise from the top like FlightAware's MiseryMap ring: red cancelled,
+ *              yellow delayed ≥ 15 min, green on time. Only boarded airports (coverage set + story airports, < 3 h) have
+ *              one; below 5 judged flights there is no outline, as on the dashboard.
+ *     CLICK  = the card lists this airport's cancelled / diverted / ≥ 60 min late flights and draws ONLY their arcs
+ *              (yellow delayed, red dashed cancelled, red glow diverted); closing the card clears them.
  *     GREY   = no score — the feed withheld statistics (too few flights), the airport was absent from
  *              the sweep, or it has never been observed. A dark square at its real size, never calm.
  *     MILITARY = violet square with a white cross, no commercial data by construction (category government).
@@ -31,6 +38,8 @@ var BANDS = [
   { band: 'severe',    from: 60, color: '#ef4444', word: 'severe' }
 ];
 var C_UNSCORED = '#94a3b8', C_MILITARY = '#a78bfa';
+var C_ONTIME = '#22c55e', C_DELAYED = '#eab308', C_CANCELLED = '#ef4444';   // NO ORANGE: the house hazard ramp
+var KIND_COLOR = { cancelled: C_CANCELLED, diverted: C_CANCELLED, delayed: C_DELAYED };
 var REASON = {
   ok: null,
   insufficient_qualified: 'too few usable flights in the window to score',
@@ -72,6 +81,93 @@ function squareGlyph(px, fill, outline, style) {
   }
   glyphCache[key] = c; return c;
 }
+/* ── the outlined glyph: misery fill inside, this airport's own flights around the edge ── */
+/** counts → the shares worth drawing, or null (no board in 3 h, or under 5 judged flights — the dashboard's rule) */
+function shares(c) {
+  if (!c) return null; var n = (c.ontime || 0) + (c.delayed || 0) + (c.cancelled || 0);
+  return n >= 5 ? { n: n, d: (c.delayed || 0) / n, x: (c.cancelled || 0) / n } : null;
+}
+/** A rounded square from its top centre, clockwise; arcTo keeps the corners circular so the perimeter is exact. */
+function edgePath(g, x, y, s, r) {
+  g.beginPath(); g.moveTo(x + s / 2, y);
+  g.arcTo(x + s, y, x + s, y + s, r); g.arcTo(x + s, y + s, x, y + s, r); g.arcTo(x, y + s, x, y, r); g.arcTo(x, y, x + s, y, r);
+  g.closePath();
+}
+function ringGlyph(px, fill, sh) {
+  var q = function (v) { return Math.round(v * 20) / 20; }, bad = q(sh.d + sh.x), cx = q(sh.x);   // 5 % steps keep the cache small
+  var key = 'ring|' + px + '|' + fill + '|' + bad + '|' + cx;
+  if (glyphCache[key]) return glyphCache[key];
+  // ring, then a dark gap, then the misery fill: green on time must not melt into a teal "calm" fill
+  var sw = px >= 20 ? 4 : 3, gap = 1.5, pad = 2, w = px + pad * 2, c = document.createElement('canvas'); c.width = w; c.height = w;
+  var g = c.getContext('2d'), r = Math.max(3, Math.round(px / 5));
+  edgePath(g, pad, pad, px, r); g.fillStyle = '#0b1220'; g.fill();
+  var inset = sw + gap; edgePath(g, pad + inset, pad + inset, px - inset * 2, Math.max(1, r - inset / 2)); g.fillStyle = fill; g.fill();
+  var o = pad + sw / 2, s = px - sw, P = 4 * (s - 2 * r) + 2 * Math.PI * r;
+  g.lineWidth = sw; g.lineCap = 'butt';
+  edgePath(g, o, o, s, r); g.strokeStyle = C_ONTIME; g.stroke();
+  if (bad > 0) { g.setLineDash([bad * P, P]); edgePath(g, o, o, s, r); g.strokeStyle = C_DELAYED; g.stroke(); }
+  if (cx > 0) { g.setLineDash([cx * P, P]); edgePath(g, o, o, s, r); g.strokeStyle = C_CANCELLED; g.stroke(); }
+  glyphCache[key] = c; return c;
+}
+/** The square for a scored airport: outlined when its board is fresh, plain otherwise. */
+function scoredGlyph(a, px, col) { var sh = shares(a.counts); return sh ? ringGlyph(Math.max(16, px + 4), col, sh) : squareGlyph(px, col, '#0f172a'); }
+
+/* ── this airport's story flights (/api/gev-story-flights, the latest board within 3 h) and its arcs on click ── */
+var storyBy = {}, storyAt = {}, storyOk = null;
+function loadStoryFlights() {
+  return fetch('/api/gev-story-flights', { signal: AbortSignal.timeout(25000) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (d) {
+      var by = {}, at = {};
+      (d.flights || []).forEach(function (f) { (by[f.airport_icao] = by[f.airport_icao] || []).push(f); });
+      (d.airports || []).forEach(function (a) { if (a.boarded_at) at[a.icao] = a.boarded_at; });
+      storyBy = by; storyAt = at; storyOk = true;
+    })
+    .catch(function () { storyOk = false; });
+}
+var sel = new Cesium.CustomDataSource('misery-selection'); WG.viewer.dataSources.add(sel);
+var selIcao = null;
+function clearSel() { if (selIcao) { sel.entities.removeAll(); selIcao = null; } }
+function showSel(a) {
+  sel.entities.removeAll(); selIcao = a.icao;
+  (storyBy[a.icao] || []).slice(0, 30).forEach(function (f, i) {
+    if (f.other_lat == null || f.other_lon == null) return;
+    var home = [a.lon, a.lat], far = [f.other_lon, f.other_lat];
+    WG.arc(sel, 'msel:' + a.icao + ':' + i, f.direction === 'departure' ? home : far, f.direction === 'departure' ? far : home,
+      KIND_COLOR[f.story_kind] || C_DELAYED, f.story_kind === 'cancelled', f.story_kind === 'diverted');
+  });
+}
+// the arcs belong to the open misery card: closing it, or opening any other card, clears them
+(function () {
+  var x = document.getElementById('cardx'), body = document.getElementById('cardbody');
+  if (x) x.addEventListener('click', clearSel);
+  if (body && window.MutationObserver) new MutationObserver(function () {
+    var m = body.querySelector('[data-mi]'); if (!m || m.getAttribute('data-mi') !== selIcao) clearSel();
+  }).observe(body, { childList: true });
+})();
+function fa(f) { var id = String(f.callsign || f.flight_number || '').replace(/\s+/g, ''); return id ? '<a href="https://www.flightaware.com/live/flight/' + encodeURIComponent(id) + '" target="_blank" rel="noopener" title="this flight on FlightAware (new tab)">' + esc(f.flight_number) + '</a>' : esc(f.flight_number || '?'); }
+function flightsHtml(a) {
+  var c = a.counts, sh = shares(c), list = storyBy[a.icao] || [], h = '<div data-mi="' + esc(a.icao) + '">';
+  h += '<div class="h" style="margin-top:8px">Flights at ' + esc(a.iata || a.icao) + (c ? ' · board ' + esc(when(c.observed_at)) : '') + '</div>';
+  if (c) {
+    var n = (c.ontime || 0) + (c.delayed || 0) + (c.cancelled || 0);
+    if (sh) h += '<div style="display:flex;height:6px;margin:4px 0;border-radius:2px;overflow:hidden">'
+      + '<i style="flex:' + c.cancelled + ';background:' + C_CANCELLED + '"></i><i style="flex:' + c.delayed + ';background:' + C_DELAYED + '"></i><i style="flex:' + c.ontime + ';background:' + C_ONTIME + '"></i></div>';
+    h += '<div style="font-size:11px"><span style="color:' + C_ONTIME + '">' + c.ontime + ' on time</span> · <span style="color:' + C_DELAYED + '">' + c.delayed + ' delayed ≥ 15 min</span> · <span style="color:' + C_CANCELLED + '">' + c.cancelled + ' cancelled</span>'
+      + ' <span style="color:#94a3b8">of ' + n + ' within ±60 min' + (c.unknown ? ' · ' + c.unknown + ' no estimate' : '') + (n < 5 ? ' · too few for an outline' : '') + '</span></div>';
+  }
+  if (list.length) {
+    h += '<div style="margin-top:6px;font:11px/1.5 monospace">' + list.slice(0, 20).map(function (f) {
+      var col = KIND_COLOR[f.story_kind] || C_DELAYED;
+      return '<div>' + fa(f) + ' ' + (f.direction === 'departure' ? '→ ' : '← ') + esc(f.other_iata || f.other_icao || '???') + ' <span style="color:' + col + '">' + esc(String(f.story_kind).toUpperCase())
+        + (f.story_kind === 'delayed' && f.delay_min ? ' +' + f.delay_min + 'm' : '') + '</span> <span style="color:#94a3b8">' + esc(f.airline_name || '') + '</span></div>';
+    }).join('') + (list.length > 20 ? '<div style="color:#94a3b8">+' + (list.length - 20) + ' more</div>' : '') + '</div>'
+      + '<div style="font-size:11px;color:#94a3b8;margin-top:4px">Arcs on the globe: these flights only — yellow delayed ≥ 60 min, red dashed cancelled, red glow diverted.</div>';
+  } else if (c || storyAt[a.icao]) h += '<div style="font-size:11px;color:#94a3b8;margin-top:4px">No cancelled, diverted or ≥ 60 min late flights on its latest board.</div>';
+  else h += '<div style="font-size:11px;color:#94a3b8">' + (storyOk === false ? 'Flight list unavailable (story flights feed did not answer).' : 'No flight board in the last 3 h — outside the coverage set right now, so no flight-level detail; the score comes from the 15-minute sweep.') + '</div>';
+  return h + '</div>';
+}
+
 var LABEL_NEAR = new Cesium.DistanceDisplayCondition(0, 2.5e6);
 function codeLabel(a, px, col, text, far) {
   return { text: text, font: (far ? '12px' : '11px') + ' monospace', fillColor: C(col), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
@@ -100,6 +196,7 @@ WG.card('misery', function (x) {
   rows.push(['rule', a.rule_id ? a.rule_id + ' ' + a.rule_version : null]);
   h += WG.kvs(rows);
   if (!a.military) h += '<pre>The feed gives a median delay and a 0–5 index per window, not a count of delayed flights; cancellations are counted.</pre>';
+  if (!a.military) { h += flightsHtml(a); showSel(a); }
   if (a.misery != null) h += '<pre>45 × min(1, median/60) + 30 × min(1, index/4) + 25 × min(1, cancelled%/20), × min(1, flights/20) — our own index from the 15-minute sweep, not FlightAware\'s.</pre>';
   return { html: h, at: [a.lon, a.lat] };
 });
@@ -145,6 +242,7 @@ function renderGauge(g, meta) {
 
 /* ── the layer ── */
 function loadMisery(src) {
+  loadStoryFlights();
   return fetch('/api/roc-misery', { signal: AbortSignal.timeout(25000) })
     .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { if (!r.ok) throw new Error((d && d.error) || ('HTTP ' + r.status)); return d; }); })
     .then(function (d) {
@@ -169,7 +267,7 @@ function loadMisery(src) {
         }
         counts.scored++; var b = bandOf(a.misery); bands[b.band] = (bands[b.band] || 0) + 1;
         var far = a.misery >= 60 ? new Cesium.DistanceDisplayCondition(0, 1.2e7) : a.misery >= 40 ? new Cesium.DistanceDisplayCondition(0, 5.0e6) : null;
-        src.entities.add({ id: id, position: pos, billboard: { image: squareGlyph(px, col, '#0f172a'), verticalOrigin: Cesium.VerticalOrigin.CENTER },
+        src.entities.add({ id: id, position: pos, billboard: { image: scoredGlyph(a, px, col), verticalOrigin: Cesium.VerticalOrigin.CENTER },
           label: codeLabel(a, px, col, faaTag(a) + (a.iata || a.icao) + (a.misery >= 40 ? ' ' + Math.round(a.misery) : ''), far) });
         if (a.misery >= 60) {
           src.entities.add({ id: id + ':halo', position: pos, ellipse: { semiMajorAxis: WG.pulse(2600, 50000, 140000), semiMinorAxis: WG.pulse(2600, 50000, 140000), material: C(col, 0.18), outline: false, height: 0 } });

@@ -199,11 +199,12 @@
   <div id="legend" class="panel">
     <div class="h" id="keyhead" role="button" tabindex="0" aria-expanded="true">Key ▾</div>
     <div class="row"><i style="flex:none;background:#ef4444"></i><span>24 h replay (drag the bar): column height = median delay at that hour</span></div>
-    <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#fb7185"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
+    <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · fill = misery <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#fb7185"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
+    <div class="row"><i style="flex:none;background:transparent;border:2px solid #22c55e;border-top-color:#ef4444;border-right-color:#eab308;border-radius:2px"></i><span><b>outline = that airport's own flights</b>, ±60 min, clockwise from the top: <i style="background:#ef4444"></i>cancelled <i style="background:#eab308"></i>delayed ≥15 min <i style="background:#22c55e"></i>on time · boarded airports only (≈90 hubs + story airports)</span></div>
     <div class="row"><i style="flex:none;background:#1e293b;border:1px solid #94a3b8;border-radius:2px"></i><span>airport not scored (statistics withheld / absent from sweep) · <i style="background:#a78bfa;border-radius:2px"></i>military airbase (no commercial data) · circles are events, never airports</span></div>
     <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
-    <div class="row"><i style="background:#ef4444"></i>flight event: diverted / emergency (solid) · cancelled (dashed) · <i style="background:#f59e0b"></i>delay 2 h+ (own layer)</div>
+    <div class="row"><i style="background:#ef4444"></i>flight arcs (click a square: that airport's only): diverted (glow) · cancelled (dashed) · <i style="background:#eab308"></i>delayed ≥ 60 min</div>
     <div class="row"><i style="border:2px solid #94a3b8;background:transparent"></i>hollow = approximate position (desk placed it at a city / country airport) · unplaced items are on the watch list only</div>
     <div class="row">hazard volumes and aircraft altitudes are exaggerated ×6</div>
   </div>
@@ -238,8 +239,10 @@ var layerDefs = [
   { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: false },
   { id: 'events',    label: 'Live travel events',   color: '#fb7185', on: false },
   { id: 'incidents', label: 'Open incidents',       color: '#ef4444', on: true },
-  { id: 'stories',   label: 'Flight events',        color: '#ef4444', on: true },
-  { id: 'delays',    label: 'Flight delays (2 h+)', color: '#f59e0b', on: true },
+  // 2026-10-18 (Ted): every airport's arcs at once read as the wrong airport's (an arc from X lands on Y's square).
+  // Click a square instead: its card lists that airport's flights and draws only its arcs (wg-misery.js). Both a click away.
+  { id: 'stories',   label: 'Flight events (all airports)', color: '#ef4444', on: false },
+  { id: 'delays',    label: 'Flight delays 2 h+ (all airports)', color: '#eab308', on: false },
   { id: 'flights',   label: 'All traffic (zoom)',   color: '#e2e8f0', on: false },
   { id: 'arcs',      label: 'Disrupted corridors',  color: '#fda4af', on: false },
   { id: 'ir',        label: 'Satellite infrared',   color: '#cbd5e1', on: false },
@@ -882,9 +885,10 @@ function flyover(lon, lat) {
  *     Not the traffic picture: that is the separate "All traffic (zoom)" layer, off by default.
  * ====================================================================== */
 /* 2026-10-11 (Ted): a diversion (emergency landing, turbulence, injury) is an EVENT and reads red and
- * solid; a cancellation is red dashed; a long delay is amber on its own layer so it can be switched off. */
-var STORY = { cancelled: '#ef4444', diverted: '#ef4444', delayed: '#f59e0b' };
-var REASON_COLOR = { operational: '#ef4444', faa: '#ef4444', sweep: '#f59e0b', cyclone: '#ec4899', news: '#a78bfa' };
+ * solid; a cancellation is red dashed; a long delay is yellow on its own layer so it can be switched off
+ * (2026-10-18: was amber — NO ORANGE; yellow is also the delayed colour of the square outlines). */
+var STORY = { cancelled: '#ef4444', diverted: '#ef4444', delayed: '#eab308' };
+var REASON_COLOR = { operational: '#ef4444', faa: '#ef4444', sweep: '#eab308', cyclone: '#ec4899', news: '#a78bfa' };
 var ARCS_PER_AIRPORT = 10;
 function storyArc(src, id, a1, a2, col, dashed, wide) {
   var g = new Cesium.EllipsoidGeodesic(Cesium.Cartographic.fromDegrees(a1[0], a1[1]), Cesium.Cartographic.fromDegrees(a2[0], a2[1]));
@@ -904,7 +908,7 @@ function loadStories() {
       (d.airports || []).forEach(function (a) {
         if (a.lat == null || a.lon == null) return;
         var kinds = (a.reasons || []).map(function (r) { return r.kind; }), sc = a.story_counts || {};
-        var col = kinds.indexOf('operational') !== -1 || kinds.indexOf('faa') !== -1 || sc.cancelled ? '#ef4444' : kinds.indexOf('cyclone') !== -1 ? '#ec4899' : kinds.indexOf('sweep') !== -1 ? '#f59e0b' : '#a78bfa';
+        var col = kinds.indexOf('operational') !== -1 || kinds.indexOf('faa') !== -1 || sc.cancelled ? '#ef4444' : kinds.indexOf('cyclone') !== -1 ? '#ec4899' : kinds.indexOf('sweep') !== -1 ? '#eab308' : '#a78bfa';
         var id = 'sa:' + a.icao, tag = (a.iata || a.icao) + (a.boarded_at ? (sc.cancelled ? '  ✕' + sc.cancelled : '') + (sc.diverted ? '  ↷' + sc.diverted : '') + (sc.delayed ? '  ⏱' + sc.delayed : '') + (!sc.cancelled && !sc.diverted && !sc.delayed ? '  board clean' : '') : '  · story');
         lookup[id] = { kind: 'storyAirport', a: a, flights: (d.flights || []).filter(function (f) { return f.airport_icao === a.icao; }) };
         src.entities.add({ id: id, position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat),
@@ -920,7 +924,7 @@ function loadStories() {
       var perAirport = {};
       (d.flights || []).forEach(function (f, i) {
         var home = byIcao[f.airport_icao]; if (!home) return;
-        var id = 'sf:' + f.airport_icao + ':' + f.direction + ':' + f.flight_number, col = STORY[f.story_kind] || '#f59e0b';
+        var id = 'sf:' + f.airport_icao + ':' + f.direction + ':' + f.flight_number, col = STORY[f.story_kind] || '#eab308';
         var tgt = f.story_kind === 'delayed' ? dsrc : src; if (f.story_kind === 'delayed') nDelayed++;
         if (tgt.entities.getById(id) || tgt.entities.getById(id + ':arc')) return;   // already drawn (Cesium throws on a duplicate id)
         lookup[id] = { kind: 'storyFlight', f: f, home: home };
