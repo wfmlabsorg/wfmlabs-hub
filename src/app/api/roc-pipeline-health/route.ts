@@ -69,8 +69,10 @@ const SCOUT_EXPECTED_MIN: Readonly<Record<string, number>> = {
   // Atlas polls every 3h (0 */3) but its travel-lens filter means most runs
   // write nothing new: measured over 10 days to 2026-10-17, 72 writes, p90 gap
   // 9h, max 27h. Judged on a 12h write interval, not its 3h cron.
+  // Atlas and Concierge hibernated 2026-10-18 (roc#205); these intervals only judge them until 24h of
+  // silence turns them HIBERNATED.
   Atlas: 720,
-  Concierge: 240, // 0 */4 * * *  (scout-triage, repurposed — see RENAMED_SCOUTS)
+  Concierge: 240, // was 0 */4 * * *  (scout-triage, repurposed — see RENAMED_SCOUTS)
   Cipher: 1440, //  0 6 * * *    daily since 05bdfff
   Grid: 1440, //    0 6 * * *    daily since 05bdfff
 }
@@ -189,9 +191,9 @@ export async function GET() {
               ? {
                   domain: hib.domain,
                   reason: hib.reason,
-                  decided: HIBERNATION_DECIDED,
-                  effective: HIBERNATION_EFFECTIVE,
-                  roc_commit: HIBERNATION_COMMIT,
+                  decided: hib.decided ?? HIBERNATION_DECIDED,
+                  effective: hib.effective ?? HIBERNATION_EFFECTIVE,
+                  roc_commit: hib.roc_commit ?? HIBERNATION_COMMIT,
                 }
               : null,
         }
