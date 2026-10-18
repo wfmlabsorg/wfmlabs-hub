@@ -63,9 +63,10 @@ const DEFAULT_EXPECTED_MIN = 240
 
 const SCOUT_EXPECTED_MIN: Readonly<Record<string, number>> = {
   Vector: 120, //    0 */2 * * *
-  Gale: 180, //      0 */3 * * *
-  Mayday: 180, //    0 */3 * * *
-  Picket: 180, //    0 */3 * * *
+  // Gale, Mayday, Picket every 12 h since 2026-10-18 (NewsAPI.ai narrowed to the travel focus; was 0 */3)
+  Gale: 720, //      0 */12 * * *
+  Mayday: 720, //    0 */12 * * *
+  Picket: 720, //    0 */12 * * *
   // Atlas polls every 3h (0 */3) but its travel-lens filter means most runs
   // write nothing new: measured over 10 days to 2026-10-17, 72 writes, p90 gap
   // 9h, max 27h. Judged on a 12h write interval, not its 3h cron.
