@@ -122,14 +122,15 @@ function loadStoryFlights() {
       (d.flights || []).forEach(function (f) { (by[f.airport_icao] = by[f.airport_icao] || []).push(f); });
       (d.airports || []).forEach(function (a) { if (a.boarded_at) at[a.icao] = a.boarded_at; });
       storyBy = by; storyAt = at; storyOk = true;
+      refreshSel();
     })
-    .catch(function () { storyOk = false; });
+    .catch(function () { storyOk = false; refreshSel(); });
 }
 var sel = new Cesium.CustomDataSource('misery-selection'); WG.viewer.dataSources.add(sel);
-var selIcao = null;
-function clearSel() { if (selIcao) { sel.entities.removeAll(); selIcao = null; } }
+var selIcao = null, selA = null;
+function clearSel() { if (selIcao) { sel.entities.removeAll(); selIcao = null; selA = null; } }
 function showSel(a) {
-  sel.entities.removeAll(); selIcao = a.icao;
+  sel.entities.removeAll(); selIcao = a.icao; selA = a;
   (storyBy[a.icao] || []).slice(0, 30).forEach(function (f, i) {
     if (f.other_lat == null || f.other_lon == null) return;
     var home = [a.lon, a.lat], far = [f.other_lon, f.other_lat];
@@ -145,6 +146,12 @@ function showSel(a) {
     var m = body.querySelector('[data-mi]'); if (!m || m.getAttribute('data-mi') !== selIcao) clearSel();
   }).observe(body, { childList: true });
 })();
+/** Story flights arrived after the card opened: redraw its flights section and arcs in place. */
+function refreshSel() {
+  if (!selA) return; var body = document.getElementById('cardbody'), m = body && body.querySelector('[data-mi]');
+  if (!m || m.getAttribute('data-mi') !== selIcao) return;
+  var a = selA; m.outerHTML = flightsHtml(a); showSel(a);
+}
 function fa(f) { var id = String(f.callsign || f.flight_number || '').replace(/\s+/g, ''); return id ? '<a href="https://www.flightaware.com/live/flight/' + encodeURIComponent(id) + '" target="_blank" rel="noopener" title="this flight on FlightAware (new tab)">' + esc(f.flight_number) + '</a>' : esc(f.flight_number || '?'); }
 function flightsHtml(a) {
   var c = a.counts, sh = shares(c), list = storyBy[a.icao] || [], h = '<div data-mi="' + esc(a.icao) + '">';
@@ -163,8 +170,15 @@ function flightsHtml(a) {
         + (f.story_kind === 'delayed' && f.delay_min ? ' +' + f.delay_min + 'm' : '') + '</span> <span style="color:#94a3b8">' + esc(f.airline_name || '') + '</span></div>';
     }).join('') + (list.length > 20 ? '<div style="color:#94a3b8">+' + (list.length - 20) + ' more</div>' : '') + '</div>'
       + '<div style="font-size:11px;color:#94a3b8;margin-top:4px">Arcs on the globe: these flights only — yellow delayed ≥ 60 min, red dashed cancelled, red glow diverted.</div>';
-  } else if (c || storyAt[a.icao]) h += '<div style="font-size:11px;color:#94a3b8;margin-top:4px">No cancelled, diverted or ≥ 60 min late flights on its latest board.</div>';
-  else h += '<div style="font-size:11px;color:#94a3b8">' + (storyOk === false ? 'Flight list unavailable (story flights feed did not answer).' : 'No flight board in the last 3 h — outside the coverage set right now, so no flight-level detail; the score comes from the 15-minute sweep.') + '</div>';
+  } else {
+    // the counts (airport_flight_counts) and the flight list (/api/gev-story-flights) are separate reads: only the list's own state speaks for it
+    var why = storyOk === false ? 'Flight list unavailable (the story flights feed did not answer).'
+      : storyOk === null ? 'Loading the flight list…'
+      : storyAt[a.icao] ? 'No cancelled, diverted or ≥ 60 min late flights on its latest board.'
+      : c ? 'No flight list for its latest board.'
+      : 'No flight board in the last 3 h — outside the coverage set right now, so no flight-level detail; the score comes from the 15-minute sweep.';
+    h += '<div style="font-size:11px;color:#94a3b8;margin-top:4px">' + why + '</div>';
+  }
   return h + '</div>';
 }
 
