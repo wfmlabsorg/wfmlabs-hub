@@ -206,10 +206,13 @@ function flightsHtml(a) {
       { t: 'Delayed 2 h+', col: C_DELAYED, f: list.filter(function (f) { return f.story_kind === 'delayed' && (f.delay_min || 0) >= LONG_DELAY_MIN; }) },
       { t: 'Delayed 1–2 h', col: '#94a3b8', f: list.filter(function (f) { return f.story_kind === 'delayed' && (f.delay_min || 0) < LONG_DELAY_MIN; }) }
     ];
-    h += groups.filter(function (g) { return g.f.length; }).map(function (g) {
-      var n = Math.max(g.n || 0, g.f.length);
-      return '<div class="h" style="margin-top:8px;color:' + g.col + '">' + g.t + ' · ' + n + (g.f.length === LIST_CAP || (g.n && g.n > g.f.length) ? ' (worst shown)' : '') + '</div>'
-        + '<div style="font:11px/1.5 monospace">' + g.f.slice(0, 12).map(row).join('') + (g.f.length > 12 ? '<div style="color:#94a3b8">+' + (g.f.length - 12) + ' more</div>' : '') + '</div>';
+    // cancelled / diverted counts are exact (story_counts); delayed counts come from the list, so a full list makes them floors
+    var full = list.length >= LIST_CAP;
+    h += groups.filter(function (g) { return g.f.length || g.n > 0; }).map(function (g) {
+      var exact = g.n != null, n = exact ? Math.max(g.n, g.f.length) : g.f.length, more = exact ? n > g.f.length : full;
+      return '<div class="h" style="margin-top:8px;color:' + g.col + '">' + g.t + ' · ' + n + (!exact && full ? '+' : '') + (more ? ' (worst shown)' : '') + '</div>'
+        + '<div style="font:11px/1.5 monospace">' + (g.f.length ? g.f.slice(0, 12).map(row).join('') + (g.f.length > 12 ? '<div style="color:#94a3b8">+' + (g.f.length - 12) + ' more</div>' : '')
+          : '<div style="color:#94a3b8">not in the flight list (it keeps the worst ' + LIST_CAP + ', cancellations first)</div>') + '</div>';
     }).join('')
       + '<div style="font-size:11px;color:#94a3b8;margin-top:4px">Arcs on the globe: this airport only — red dashed cancelled, red glow diverted, yellow delayed 2 h+.</div>';
   } else {
