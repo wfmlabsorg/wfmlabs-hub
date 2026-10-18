@@ -40,6 +40,10 @@ export interface HibernatedScout {
   domain: string
   /** Why it was hibernated — from the roc commit / wrangler comment. */
   reason: string
+  /** Set when this scout was hibernated by a later decision than 05bdfff. */
+  decided?: string
+  effective?: string
+  roc_commit?: string
 }
 
 export const HIBERNATED_SCOUTS: Readonly<Record<string, HibernatedScout>> = {
@@ -58,6 +62,18 @@ export const HIBERNATED_SCOUTS: Readonly<Record<string, HibernatedScout>> = {
   Richter: {
     scout: 'Richter', worker: 'scout-richter', domain: 'seismic',
     reason: 'USGS/EMSC already feed the seismic lane deterministically; the news scout was redundant.',
+  },
+  // 2026-10-18 (Ted, macro signal sweep): neither produced a promotable item in 7 days. Not added to
+  // HIBERNATED_DOMAINS: sentinel still feeds geopolitical, and hospitality rides under travel.
+  Concierge: {
+    scout: 'Concierge', worker: 'scout-triage', domain: 'travel',
+    reason: 'Hospitality lens: 376 items in 7 days, none promotable.',
+    decided: '2026-10-18', effective: '2026-10-18', roc_commit: 'roc#205',
+  },
+  Atlas: {
+    scout: 'Atlas', worker: 'scout-atlas', domain: 'geopolitical',
+    reason: 'Travel-lens geopolitics: 19 items in 7 days, none promotable; sentinel still feeds the lane.',
+    decided: '2026-10-18', effective: '2026-10-18', roc_commit: 'roc#205',
   },
 }
 
