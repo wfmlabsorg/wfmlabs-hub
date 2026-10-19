@@ -62,7 +62,7 @@
   var KIND = {
     ground_stop:     { label: 'Ground stop',          short: 'GS',    color: '#ef4444', width: 4,   dash: false },
     closure:         { label: 'Airport closure',      short: 'CLSD',  color: '#e879f9', width: 3,   dash: true },
-    ground_delay:    { label: 'Ground delay program', short: 'GDP',   color: '#f59e0b', width: 3,   dash: false },
+    ground_delay:    { label: 'Ground delay program', short: 'GDP',   color: '#eab308', width: 3,   dash: false },
     arrival_delay:   { label: 'Arrival delays',       short: 'ARR',   color: '#facc15', width: 2,   dash: true },
     departure_delay: { label: 'Departure delays',     short: 'DEP',   color: '#facc15', width: 2,   dash: true },
     deicing:         { label: 'Deicing',              short: 'DEICE', color: '#7dd3fc', width: 1.5, dash: true }

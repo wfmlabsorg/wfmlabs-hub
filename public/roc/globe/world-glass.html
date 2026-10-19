@@ -35,7 +35,7 @@
   <style>
     :root {
       --bg: #02060c; --ink: #cfe8ff; --dim: #6b8aa6; --line: rgba(120,190,255,0.18);
-      --cyan: #38bdf8; --amber: #f59e0b; --red: #ef4444; --teal: #18BC9C; --violet: #a78bfa;
+      --cyan: #38bdf8; --yellow: #eab308; --red: #ef4444; --teal: #18BC9C; --violet: #a78bfa;
       --mono: "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
@@ -120,7 +120,7 @@
     #tourbar .ttl { color: #fff; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     #tourbar .why { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     #tourbar select { font: inherit; color: var(--ink); background: rgba(56,189,248,0.08); border: 1px solid var(--line); padding: 2px 4px; }
-    #tourbar .paused { color: #fbbf24; white-space: nowrap; }
+    #tourbar .paused { color: #eab308; white-space: nowrap; }
     body.tour-on #replaybanner { top: 118px; }
     #legend i { display: inline-block; width: 11px; height: 11px; }
     #credits { position: absolute; z-index: 5; bottom: 4px; left: 50%; transform: translateX(-50%); font-size: 9.5px; color: rgba(160,190,220,0.55); white-space: nowrap; }
@@ -202,7 +202,7 @@
     <div class="row"><i style="flex:none;background:#18BC9C;border-radius:2px"></i><span><b>square = airport</b> (click it) · size = flights in the 2 h window · fill = misery <i style="background:#18BC9C"></i>calm &lt;20 <i style="background:#eab308"></i>slow <i style="background:#fb7185"></i>miserable <i style="background:#ef4444"></i>severe ≥60</span></div>
     <div class="row"><i style="flex:none;background:transparent;border:2px solid #22c55e;border-top-color:#ef4444;border-right-color:#eab308;border-radius:2px"></i><span><b>outline = that airport's own flights</b>, ±60 min, clockwise from the top: <i style="background:#ef4444"></i>cancelled <i style="background:#eab308"></i>delayed ≥15 min <i style="background:#22c55e"></i>on time · boarded airports only (≈90 hubs + story airports) · label events: <b>✕</b> cancelled <b>↷</b> diverted <b>⏱</b> delayed 2 h+</span></div>
     <div class="row"><i style="flex:none;background:#1e293b;border:1px solid #94a3b8;border-radius:2px"></i><span>airport not scored (statistics withheld / absent from sweep) · <i style="background:#a78bfa;border-radius:2px"></i>military airbase (no commercial data) · circles are events, never airports</span></div>
-    <div class="row"><i style="background:rgba(245,158,11,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
+    <div class="row"><i style="background:rgba(234,179,8,.55)"></i>thunderstorms · <i style="background:rgba(167,139,250,.55)"></i>turbulence · <i style="background:rgba(56,189,248,.55)"></i>icing</div>
     <div class="row"><i style="background:rgba(148,120,90,.7)"></i>volcanic ash · <i style="background:rgba(236,72,153,.6)"></i>cyclone / cone</div>
     <div class="row"><i style="background:#ef4444"></i>flight arcs (click a square: that airport's only): diverted (glow) · cancelled (dashed) · <i style="background:#eab308"></i>delayed 2 h+</div>
     <div class="row"><i style="border:2px solid #94a3b8;background:transparent"></i>hollow = approximate position (desk placed it at a city / country airport) · unplaced items are on the watch list only</div>
@@ -234,7 +234,7 @@ var layerDefs = [
   // Defaults (Ted, 2026-10-11): what carries the posture is ON — airports & delays, flight events,
   // flight delays, open incidents, cyclones (plus the nathaz and faa plugins). Weather volumes
   // (SIGMETs, radar), live event dots and corridor arcs are a click away, not the first thing seen.
-  { id: 'hazards',   label: 'Aviation hazards (SIGMET)', color: '#f59e0b', on: false },
+  { id: 'hazards',   label: 'Aviation hazards (SIGMET)', color: '#eab308', on: false },
   { id: 'cyclones',  label: 'Tropical cyclones',    color: '#ec4899', on: true },
   { id: 'radar',     label: 'Precipitation radar',  color: '#22d3ee', on: false },
   { id: 'events',    label: 'Live travel events',   color: '#fb7185', on: false },
@@ -374,7 +374,7 @@ function loadAirports() {
 /* =========================================================================
  * 3. AVIATION HAZARDS — SIGMET / G-AIRMET volumes
  * ====================================================================== */
-var HZ = { convective: '#f59e0b', turbulence: '#a78bfa', icing: '#38bdf8', volcanic: '#94785a', tropical: '#ec4899', visibility: '#64748b', wind: '#2dd4bf', other: '#94a3b8' };
+var HZ = { convective: '#eab308', turbulence: '#a78bfa', icing: '#38bdf8', volcanic: '#94785a', tropical: '#ec4899', visibility: '#64748b', wind: '#2dd4bf', other: '#94a3b8' };
 function hierarchy(poly) {   // outer ring + holes, so a polygon with an excluded area is not filled solid
   var ll = function (ring) { return (ring || []).map(function (c) { return Cesium.Cartesian3.fromDegrees(c[0], c[1]); }); };
   return new Cesium.PolygonHierarchy(ll(poly[0]), poly.slice(1).map(function (h) { return new Cesium.PolygonHierarchy(ll(h)); }));
@@ -792,7 +792,7 @@ document.addEventListener('keydown', function (ev) {
 });
 
 /* =========================================================================
- * 6g. SENSOR LOOKS — post-process stages (NVG, FLIR white-hot, amber CRT)
+ * 6g. SENSOR LOOKS — post-process stages (NVG, FLIR white-hot, yellow CRT)
  * ====================================================================== */
 var LOOKS = {
   nvg: 'uniform sampler2D colorTexture; in vec2 v_textureCoordinates;\n' +
@@ -807,7 +807,7 @@ var LOOKS = {
   crt: 'uniform sampler2D colorTexture; in vec2 v_textureCoordinates;\n' +
     'void main(){ vec2 uv = v_textureCoordinates; float r = texture(colorTexture, uv + vec2(0.0012, 0.0)).r, g = texture(colorTexture, uv).g, b = texture(colorTexture, uv - vec2(0.0012, 0.0)).b;\n' +
     ' float l = dot(vec3(r, g, b), vec3(0.299,0.587,0.114)); float scan = 0.82 + 0.18 * sin(uv.y * czm_viewport.w * 3.14159);\n' +
-    ' out_FragColor = vec4(vec3(1.0, 0.68, 0.18) * l * 1.4 * scan, 1.0); }'
+    ' out_FragColor = vec4(vec3(0.92, 0.70, 0.03) * l * 1.4 * scan, 1.0); }'
 };
 var lookStage = null, look = 'normal';
 function setLook(name) {
