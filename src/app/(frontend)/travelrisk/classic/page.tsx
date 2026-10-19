@@ -312,8 +312,8 @@ export default async function TravelRiskClassicPage() {
     <>
       {/* 2026-10-11 (Ted): this page is RETIRED as the landing — World Glass is the core of
           travelrisk.wfmlabs.com now (../page.tsx). Kept here, unchanged below, for reference. */}
-      <div style={{ background: 'rgba(251,191,36,0.08)', borderBottom: '1px solid rgba(251,191,36,0.4)', padding: '0.5rem 1rem', fontSize: '0.8125rem', color: 'var(--fg-muted)', textAlign: 'center' }}>
-        Classic view, kept for reference. The live desk is <a href="/travelrisk" style={{ color: '#fbbf24', fontWeight: 600 }}>World Glass</a>.
+      <div style={{ background: 'rgba(234,179,8,0.08)', borderBottom: '1px solid rgba(234,179,8,0.4)', padding: '0.5rem 1rem', fontSize: '0.8125rem', color: 'var(--fg-muted)', textAlign: 'center' }}>
+        Classic view, kept for reference. The live desk is <a href="/travelrisk" style={{ color: '#eab308', fontWeight: 600 }}>World Glass</a>.
       </div>
       {/* ── HERO (hub-051 item 1 + 2) ───────────────────────────────────────
           Ted: "The Globe here /roc/globe/travel-globe.html should be our main

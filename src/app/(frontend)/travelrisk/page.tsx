@@ -53,7 +53,7 @@ export default async function TravelRiskPage() {
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem 1rem', flexWrap: 'wrap', padding: '0.5rem 1rem', borderBottom: '1px solid var(--border)', background: '#060610', fontSize: '0.8125rem' }}>
       <span style={{ fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.6875rem', color: '#22d3ee' }}>Travel Risk · World Glass</span>
       {deskDown ? (
-        <span style={{ color: '#f59e0b' }}>desk unreachable — the board below reads it directly</span>
+        <span style={{ color: '#eab308' }}>desk unreachable — the board below reads it directly</span>
       ) : (
         <>
           <span style={{ color: level ? LEVEL_COLOR(level) : 'var(--fg-faint)' }}>
