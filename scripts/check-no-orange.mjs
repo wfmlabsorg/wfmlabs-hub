@@ -22,10 +22,14 @@ const EXT = new Set(['.ts', '.tsx', '.js', '.mjs', '.css', '.html'])
 const ORANGE_HEX = ['fff7ed', 'ffedd5', 'fed7aa', 'fdba74', 'fb923c', 'f97316', 'ea580c', 'c2410c', '9a3412', '7c2d12', '431407']
 // amber family — enforced only under AMBER_SCOPES
 const AMBER_HEX = ['fcd34d', 'fbbf24', 'f59e0b', 'd97706', 'b45309', '92400e', '78350f', '451a03']
-const AMBER_SCOPES = ['public/roc/globe/', 'src/components/travelrisk/', 'src/app/(frontend)/travelrisk/', 'src/app/api/roc-misery']
+const AMBER_SCOPES = ['public/roc/globe/', 'src/components/travelrisk/', 'src/app/(frontend)/travelrisk/', 'src/app/api/roc-misery/', 'src/app/api/roc-misery-history/']
 const AMBER_RULES = [
   new RegExp(`#(?:${AMBER_HEX.join('|')})(?:[0-9a-f]{2})?(?![0-9a-f])`, 'i'),
-  /rgba?\(\s*245\s*[,\s]\s*158\s*[,\s]\s*11\b/,
+  // rgb()/rgba() of every amber shade, comma or CSS4 space syntax
+  ...AMBER_HEX.map((hex) => {
+    const [r, g, b] = hex.match(/../g).map((part) => parseInt(part, 16))
+    return new RegExp(`rgba?\\(\\s*${r}\\s*[,\\s]\\s*${g}\\s*[,\\s]\\s*${b}\\b`)
+  }),
   /\b(?:text|bg|border|from|via|to|ring|fill|stroke|outline|decoration|shadow|accent|caret)-amber-\d{2,3}\b/,
 ]
 const RULES = [
