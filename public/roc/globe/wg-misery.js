@@ -282,17 +282,33 @@ function drawSpark(canvas, series) {
   ctx.stroke();
   var last = pts[n - 1], lb = bandOf(last.misery); ctx.fillStyle = lb ? lb.color : "#e2e8f0"; ctx.beginPath(); ctx.arc((n - 1) * step, y(last.misery), 2, 0, Math.PI * 2); ctx.fill();
 }
+/** Live system- or carrier-scope FAA programmes (meta.faa.wide), as one chip ahead of the gauge. WFM-156: the
+ *  2026-11-13 nationwide ground stop was on no map. Text only — every value is escaped. */
+function wideChip(meta) {
+  var wide = (meta && meta.faa && meta.faa.wide) || []; if (!wide.length) return { html: "", title: "" };
+  var esc = function (s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); };
+  var words = wide.map(function (p) {
+    var what = p.kind === "ground_stop" ? "GROUND STOP" : "GROUND DELAY";
+    return p.scope === "system" ? "NATIONWIDE " + what : (p.carrier || "CARRIER") + " " + what;
+  });
+  var stop = wide.some(function (p) { return p.kind === "ground_stop"; });
+  return {
+    html: "<b style=\"background:" + (stop ? "#dc2626" : "#eab308") + ";color:" + (stop ? "#fff" : "#0b1220") + ";padding:2px 5px;border-radius:3px;letter-spacing:.06em\">" + esc(words.join(" · ")) + "</b> ",
+    title: "FAA: " + wide.map(function (p) { return p.title + (p.detail ? " — " + p.detail : ""); }).join(" | ")
+      + (meta.faa.held_by_system ? " · " + meta.faa.held_by_system + " US airports tagged GS" : "") + " · the score counts flights that have already moved, so it can read calm under a stop · "
+  };
+}
 function renderGauge(g, meta) {
   var el = ensureGauge(); if (!el) return;
-  var now = g && g.now, series = (g && g.series) || [];
-  if (!now || now.misery == null) { el.innerHTML = "<b style=\"color:#e2e8f0\">MISERY</b> <span>— no scored sweep in 24 h</span>"; el.title = "Travel misery: no scored sweep in the last 24 hours"; return; }
+  var now = g && g.now, series = (g && g.series) || [], chip = wideChip(meta);
+  if (!now || now.misery == null) { el.innerHTML = chip.html + "<b style=\"color:#e2e8f0\">MISERY</b> <span>— no scored sweep in 24 h</span>"; el.title = chip.title + "Travel misery: no scored sweep in the last 24 hours"; return; }
   var b = bandOf(now.misery), prev = series.length > 4 ? series[series.length - 5] : null;   // ~1 h earlier at 15-min sweeps
   var trend = prev && prev.misery != null ? signed(now.misery - prev.misery) + "/1h" : "";
-  el.innerHTML = "<b style=\"color:#e2e8f0;letter-spacing:.06em\">MISERY</b>"
+  el.innerHTML = chip.html + "<b style=\"color:#e2e8f0;letter-spacing:.06em\">MISERY</b>"
     + " <b style=\"color:" + b.color + ";font-size:12px\">" + Math.round(now.misery) + "</b><span style=\"color:" + b.color + "\">" + b.word + "</span>"
     + "<span>· " + now.airports_scored + "/" + now.airports_total + " · " + now.miserable_airports + " mis · " + now.severe_airports + " sev" + (trend ? " · " + trend : "") + "</span>"
     + "<canvas id=\"misery-spark\" width=\"72\" height=\"14\" style=\"display:block;width:72px;height:14px;opacity:.9\"></canvas>";
-  el.title = "Travel misery " + now.misery.toFixed(1) + " (" + b.word + "): flight-weighted mean of every scored airport in the latest 15-minute sweep · "
+  el.title = chip.title + "Travel misery " + now.misery.toFixed(1) + " (" + b.word + "): flight-weighted mean of every scored airport in the latest 15-minute sweep · "
     + now.airports_scored + " of " + now.airports_total + " registry airports scored · " + now.miserable_airports + " miserable (≥40) · " + now.severe_airports + " severe (≥60)"
     + (now.cancelled != null ? " · " + now.cancelled + " cancellations in window" : "") + (trend ? " · " + trend.replace("/1h", " vs 1 h ago") : "")
     + " · sparkline = last 24 h · sweep " + when(now.observed_at) + " · click for the Travel Misery dashboard (new tab); click any square for that airport";

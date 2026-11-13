@@ -431,7 +431,10 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const series = d.global?.series ?? []
   const regional = airports.filter((a) => inRegion(a, region))
   const FAA_RANK: Record<string, number> = { CLSD: 0, GS: 1, GDP: 2, DLY: 3 }
-  const faaNow = regional.filter((a) => a.faa?.length).sort((x, y) => (FAA_RANK[x.faa[0].label] - FAA_RANK[y.faa[0].label]) || ((y.business_travel_weight ?? 0) - (x.business_travel_weight ?? 0)))
+  const wide = d.meta.faa?.wide ?? []
+  const nationwide = wide.find((p) => p.scope === 'system' && p.kind === 'ground_stop') ?? null
+  // under a nationwide stop every US airport carries the system badge; the strip lists only an airport's OWN programmes
+  const faaNow = regional.filter((a) => a.faa?.some((p) => !p.scope)).sort((x, y) => (FAA_RANK[x.faa[0].label] - FAA_RANK[y.faa[0].label]) || ((y.business_travel_weight ?? 0) - (x.business_travel_weight ?? 0)))
   const cellOf = (a: MiseryAirport): Frame | null => {
     if (!frame) return null
     const c = frame.airports[a.icao]
@@ -500,6 +503,19 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
           <a href="/roc/globe/world-glass.html" target="_blank" rel="noopener" style={{ color: '#38bdf8', fontFamily: MONO, fontSize: 11, textDecoration: 'none' }}>Globe ↗</a>
         </span>
       </header>
+      {wide.length > 0 && (
+        <div className="misd-wide" role="status" title="Live FAA Command Center programmes with no single airport (via travel-intel). Shown beside the score, never inside it.">
+          {wide.map((p) => (
+            <span key={`${p.scope}:${p.kind}:${p.carrier ?? ''}`} className={p.kind === 'ground_stop' ? 'misd-wide-stop' : 'misd-wide-delay'}>
+              <b>{p.scope === 'system' ? (p.kind === 'ground_stop' ? 'NATIONWIDE GROUND STOP' : 'NATIONWIDE GROUND DELAY') : `${p.carrier_name ?? p.carrier ?? 'CARRIER'} ${p.kind === 'ground_stop' ? 'GROUND STOP' : 'GROUND DELAY'}`}</b>
+              {p.scope === 'system' && p.kind === 'ground_stop' ? ` · all US departures held · ${d.meta.faa.held_by_system} airports here` : ' · fleet-wide'}
+              {p.starts_at ? ` · since ${hhmm(p.starts_at)}` : ''}
+              {p.href ? <> · <a href={p.href} target="_blank" rel="noopener noreferrer">FAA advisory</a></> : null}
+            </span>
+          ))}
+          {nationwide && <span className="misd-wide-note">Held flights are not in the score until they move, so airports can read calm while nothing departs.</span>}
+        </div>
+      )}
 
       <div className="misd-upper">
         <div className="misd-map">
@@ -536,10 +552,11 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
             <div><b>{scoredR.length}<small>/{regional.length}</small></b><span>SCORED</span></div>
             <div style={{ fontFamily: MONO, fontSize: 10, color: '#64748b', alignSelf: 'end' }}>{frame ? `replay ${hhmm(frame.observed_at)}` : `window ${windowText}`} · {regionLabel}</div>
           </div>
-          {(faaNow.length > 0 || d.meta.faa?.error) && (
+          {(faaNow.length > 0 || nationwide || d.meta.faa?.error) && (
             <div className="misd-faastrip" title="Live FAA programmes (via travel-intel). Shown beside the score, never inside it: the score counts flights that have already moved.">
               <span style={{ color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em' }}>FAA NOW{frame ? ' (live)' : ''}</span>
               {d.meta.faa?.error && <span style={{ color: '#eab308' }}>FAA read failed — badges may be missing</span>}
+              {nationwide && <span title={nationwide.detail ?? nationwide.title}><span className="misd-pill" style={{ background: FAA_COLOR.GS, color: FAA_INK.GS }}>GS</span> ALL US AIRPORTS</span>}
               {faaNow.map((a) => (
                 <button key={a.icao} onClick={() => pick(a.icao)} title={a.faa.map((x) => `${x.title}${x.detail ? ' — ' + x.detail : ''}`).join('\n')}>
                   <FaaPill a={a} /> {a.iata ?? a.icao}{a.faa.length > 1 ? ` +${a.faa.slice(1).map((x) => x.label).join('+')}` : ''}
@@ -611,6 +628,12 @@ const CSS = `
 .misd-barsub{grid-column:2/4;font:10px ${MONO};color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .misd-faa{position:absolute;top:-7px;right:-10px;font:800 8.5px/1 'IBM Plex Mono',monospace;padding:2px 3px;border-radius:3px;box-shadow:0 0 0 1px #0b1220;pointer-events:none;letter-spacing:.04em}
 .misd-pill{display:inline-block;font:800 9px/1 'IBM Plex Mono',monospace;padding:2px 4px;border-radius:3px;margin-right:6px;flex:none;letter-spacing:.04em}
+.misd-wide{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 12px;background:#450a0a;border-bottom:1px solid #dc2626;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#fee2e2}
+.misd-wide b{letter-spacing:.08em}
+.misd-wide a{color:#fecaca}
+.misd-wide-stop b{color:#fff}
+.misd-wide-delay b{color:#fde047}
+.misd-wide-note{flex-basis:100%;font-size:11px;color:#fca5a5}
 .misd-faastrip{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #1e293b;font-family:'IBM Plex Mono',monospace;font-size:11px;color:#e2e8f0}
 .misd-faastrip button{background:#0f172a;border:1px solid #1e293b;border-radius:3px;color:#e2e8f0;font:inherit;padding:2px 6px;cursor:pointer;display:inline-flex;align-items:center}
 .misd-faastrip button .misd-pill{margin-right:4px}
