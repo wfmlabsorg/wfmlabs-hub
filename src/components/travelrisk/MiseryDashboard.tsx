@@ -64,9 +64,10 @@ function flightsRingSvg(px: number, c: MiseryAirport['counts'], code: string | n
 }
 const pctOf = (c: MiseryAirport['counts']) => (c && c.bad_share != null ? Math.round(c.bad_share * 100) : null)
 
-function FaaPill({ a }: { a: MiseryAirport }) {
-  const p = a.faa?.[0]; if (!p) return null
-  return <span className="misd-pill" title={a.faa.map((x) => x.title).join(' · ')} style={{ background: FAA_COLOR[p.label], color: FAA_INK[p.label] }}>{p.label}</span>
+function FaaPill({ a, list }: { a: MiseryAirport; list?: MiseryAirport['faa'] }) {
+  const faa = list ?? a.faa
+  const p = faa?.[0]; if (!p) return null
+  return <span className="misd-pill" title={faa.map((x) => x.title).join(' · ')} style={{ background: FAA_COLOR[p.label], color: FAA_INK[p.label] }}>{p.label}</span>
 }
 const MONO = "'IBM Plex Mono', ui-monospace, monospace"
 const WORLD: [[number, number], [number, number]] = [[-50, -170], [72, 180]]
@@ -434,7 +435,8 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
   const wide = d.meta.faa?.wide ?? []
   const nationwide = wide.find((p) => p.scope === 'system' && p.kind === 'ground_stop') ?? null
   // under a nationwide stop every US airport carries the system badge; the strip lists only an airport's OWN programmes
-  const faaNow = regional.filter((a) => a.faa?.some((p) => !p.scope)).sort((x, y) => (FAA_RANK[x.faa[0].label] - FAA_RANK[y.faa[0].label]) || ((y.business_travel_weight ?? 0) - (x.business_travel_weight ?? 0)))
+  const faaNow = regional.map((a) => ({ a, own: (a.faa ?? []).filter((p) => !p.scope) })).filter((x) => x.own.length)
+    .sort((x, y) => (FAA_RANK[x.own[0].label] - FAA_RANK[y.own[0].label]) || ((y.a.business_travel_weight ?? 0) - (x.a.business_travel_weight ?? 0)))
   const cellOf = (a: MiseryAirport): Frame | null => {
     if (!frame) return null
     const c = frame.airports[a.icao]
@@ -557,9 +559,9 @@ export function MiseryDashboard({ d, backHref = '/travelrisk' }: { d: MiseryPayl
               <span style={{ color: '#94a3b8', fontWeight: 700, letterSpacing: '0.12em' }}>FAA NOW{frame ? ' (live)' : ''}</span>
               {d.meta.faa?.error && <span style={{ color: '#eab308' }}>FAA read failed — badges may be missing</span>}
               {nationwide && <span title={nationwide.detail ?? nationwide.title}><span className="misd-pill" style={{ background: FAA_COLOR.GS, color: FAA_INK.GS }}>GS</span> ALL US AIRPORTS</span>}
-              {faaNow.map((a) => (
-                <button key={a.icao} onClick={() => pick(a.icao)} title={a.faa.map((x) => `${x.title}${x.detail ? ' — ' + x.detail : ''}`).join('\n')}>
-                  <FaaPill a={a} /> {a.iata ?? a.icao}{a.faa.length > 1 ? ` +${a.faa.slice(1).map((x) => x.label).join('+')}` : ''}
+              {faaNow.map(({ a, own }) => (
+                <button key={a.icao} onClick={() => pick(a.icao)} title={own.map((x) => `${x.title}${x.detail ? ' — ' + x.detail : ''}`).join('\n')}>
+                  <FaaPill a={a} list={own} /> {a.iata ?? a.icao}{own.length > 1 ? ` +${own.slice(1).map((x) => x.label).join('+')}` : ''}
                   <span style={{ color: a.misery != null ? bandOf(a.misery).color : '#64748b' }}> {a.misery != null ? Math.round(a.misery) : '—'}</span>
                 </button>
               ))}

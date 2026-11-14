@@ -158,7 +158,7 @@ export async function readMisery(): Promise<MiseryPayload> {
     a.faa = list as unknown as Row[string]
     a.counts = (counts.get(String(a.icao)) ?? null) as unknown as Row[string]
     if (own.length) faaAirports++
-    if (list[0]?.scope === 'system') heldBySystem++
+    if (list.some((p) => p.scope === 'system')) heldBySystem++
   }
   const series = (glob.rows as Row[]).map(iso)
 

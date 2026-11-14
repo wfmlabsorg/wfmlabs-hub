@@ -103,33 +103,36 @@ export function nationwideStop(wide: FaaWideProgram[]): FaaWideProgram | null {
 }
 
 /**
- * An airport's badges under a nationwide stop: the system GS first, then its own programmes minus its own ground
- * stop (the same fact twice). US airports only, and never a military field — it carries no commercial data.
+ * An airport's badges under a nationwide stop: its own closure first (a closed field is closed whatever the
+ * system does), then the system GS, then its other programmes minus its own ground stop (the same fact twice). US airports only, and never a military field — it carries no commercial data.
  */
 export function withNationwide(own: FaaProgram[], a: { country?: unknown; military?: unknown }, stop: FaaWideProgram | null): FaaProgram[] {
   if (!stop || a.country !== 'US' || a.military === true) return own
   const badge: FaaProgram = { kind: 'ground_stop', label: 'GS', title: 'Nationwide ground stop', detail: stop.detail, starts_at: stop.starts_at, ends_at: null, scope: 'system' }
-  return [badge, ...own.filter((p) => p.kind !== 'ground_stop')]
+  return [...own.filter((p) => p.kind === 'closure'), badge, ...own.filter((p) => p.kind !== 'ground_stop' && p.kind !== 'closure')]
 }
 
 async function readEvents(source: string): Promise<RawEvent[]> {
   const r = await fetch(`${TRAVEL_INTEL}/api/travel/events?source=${source}`, { signal: AbortSignal.timeout(6000), next: { revalidate: 60 } })
   if (!r.ok) throw new Error(`travel-intel HTTP ${r.status}`)
-  return ((await r.json()) as { events?: RawEvent[] }).events ?? []
+  const events = ((await r.json()) as { events?: unknown }).events
+  if (events != null && !Array.isArray(events)) throw new Error('travel-intel events is not a list')
+  return (events as RawEvent[] | undefined) ?? []
 }
 const failure = (e: unknown) => String((e as Error)?.message ?? e).slice(0, 120)
 
 /** Two reads, judged apart: a failed ATCSCC read never costs the airport badges, and the error says which failed. */
 export async function readFaaPrograms(): Promise<FaaRead> {
   const checked_at = new Date().toISOString()
-  const [airport, atcscc] = await Promise.allSettled([readEvents('FAA'), readEvents('FAA-ATCSCC')])
+  // fetch AND shaping sit inside each source's boundary: a malformed body from one never costs the other
+  const [airport, atcscc] = await Promise.allSettled([readEvents('FAA').then(shapeFaa), readEvents('FAA-ATCSCC').then(shapeFaaWide)])
   const errors = [
     airport.status === 'rejected' ? `airport programmes: ${failure(airport.reason)}` : null,
     atcscc.status === 'rejected' ? `system/carrier programmes: ${failure(atcscc.reason)}` : null,
   ].filter(Boolean)
   return {
-    byIata: airport.status === 'fulfilled' ? shapeFaa(airport.value) : {},
-    wide: atcscc.status === 'fulfilled' ? shapeFaaWide(atcscc.value) : [],
+    byIata: airport.status === 'fulfilled' ? airport.value : {},
+    wide: atcscc.status === 'fulfilled' ? atcscc.value : [],
     checked_at,
     error: errors.length ? errors.join(' · ') : null,
   }

@@ -54,6 +54,8 @@ describe('nationwideStop / withNationwide', () => {
   it('leaves non-US airports, military fields and the no-stop case exactly as they were', () => {
     expect(withNationwide([gdp], { country: 'CA' }, stop)).toEqual([gdp])
     expect(withNationwide([], { country: 'US', military: true }, stop)).toEqual([])
+    const clsd: FaaProgram = { ...gdp, kind: 'closure', label: 'CLSD', title: 'Closure: SFO' }
+    expect(withNationwide([clsd, gdp], { country: 'US' }, stop).map((p) => p.label)).toEqual(['CLSD', 'GS', 'GDP'])
     expect(withNationwide([ownStop], { country: 'US' }, null)).toEqual([ownStop])
   })
 })
