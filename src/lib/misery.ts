@@ -1,5 +1,5 @@
 import { getPool } from '@/lib/db'
-import { readFaaPrograms, type FaaProgram } from '@/lib/faa-programs'
+import { nationwideStop, readFaaPrograms, withNationwide, type FaaProgram, type FaaWideProgram } from '@/lib/faa-programs'
 
 /**
  * Travel Misery Index — one read for the globe route (/api/roc-misery) and the dashboard page
@@ -77,7 +77,13 @@ export interface MiseryPayload {
     baseline_maturity: Record<string, number>
     newest_observed_at: string | null
     /** FAA read: when checked, how many airports carry a programme, and the error if the read failed. */
-    faa: { checked_at: string; airports: number; error: string | null }
+    faa: {
+      checked_at: string; airports: number; error: string | null
+      /** Live system- and carrier-scope programmes (ATCSCC), system first; [] when none. Drives the banner. */
+      wide: FaaWideProgram[]
+      /** US airports carrying the nationwide ground-stop badge; 0 when there is no system-wide stop. */
+      held_by_system: number
+    }
     generatedAt: string
     rule: { id: string; version: string }
   }
@@ -144,12 +150,15 @@ export async function readMisery(): Promise<MiseryPayload> {
   const pool = getPool()
   const [air, glob, faa, counts] = await Promise.all([pool.query(AIRPORTS_SQL), pool.query(GLOBAL_SQL), readFaaPrograms(), readCounts(pool)])
   const airports = (air.rows as Row[]).map(iso)
-  let faaAirports = 0
+  let faaAirports = 0, heldBySystem = 0
+  const stop = nationwideStop(faa.wide)
   for (const a of airports) {
-    const list = (typeof a.iata === 'string' && faa.byIata[a.iata]) || []
+    const own = (typeof a.iata === 'string' && faa.byIata[a.iata]) || []
+    const list = withNationwide(own, a, stop)
     a.faa = list as unknown as Row[string]
     a.counts = (counts.get(String(a.icao)) ?? null) as unknown as Row[string]
-    if (list.length) faaAirports++
+    if (own.length) faaAirports++
+    if (list.some((p) => p.scope === 'system')) heldBySystem++
   }
   const series = (glob.rows as Row[]).map(iso)
 
@@ -172,7 +181,7 @@ export async function readMisery(): Promise<MiseryPayload> {
       military: airports.filter((a) => a.military === true).length,
       baseline_maturity: tally(airports, 'baseline_maturity'),
       newest_observed_at: newest,
-      faa: { checked_at: faa.checked_at, airports: faaAirports, error: faa.error },
+      faa: { checked_at: faa.checked_at, airports: faaAirports, error: faa.error, wide: faa.wide, held_by_system: heldBySystem },
       generatedAt: new Date().toISOString(),
       rule: { id: 'airport_misery', version: 'v2' },
     },
